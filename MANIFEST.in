@@ -1,0 +1,3 @@
+include README AUTHORS CHANGES LICENSE
+recursive-include pyvisa-alt *
+global-exclude *.pyc *~ .DS_Store *__pycache__* *.pyo
