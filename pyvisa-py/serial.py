@@ -145,9 +145,9 @@ class SerialSession(Session):
         :rtype: int, VISAStatus
         """
 
-        # TODO: How to deal with VI_ATTR_TERMCHAR_E
+        # TODO: How to deal with VI_ATTR_TERMCHAR_EN
         end_out = self.attrs[constants.VI_ATTR_ASRL_END_OUT]
-        send_end = self.attrs[constants.VI_ATTR_SEND_END]
+        send_end = self.attrs[constants.VI_ATTR_SEND_END_EN]
         try:
             if end_out == SerialTermination.none:
                 pass
@@ -159,15 +159,15 @@ class SerialSession(Session):
             elif end_out == SerialTermination.termination_char:
                 data = data + self.attrs[constants.VI_ASRL_END_TERMCHAR]
 
-            self.internal.write(data)
+            count = self.internal.write(data)
 
             if end_out == SerialTermination.termination_break:
                 #TODO: SEND BREAK
                 pass
 
-            return SUCCESS
+            return count, SUCCESS
         except SerialTimeoutException:
-            return StatusCode.error_timeout
+            return 0, StatusCode.error_timeout
 
     def get_attribute(self, attribute):
         """Retrieves the state of an attribute.
@@ -399,9 +399,6 @@ class SerialSession(Session):
 
         elif attribute == constants.VI_ATTR_ASRL_XOFF_CHAR:
             raise NotImplementedError
-
-        elif attribute == constants.VI_ATTR_INTF_TYPE:
-            return constants.InterfaceType.asrl
 
         elif attribute == constants.VI_ATTR_SEND_END_EN:
             raise NotImplementedError
