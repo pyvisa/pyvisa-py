@@ -5,7 +5,6 @@
 
     Highlevel wrapper of the VISA Library.
 
-    This file is part of PyVISA-py
 
     :copyright: 2014 by PyVISA-py Authors, see AUTHORS for more details.
     :license: MIT, see LICENSE for more details.
@@ -19,6 +18,8 @@ import random
 
 from pyvisa import constants, errors, highlevel, logger
 from pyvisa.compat import integer_types
+
+from . import common, sessions
 
 
 class PyVisaLibrary(highlevel.VisaLibraryBase):
@@ -44,12 +45,13 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
         from .serial import SerialSession
         SESSION_TYPES.append(SerialSession)
     except ImportError:
+        SerialSession = None
         pass
 
-    def __init__(self, argument):
-        super(PyVisaLibrary, self).__init__('py')
+    def _init(self):
 
         #: map session handle to session object.
+        #: dict[int, session.Session]
         self.sessions = {}
 
     def _register(self, obj):
@@ -125,7 +127,6 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
 
         Corresponds to viOpen function of the VISA library.
 
-        :param library: the visa library wrapped by ctypes.
         :param session: Resource Manager session (should always be a session returned from open_default_resource_manager()).
         :param resource_name: Unique symbolic name of a resource.
         :param access_mode: Specifies the mode by which the resource is to be accessed. (constants.AccessModes)
@@ -140,15 +141,17 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
         except ValueError:
             raise ValueError('open_timeout (%r) must be an integer (or compatible type)' % open_timeout)
 
-        # Loops through all session types, tries to parse the resource name and if ok, open it.
-        for st in self.SESSION_TYPES:
-            try:
-                st.parse_resource_name(resource_name)
-                return self._register(st(resource_name)), constants.StatusCode.success
-            except ValueError as e:
-                pass
-        else:
+        try:
+            parsed = common.parse_resource_name(resource_name)
+        except common.InvalidResourceName:
             return 0, constants.StatusCode.error_invalid_resource_name
+
+        # Loops through all session types, tries to parse the resource name and if ok, open it.
+        cls = sessions.Session.get_session_class(parsed['interface_type'], parsed['resource_class'])
+
+        sess = cls(session, resource_name, parsed)
+
+        return self._register(sess), constants.StatusCode.success
 
     def close(self, session):
         """Closes the specified session, event, or find list.
@@ -169,7 +172,6 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
 
         Corresponds to viOpenDefaultRM function of the VISA library.
 
-        :param library: the visa library wrapped by ctypes.
         :return: Unique logical identifier to a Default Resource Manager session, return value of the library call.
         :rtype: session, VISAStatus
         """
@@ -215,7 +217,7 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
                         returned from open_default_resource_manager()).
         :param resource_name: Unique symbolic name of a resource.
         :return: Resource information with interface type and board number, return value of the library call.
-        :rtype: :class:ResourceInfo, VISAStatus
+        :rtype: :class:`pyvisa.highlevel.ResourceInfo`, :class:`pyvisa.constants.StatusCode`
         """
         return self.parse_resource_extended(session, resource_name)
 
@@ -228,19 +230,16 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
                         returned from open_default_resource_manager()).
         :param resource_name: Unique symbolic name of a resource.
         :return: Resource information, return value of the library call.
-        :rtype: :class:ResourceInfo, VISAStatus
+        :rtype: :class:`pyvisa.highlevel.ResourceInfo`, :class:`pyvisa.constants.StatusCode`
         """
-        for st in self.SESSION_TYPES:
-            try:
-                parsed = st.parse_resource_name(resource_name)
+        try:
+            parsed = common.parse_resource_name(resource_name)
 
-                return (highlevel.ResourceInfo(parsed['interface_type'],
-                                               parsed['board'],
-                                               parsed['resource_class'], None, None),
-                        constants.StatusCode.success)
-            except ValueError as e:
-                pass
-        else:
+            return (highlevel.ResourceInfo(parsed['interface_type'],
+                                           parsed['board'],
+                                           parsed['resource_class'], None, None),
+                    constants.StatusCode.success)
+        except ValueError:
             return 0, constants.StatusCode.error_invalid_resource_name
 
     def read(self, session, count):
@@ -291,28 +290,9 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
         try:
             sess = self.sessions[session]
         except KeyError:
-            return None, None, constants.StatusCode.error_invalid_object
-
-
-        # First try to answer those attributes that are common to all session types,
-        # and if not one of those, dispatch to the session object.
-
-        if attribute == constants.VI_ATTR_RSRC_CLASS:
-            return sess.resource_name, constants.StatusCode.success
-        elif attribute == constants.VI_ATTR_RSRC_NAME:
-            return sess.resource_class, constants.StatusCode.success
-        elif attribute == constants.VI_ATTR_RSRC_LOCK_STATE:
-            raise NotImplementedError
-        elif attribute == constants.VI_ATTR_MAX_QUEUE_LENGTH:
-            raise NotImplementedError
-        elif attribute == constants.VI_ATTR_USER_DATA:
-            raise NotImplementedError
-
-        elif attribute == constants.VI_ATTR_TMO_VALUE:
-            return sess.timeout, constants.StatusCode.success
+            return None, constants.StatusCode.error_invalid_object
 
         return sess.get_attribute(attribute)
-
 
     def set_attribute(self, session, attribute, attribute_state):
         """Sets the state of an attribute.
@@ -325,4 +305,10 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
         :return: return value of the library call.
         :rtype: VISAStatus
         """
-        raise NotImplementedError
+
+        try:
+            sess = self.sessions[session]
+        except KeyError:
+            return None, constants.StatusCode.error_invalid_object
+
+        return sess.set_attribute(attribute, attribute_state)
