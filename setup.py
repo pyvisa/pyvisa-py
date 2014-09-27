@@ -28,7 +28,7 @@ long_description = '\n\n'.join([read('README'),
 
 __doc__ = long_description
 
-requirements = []#['pyvisa>1.5']
+requirements = ['pyvisa>1.5']
 
 setup(name='PyVISA-py',
       description='Python VISA bindings for GPIB, RS232, and USB instruments',
