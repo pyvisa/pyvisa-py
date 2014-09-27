@@ -5,19 +5,21 @@
 
     Serial Session implementation using PySerial.
 
-    This file is part of PyVISA-py
 
     :copyright: 2014 by PyVISA-py Authors, see AUTHORS for more details.
     :license: MIT, see LICENSE for more details.
 """
 
-import re
+from __future__ import division, unicode_literals, print_function, absolute_import
 
 import serial
+from serial.tools.list_ports import comports
 
 from pyvisa import constants
 
-from .session import Session
+from .sessions import Session
+from . import common
+
 
 def to_state(boolean_input):
     """Convert a boolean input into a LineState value
@@ -27,22 +29,9 @@ def to_state(boolean_input):
     return constants.LineState.unasserted
 
 
-
-#: Regular expression to match Serial resource names.
-#: Defintion:  ASRLboard[::INSTR]
-_RESOURCE_RE = re.compile('^ASRL(?P<board>[^\s:]+)'
-                          '(::INSTR)?', re.I
-                         )
-
-from serial.tools.list_ports import comports
-
 StatusCode = constants.StatusCode
 SUCCESS = StatusCode.success
 SerialTermination = constants.SerialTermination
-
-
-class UnsupportedAttrError(ValueError):
-    pass
 
 
 class SerialSession(Session):
@@ -53,50 +42,33 @@ class SerialSession(Session):
     def list_resources():
         return ['ASRL%s::INSTR' % port[0] for port in comports()]
 
-    @staticmethod
-    def parse_resource_name(resource_name):
-        r = _RESOURCE_RE.match(resource_name)
-        if r is None:
-            raise ValueError('Is not a valid Serial Session resource name %s' % resource_name)
-        return dict(board=r.group('board'),
-                    interface_type=constants.InterfaceType.asrl,
-                    resource_class='INSTR',
-                    resource_name=resource_name)
-
-    def __init__(self, resource_name):
-        parsed = self.parse_resource_name(resource_name)
-        super(SerialSession, self).__init__(parsed['resource_name'], parsed['resource_class'])
-        port = parsed['board']
-        self.internal = serial.Serial(port=port, timeout=2000, writeTimeout=2000)
-
-        self.attrs = {constants.VI_ATTR_ASRL_END_IN: SerialTermination.termination_char}
+    def after_parsing(self):
+        self.interface = serial.Serial(port=self.parsed['board'], timeout=2000, writeTimeout=2000)
 
     def _get_timeout(self):
-        return self.internal.timeout
+        return self.interface.timeout
 
     def _set_timeout(self, value):
-        self.internal.timeout = value
-        self.internal.writeTimeout = value
+        self.interface.timeout = value
+        self.interface.writeTimeout = value
 
     def close(self):
-        self.internal.close()
+        self.interface.close()
 
     def read(self, count):
         """Reads data from device or interface synchronously.
 
         Corresponds to viRead function of the VISA library.
 
-        :param session: Unique logical identifier to a session.
         :param count: Number of bytes to be read.
         :return: data read, return value of the library call.
         :rtype: bytes, VISAStatus
         """
 
-        # TODO: Deal with end of line an other stuff
         end_in = self.attrs[constants.VI_ATTR_ASRL_END_IN]
 
         if end_in == SerialTermination.none:
-            ret = self.internal.read(count)
+            ret = self.interface.read(count)
             if len(ret) == count:
                 return ret, StatusCode.success_max_count_read
             else:
@@ -104,12 +76,13 @@ class SerialSession(Session):
 
         elif end_in == SerialTermination.last_bit:
             ret = b''
-            mask = 2 ** self.internal.bytesize
-            while:
-                ret += self.internal.read(1)
-                if ret[-1] & mask:
+            mask = 2 ** self.interface.bytesize
+            while True:
+                ret += self.interface.read(1)
+                if common.last_int(ret) & mask:
                     # TODO: What is the correct success code??
-                    return ret, SUCCESS
+                    return ret, StatusCode.success
+
                 #TODO: Should we stop here as well?
                 if len(ret) == count:
                     return ret, StatusCode.success_max_count_read
@@ -119,9 +92,9 @@ class SerialSession(Session):
         elif end_in == SerialTermination.term_char:
             ret = b''
             term_char = self.attrs[constants.VI_ASRL_END_TERMCHAR]
-            while:
-                ret += self.internal.read(1)
-                if ret[-1] == term_char:
+            while True:
+                ret += self.interface.read(1)
+                if ret[-1:] == term_char:
                     # TODO: What is the correct success code??
                     return ret, StatusCode.termination_char
                 #TODO: Should we stop here as well?
@@ -138,7 +111,6 @@ class SerialSession(Session):
 
         Corresponds to viWrite function of the VISA library.
 
-        :param session: Unique logical identifier to a session.
         :param data: data to be written.
         :type data: str
         :return: Number of bytes actually transferred, return value of the library call.
@@ -153,38 +125,24 @@ class SerialSession(Session):
                 pass
 
             elif end_out == SerialTermination.last_bit:
-                #: TODO unset last bit in data[:-1] and set last data[-1]
+                last_bit, _ = self.get_attribute(constants.VI_ATTR_ASRL_DATA_BITS)
+                mask = 1 << (last_bit - 1)
+                data = common.iter_bytes(data, mask, send_end)
 
-                data = data
             elif end_out == SerialTermination.termination_char:
                 data = data + self.attrs[constants.VI_ASRL_END_TERMCHAR]
 
-            count = self.internal.write(data)
+            count = 0
+            for d in data:
+                count += self.interface.write(d)
 
             if end_out == SerialTermination.termination_break:
-                #TODO: SEND BREAK
-                pass
+                self.interface.sendBreak()
 
-            return count, SUCCESS
-        except SerialTimeoutException:
+            return count, constants.StatusCode.success
+
+        except serial.SerialTimeoutException:
             return 0, StatusCode.error_timeout
-
-    def get_attribute(self, attribute):
-        """Retrieves the state of an attribute.
-
-        Corresponds to viGetAttribute function of the VISA library.
-
-        :param session: Unique logical identifier to a session, event, or find list.
-        :param attribute: Resource attribute for which the state query is made (see Attributes.*)
-        :return: The state of the queried attribute for a specified resource, return value of the library call.
-        :rtype: unicode (Py2) or str (Py3), list or other type, VISAStatus
-        """
-        try:
-            return self._get_attribute(attribute), SUCCESS
-        except UnsupportedAttrError:
-            return None, StatusCode.error_nonsupported_attribute
-        except NotImplementedError:
-            raise e
 
     def _get_attribute(self, attribute):
 
@@ -192,10 +150,10 @@ class SerialSession(Session):
             raise NotImplementedError
 
         elif attribute == constants.VI_ATTR_ASRL_AVAIL_NUM:
-            return self.internal.inWaiting()
+            return self.interface.inWaiting()
 
         elif attribute == constants.VI_ATTR_ASRL_BAUD:
-            return self.internal.baudrate
+            return self.interface.baudrate
 
         elif attribute == constants.VI_ATTR_ASRL_BREAK_LEN:
             raise NotImplementedError
@@ -207,10 +165,10 @@ class SerialSession(Session):
             raise NotImplementedError
 
         elif attribute == constants.VI_ATTR_ASRL_CTS_STATE:
-            return to_state(self.internal.getCTS())
+            return to_state(self.interface.getCTS())
 
         elif attribute == constants.VI_ATTR_ASRL_DATA_BITS:
-            return self.internal.bytesize
+            return self.interface.bytesize
 
         elif attribute == constants.VI_ATTR_ASRL_DCD_STATE:
             raise NotImplementedError
@@ -219,7 +177,7 @@ class SerialSession(Session):
             raise NotImplementedError
 
         elif attribute == constants.VI_ATTR_ASRL_DSR_STATE:
-            return to_state(self.internal.getDSR())
+            return to_state(self.interface.getDSR())
 
         elif attribute == constants.VI_ATTR_ASRL_DTR_STATE:
             raise NotImplementedError
@@ -234,7 +192,7 @@ class SerialSession(Session):
             raise NotImplementedError
 
         elif attribute == constants.VI_ATTR_ASRL_PARITY:
-            parity = self.internal.parity
+            parity = self.interface.parity
             if parity == serial.PARITY_NONE:
                 return constants.Parity.none
             elif parity == serial.PARITY_EVEN:
@@ -255,7 +213,7 @@ class SerialSession(Session):
             raise NotImplementedError
 
         elif attribute == constants.VI_ATTR_ASRL_STOP_BITS:
-            bits = self.internal.stopbits
+            bits = self.interface.stopbits
             if bits == serial.STOPBITS_ONE:
                 return constants.StopBits.one
             elif bits == serial.STOPBITS_ONE_POINT_FIVE:
@@ -283,46 +241,16 @@ class SerialSession(Session):
         elif attribute == constants.VI_ATTR_TERMCHAR_EN:
             raise NotImplementedError
 
-        raise ValueError
-
-    def set_attribute(self, attribute, attribute_state):
-        """Sets the state of an attribute.
-
-        Corresponds to viSetAttribute function of the VISA library.
-
-        :param session: Unique logical identifier to a session.
-        :param attribute: Attribute for which the state is to be modified. (Attributes.*)
-        :param attribute_state: The state of the attribute to be set for the specified object.
-        :return: return value of the library call.
-        :rtype: VISAStatus
-        """
-        try:
-            return SUCCESS
-        except UnsupportedAttrError:
-            return StatusCode.error_nonsupported_attribute
-        except ValueError:
-            return StatusCode.error_nonsupported_attribute_state
-        except NotImplementedError:
-            raise e
+        raise Exception('Unknown attribute %s' % attribute)
 
     def _set_attribute(self, attribute, attribute_state):
-        """Sets the state of an attribute.
-
-        Corresponds to viSetAttribute function of the VISA library.
-
-        :param session: Unique logical identifier to a session.
-        :param attribute: Attribute for which the state is to be modified. (Attributes.*)
-        :param attribute_state: The state of the attribute to be set for the specified object.
-        :return: return value of the library call.
-        :rtype: VISAStatus
-        """
 
         if attribute == constants.VI_ATTR_ASRL_ALLOW_TRANSMIT:
             raise NotImplementedError
 
         elif attribute == constants.VI_ATTR_ASRL_BAUD:
-            self.internal.baudrate = attribute_state
-            return Success
+            self.interface.baudrate = attribute_state
+            return StatusCode.success
 
         elif attribute == constants.VI_ATTR_ASRL_BREAK_LEN:
             raise NotImplementedError
@@ -334,7 +262,7 @@ class SerialSession(Session):
             raise NotImplementedError
 
         elif attribute == constants.VI_ATTR_ASRL_DATA_BITS:
-            self.internal.bytesize = attribute_state
+            self.interface.bytesize = attribute_state
 
         elif attribute == constants.VI_ATTR_ASRL_DCD_STATE:
             raise NotImplementedError
@@ -343,7 +271,7 @@ class SerialSession(Session):
             raise NotImplementedError
 
         elif attribute == constants.VI_ATTR_ASRL_DSR_STATE:
-            return to_state(self.internal.getDSR())
+            return to_state(self.interface.getDSR())
 
         elif attribute == constants.VI_ATTR_ASRL_DTR_STATE:
             raise NotImplementedError
@@ -359,23 +287,23 @@ class SerialSession(Session):
 
         elif attribute == constants.VI_ATTR_ASRL_PARITY:
             if attribute_state == constants.Parity.none:
-                self.internal.parity = serial.PARITY_NONE
+                self.interface.parity = serial.PARITY_NONE
                 return StatusCode.success
 
             elif attribute_state == constants.Parity.even:
-                self.internal.parity = serial.PARITY_EVEN
+                self.interface.parity = serial.PARITY_EVEN
                 return StatusCode.success
 
             elif attribute_state == constants.Parity.odd:
-                self.internal.parity = serial.PARITY_ODD
+                self.interface.parity = serial.PARITY_ODD
                 return StatusCode.success
 
             elif attribute_state == serial.PARITY_MARK:
-                self.internal.parity = serial.PARITY_MARK
+                self.interface.parity = serial.PARITY_MARK
                 return StatusCode.success
 
             elif attribute_state == constants.Parity.space:
-                self.internal.parity = serial.PARITY_SPACE
+                self.interface.parity = serial.PARITY_SPACE
                 return StatusCode.success
 
             return StatusCode.error_nonsupported_attribute_state
@@ -387,7 +315,7 @@ class SerialSession(Session):
             raise NotImplementedError
 
         elif attribute == constants.VI_ATTR_ASRL_STOP_BITS:
-            bits = self.internal.stopbits
+            bits = self.interface.stopbits
             if bits == serial.STOPBITS_ONE:
                 return constants.StopBits.one
             elif bits == serial.STOPBITS_ONE_POINT_FIVE:
@@ -412,4 +340,4 @@ class SerialSession(Session):
         elif attribute == constants.VI_ATTR_TERMCHAR_EN:
             raise NotImplementedError
 
-        raise UnsupportedAttrError
+        raise Exception('Unknown attribute %s' % attribute)
