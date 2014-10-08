@@ -37,16 +37,27 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
     Importantly, the user is unaware of this. PyVisaLibrary behaves for the user just as NIVisaLibrary.
     """
 
-    #: List of valid session types (Depend on which packages are installed).
-    SESSION_TYPES = []
-
     # Try to import packages implementing lower level functionality.
     try:
         from .serial import SerialSession
-        SESSION_TYPES.append(SerialSession)
-    except ImportError:
-        SerialSession = None
+    except ImportError as e:
         pass
+
+    try:
+        from .usb import USBSession
+    except ImportError as e:
+        pass
+
+    from .tcpip import TCPIPSession
+
+    @property
+    def get_session_classes(self):
+        return sessions.Session._session_classes
+
+    @property
+    def iter_session_classes_issues(self):
+        return sessions.Session.iter_session_classes_issues()
+
 
     def _init(self):
 
@@ -146,7 +157,6 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
         except common.InvalidResourceName:
             return 0, constants.StatusCode.error_invalid_resource_name
 
-        # Loops through all session types, tries to parse the resource name and if ok, open it.
         cls = sessions.Session.get_session_class(parsed['interface_type'], parsed['resource_class'])
 
         sess = cls(session, resource_name, parsed)
@@ -163,7 +173,9 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
         :rtype: VISAStatus
         """
         try:
-            return self.sessions[session].close()
+            sess = self.sessions[session]
+            if not sess is self:
+                sess.close()
         except KeyError:
             return constants.StatusCode.error_invalid_object
 
@@ -201,12 +213,16 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
 
         # TODO: Query not implemented
 
-        # For each sesion type, ask for the list of connected resources and merge them into a single list.
+        # For each session type, ask for the list of connected resources and
+        # merge them into a single list.
 
-        resources = sum([st.list_resources() for st in self.SESSION_TYPES], [])
+        resources = sum([st.list_resources()
+                         for key, st in sessions.Session.iter_valid_session_classes()], [])
         count = len(resources)
         resources = iter(resources)
-        return resources, count, next(resources), constants.StatusCode.success
+        if count:
+            return resources, count, next(resources), constants.StatusCode.success
+        return resources, count, None, constants.StatusCode.success
 
     def parse_resource(self, session, resource_name):
         """Parse a resource string to get the interface information.
