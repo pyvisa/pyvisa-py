@@ -41,6 +41,10 @@ class Session(compat.with_metaclass(abc.ABCMeta)):
     def _set_attribute(self, attribute, attribute_state):
         pass
 
+    @abc.abstractmethod
+    def close(self):
+        pass
+
     # TODO: We also need a few others. Add the minimal List
     #: Maps (Interface Type, Resource Class) to Python class encapsulating that resource.
     #: dict[(Interface Type, Resource Class) , Session]
@@ -48,6 +52,27 @@ class Session(compat.with_metaclass(abc.ABCMeta)):
 
     #: Session handler for the resource manager.
     session_type = None
+
+    @classmethod
+    def iter_valid_session_classes(cls):
+        """Yield (Interface Type, Resource Class), Session class pair for
+        valid sessions classes.
+        """
+
+        for key, val in cls._session_classes.items():
+            if issubclass(val, Session):
+                yield key, val
+
+    @classmethod
+    def iter_session_classes_issues(cls):
+        """Yield (Interface Type, Resource Class), Issues class pair for
+        invalid sessions classes (i.e. those with import errors).
+        """
+        for key, val in cls._session_classes.items():
+            try:
+                yield key, getattr(val, 'session_issue')
+            except AttributeError:
+                pass
 
     @classmethod
     def get_session_class(cls, interface_type, resource_class):
@@ -77,6 +102,25 @@ class Session(compat.with_metaclass(abc.ABCMeta)):
             cls._session_classes[(interface_type, resource_class)] = python_class
             return python_class
         return _internal
+
+    @classmethod
+    def register_unavailable(cls, interface_type, resource_class, msg):
+        """Register an unavailable session class for a given interface type and resource class.
+        raising a ValueError if called.
+
+        :type interface_type: constants.InterfaceType
+        :type resource_class: str
+        """
+        def _internal(*args, **kwargs):
+            raise ValueError(msg)
+
+        _internal.session_issue = msg
+
+        if (interface_type, resource_class) in cls._session_classes:
+            logger.warning('%s is already registered in the ResourceManager. '
+                           'Overwriting with unavailable %s' % ((interface_type, resource_class), msg))
+
+        cls._session_classes[(interface_type, resource_class)] = _internal
 
     def __init__(self, resource_manager_session, resource_name, parsed=None):
         if parsed is None:
@@ -115,6 +159,9 @@ class Session(compat.with_metaclass(abc.ABCMeta)):
         if not attr.read:
             raise Exception('Do not now how to handle write only attributes.')
 
+        if attribute in self.attrs:
+            return self.attrs[attribute], constants.StatusCode.success
+
         return self._get_attribute(attribute), constants.StatusCode.success
 
     def set_attribute(self, attribute, attribute_state):
@@ -128,6 +175,9 @@ class Session(compat.with_metaclass(abc.ABCMeta)):
 
         if not attr.write:
             return constants.StatusCode.error_attribute_read_only
+
+        if attribute in self.attrs:
+            self.attrs[attribute] = attribute_state
 
         try:
             self._set_attribute(attribute, attribute_state)
