@@ -1,0 +1,301 @@
+# -*- coding: utf-8 -*-
+"""
+    pyvisa-py.tcpip
+    ~~~~~~~~~~~~~~~~
+
+    TCPIP Session implementation using Python Standard library.
+
+
+    :copyright: 2014 by PyVISA-py Authors, see AUTHORS for more details.
+    :license: MIT, see LICENSE for more details.
+"""
+
+import random
+
+from pyvisa import constants
+
+from .sessions import Session
+from .protocols import vxi11
+
+
+StatusCode = constants.StatusCode
+SUCCESS = StatusCode.success
+
+
+@Session.register(constants.InterfaceType.tcpip, 'INSTR')
+class TCPIPSession(Session):
+    """A serial Session that uses PySerial to do the low level communication.
+    """
+
+    lock_timeout = 1000
+    timeout = 1000
+    client_id = None
+
+    link = None
+    max_recv_size = 1024
+
+    @staticmethod
+    def list_resources():
+        # TODO: is there a way to get this?
+        return []
+
+    def after_parsing(self):
+        # TODO: board_number not handled
+        # TODO: lan_device_name not handled
+        self.interface = vxi11.CoreClient(self.parsed['host_address'])
+
+        self.lock_timeout = 10000
+        self.timeout = 10000
+        self.client_id = random.getrandbits(31)
+
+        (error, link,
+         abort_port,
+         max_recv_size) = self.interface.create_link(self.client_id, 0, self.lock_timeout,
+                                                     self.parsed['lan_device_name'])
+
+        if error:
+            raise Exception("error creating link: %d" % error)
+
+        self.link = link
+        self.max_recv_size = min(max_recv_size, 2 ** 30) # 1GB
+
+    def _get_timeout(self):
+        return self.timeout
+
+    def _set_timeout(self, value):
+        self.timeout = value
+
+    def close(self):
+        self.interface.destroy_link(self.link)
+        self.interface.close()
+        self.link = None
+        self.interface = None
+
+    def read(self, count):
+        """Reads data from device or interface synchronously.
+
+        Corresponds to viRead function of the VISA library.
+
+        :param count: Number of bytes to be read.
+        :return: data read, return value of the library call.
+        :rtype: bytes, VISAStatus
+        """
+        if count < self.max_recv_size:
+            chunk_length = count
+        else:
+            chunk_length = self.max_recv_size
+
+        flags = 0
+        reason = 0
+
+        if self.get_attribute(constants.VI_ATTR_TERMCHAR_EN):
+            term_char, _ = self.get_attribute(constants.VI_ATTR_TERMCHAR)
+        else:
+            term_char = 0
+
+        if self.term_char:
+            flags = vxi11.OP_FLAG_TERMCHAR_SET
+            term_char = str(self.term_char).encode('utf-8')[0]
+
+        read_data = b''
+
+        end_reason = vxi11.RX_END | vxi11.RX_CHR
+
+        read_fun = self.interface.device_read
+
+        while reason & end_reason == 0:
+            error, reason, data = read_fun(self.link, chunk_length, self.timeout,
+                                           self.lock_timeout, flags, term_char)
+
+            if error:
+                return read_data, StatusCode.error_io
+
+            read_data += data
+            count -= len(data)
+
+            if count <= 0:
+                break
+
+            chunk_length = min(count, chunk_length)
+
+        return read_data, SUCCESS
+
+    def write(self, data):
+        """Writes data to device or interface synchronously.
+
+        Corresponds to viWrite function of the VISA library.
+
+        :param data: data to be written.
+        :type data: str
+        :return: Number of bytes actually transferred, return value of the library call.
+        :rtype: int, VISAStatus
+        """
+
+        send_end, _ = self.get_attribute(constants.VI_ATTR_SEND_END_EN)
+
+        chunk_size = 1024
+        try:
+
+            if send_end:
+                flags = vxi11.OP_FLAG_TERMCHAR_SET
+            else:
+                flags = 0
+
+            num = len(data)
+
+            offset = 0
+
+            while num > 0:
+                if num <= chunk_size:
+                    flags |= vxi11.OP_FLAG_END
+
+                block = data[offset:offset+self.max_recv_size]
+
+                error, size = self.interface.device_write(self.link, self.timeout,
+                                                          self.lock_timeout, flags, block)
+
+                if error:
+                    return offset, StatusCode.error_io
+                elif size < len(block):
+                    return offset, StatusCode.error_io
+
+                offset += size
+                num -= size
+
+            return offset, SUCCESS
+        except vxi11.Vxi11Error:
+            return StatusCode.error_timeout
+
+    def _get_attribute(self, attribute):
+
+        if attribute == constants.VI_ATTR_TCPIP_ADDR:
+            return self.host_address
+
+        elif attribute == constants.VI_ATTR_TCPIP_DEVICE_NAME:
+            raise NotImplementedError
+
+        elif attribute == constants.VI_ATTR_TCPIP_HOSTNAME:
+            raise NotImplementedError
+
+        elif attribute == constants.VI_ATTR_TCPIP_KEEPALIVE:
+            raise NotImplementedError
+
+        elif attribute == constants.VI_ATTR_TCPIP_NODELAY:
+            raise NotImplementedError
+
+        elif attribute == constants.VI_ATTR_TCPIP_PORT:
+            raise NotImplementedError
+
+        elif attribute == constants.VI_ATTR_SEND_END_EN:
+            raise NotImplementedError
+
+        elif attribute == constants.VI_ATTR_SUPPRESS_END_EN:
+            raise NotImplementedError
+
+        raise Exception('Unknown attribute %s' % attribute)
+
+    def _set_attribute(self, attribute, attribute_state):
+        """Sets the state of an attribute.
+
+        Corresponds to viSetAttribute function of the VISA library.
+
+        :param attribute: Attribute for which the state is to be modified. (Attributes.*)
+        :param attribute_state: The state of the attribute to be set for the specified object.
+        :return: return value of the library call.
+        :rtype: VISAStatus
+        """
+
+        raise Exception('Unknown attribute %s' % attribute)
+
+    def assert_trigger(self, protocol):
+        """Asserts software or hardware trigger.
+
+        Corresponds to viAssertTrigger function of the VISA library.
+
+        :param protocol: Trigger protocol to use during assertion. (Constants.PROT*)
+        :return: return value of the library call.
+        :rtype: VISAStatus
+        """
+
+        flags = 0
+
+        error = self.interface.device_trigger(self.link, flags, self.lock_timeout, self.io_timeout)
+
+        if error:
+            # TODO: Which status to return
+            raise Exception("error triggering: %d" % error)
+
+        return SUCCESS
+
+    def clear(self):
+        """Clears a device.
+
+        Corresponds to viClear function of the VISA library.
+
+        :return: return value of the library call.
+        :rtype: VISAStatus
+        """
+
+        flags = 0
+
+        error = self.interface.device_clear(self.link, flags, self.lock_timeout, self.io_timeout)
+
+        if error:
+            # TODO: Which status to return
+            raise Exception("error clearing: %d" % error)
+
+    def read_stb(self):
+        """Reads a status byte of the service request.
+
+        Corresponds to viReadSTB function of the VISA library.
+
+        :return: Service request status byte, return value of the library call.
+        :rtype: int, VISAStatus
+        """
+        flags = 0
+
+        error, stb = self.interface.device_read_stb(self.link, flags, self.lock_timeout, self.io_timeout)
+
+        if error:
+            # TODO: Which status to return
+            raise Exception("error reading status: %d" % error)
+
+        return stb, SUCCESS
+
+    def lock(self, lock_type, timeout, requested_key=None):
+        """Establishes an access mode to the specified resources.
+
+        Corresponds to viLock function of the VISA library.
+
+        :param lock_type: Specifies the type of lock requested, either Constants.EXCLUSIVE_LOCK or Constants.SHARED_LOCK.
+        :param timeout: Absolute time period (in milliseconds) that a resource waits to get unlocked by the
+                        locking session before returning an error.
+        :param requested_key: This parameter is not used and should be set to VI_NULL when lockType is VI_EXCLUSIVE_LOCK.
+        :return: access_key that can then be passed to other sessions to share the lock, return value of the library call.
+        :rtype: str, VISAStatus
+        """
+
+        #TODO: lock type not implemented
+        flags = 0
+
+        error = self.interface.device_lock(self.link, flags, self.lock_timeout)
+
+        if error:
+            # TODO: Which status to return
+            raise Exception("error locking: %d" % error)
+
+    def unlock(self):
+        """Relinquishes a lock for the specified resource.
+
+        Corresponds to viUnlock function of the VISA library.
+
+        :return: return value of the library call.
+        :rtype: VISAStatus
+        """
+        flags = 0
+
+        error = self.interface.device_unlock(self.link)
+
+        if error:
+            # TODO: Which message to return
+            raise Exception("error unlocking: %d" % error)
