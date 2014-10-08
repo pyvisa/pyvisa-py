@@ -59,7 +59,7 @@ setup(name='PyVISA-py',
         'Programming Language :: Python :: 3.3',
         'Programming Language :: Python :: 3.4',
         ],
-      packages=['pyvisa-py', ],
+      packages=['pyvisa-py', 'pyvisa-py.protocols'],
       platforms="Linux, Windows,Mac",
       use_2to3=False,
       zip_safe=False)
