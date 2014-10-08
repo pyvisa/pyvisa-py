@@ -9,8 +9,9 @@
     :license: MIT, see LICENSE for more details.
 """
 
-import sys
+from __future__ import division, unicode_literals, print_function, absolute_import
 
+import sys
 
 from pyvisa import constants
 
