@@ -12,13 +12,18 @@
 
 from __future__ import division, unicode_literals, print_function, absolute_import
 
-import serial
-from serial.tools.list_ports import comports
-
 from pyvisa import constants
 
 from .sessions import Session
 from . import common
+
+try:
+    import serial
+    from serial.tools.list_ports import comports
+except ImportError as e:
+    Session.register_unavailable(constants.InterfaceType.asrl, 'INSTR',
+                                 'Please install PySerial to use this resource type.\n%s' % e)
+    raise
 
 
 def to_state(boolean_input):
@@ -34,6 +39,7 @@ SUCCESS = StatusCode.success
 SerialTermination = constants.SerialTermination
 
 
+@Session.register(constants.InterfaceType.asrl, 'INSTR')
 class SerialSession(Session):
     """A serial Session that uses PySerial to do the low level communication.
     """
@@ -44,6 +50,11 @@ class SerialSession(Session):
 
     def after_parsing(self):
         self.interface = serial.Serial(port=self.parsed['board'], timeout=2000, writeTimeout=2000)
+
+        for name in 'ASRL_END_IN,ASRL_END_OUT,SEND_END_EN,TERMCHAR,' \
+                    'TERMCHAR_EN'.split(','):
+            attr = getattr(constants, 'VI_ATTR_' + name)
+            self.attrs[attr] = attr.default
 
     def _get_timeout(self):
         return self.interface.timeout
@@ -65,7 +76,7 @@ class SerialSession(Session):
         :rtype: bytes, VISAStatus
         """
 
-        end_in = self.attrs[constants.VI_ATTR_ASRL_END_IN]
+        end_in = self.get_attribute(constants.VI_ATTR_ASRL_END_IN)
 
         if end_in == SerialTermination.none:
             ret = self.interface.read(count)
@@ -91,7 +102,7 @@ class SerialSession(Session):
 
         elif end_in == SerialTermination.term_char:
             ret = b''
-            term_char = self.attrs[constants.VI_ASRL_END_TERMCHAR]
+            term_char = self.get_attribute(constants.VI_ASRL_END_TERMCHAR)
             while True:
                 ret += self.interface.read(1)
                 if ret[-1:] == term_char:
@@ -118,8 +129,9 @@ class SerialSession(Session):
         """
 
         # TODO: How to deal with VI_ATTR_TERMCHAR_EN
-        end_out = self.attrs[constants.VI_ATTR_ASRL_END_OUT]
-        send_end = self.attrs[constants.VI_ATTR_SEND_END_EN]
+        end_out, _ = self.get_attribute(constants.VI_ATTR_ASRL_END_OUT)
+        send_end, _ = self.get_attribute(constants.VI_ATTR_SEND_END_EN)
+
         try:
             if end_out == SerialTermination.none:
                 pass
@@ -130,7 +142,8 @@ class SerialSession(Session):
                 data = common.iter_bytes(data, mask, send_end)
 
             elif end_out == SerialTermination.termination_char:
-                data = data + self.attrs[constants.VI_ASRL_END_TERMCHAR]
+                term_char, _ = self.get_attribute(constants.VI_ASRL_END_TERMCHAR)
+                data = data + term_char
 
             count = 0
             for d in data:
@@ -182,12 +195,6 @@ class SerialSession(Session):
         elif attribute == constants.VI_ATTR_ASRL_DTR_STATE:
             raise NotImplementedError
 
-        elif attribute == constants.VI_ATTR_ASRL_END_IN:
-            raise NotImplementedError
-
-        elif attribute == constants.VI_ATTR_ASRL_END_OUT:
-            raise NotImplementedError
-
         elif attribute == constants.VI_ATTR_ASRL_FLOW_CNTRL:
             raise NotImplementedError
 
@@ -229,16 +236,7 @@ class SerialSession(Session):
         elif attribute == constants.VI_ATTR_INTF_TYPE:
             return constants.InterfaceType.asrl
 
-        elif attribute == constants.VI_ATTR_SEND_END_EN:
-            raise NotImplementedError
-
         elif attribute == constants.VI_ATTR_SUPPRESS_END_EN:
-            raise NotImplementedError
-
-        elif attribute == constants.VI_ATTR_TERMCHAR:
-            raise NotImplementedError
-
-        elif attribute == constants.VI_ATTR_TERMCHAR_EN:
             raise NotImplementedError
 
         raise Exception('Unknown attribute %s' % attribute)
@@ -274,12 +272,6 @@ class SerialSession(Session):
             return to_state(self.interface.getDSR())
 
         elif attribute == constants.VI_ATTR_ASRL_DTR_STATE:
-            raise NotImplementedError
-
-        elif attribute == constants.VI_ATTR_ASRL_END_IN:
-            raise NotImplementedError
-
-        elif attribute == constants.VI_ATTR_ASRL_END_OUT:
             raise NotImplementedError
 
         elif attribute == constants.VI_ATTR_ASRL_FLOW_CNTRL:
@@ -328,16 +320,7 @@ class SerialSession(Session):
         elif attribute == constants.VI_ATTR_ASRL_XOFF_CHAR:
             raise NotImplementedError
 
-        elif attribute == constants.VI_ATTR_SEND_END_EN:
-            raise NotImplementedError
-
         elif attribute == constants.VI_ATTR_SUPPRESS_END_EN:
-            raise NotImplementedError
-
-        elif attribute == constants.VI_ATTR_TERMCHAR:
-            raise NotImplementedError
-
-        elif attribute == constants.VI_ATTR_TERMCHAR_EN:
             raise NotImplementedError
 
         raise Exception('Unknown attribute %s' % attribute)
