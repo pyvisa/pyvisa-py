@@ -43,7 +43,7 @@ class USBSession(Session):
     #: endpoint will be used.
     ENDPOINTS = (None, None)
 
-    TIMEOUT = 1000
+    timeout = 2000
 
     @staticmethod
     def list_resources():
@@ -64,11 +64,14 @@ class USBSession(Session):
                                   usb_interface_number=intfc))
         return out
 
-
     def after_parsing(self):
         self.interface = usbtmc.USBTMC(int(self.parsed['manufacturer_id']),
                                        int(self.parsed['model_code']),
                                        self.parsed['serial_number'])
+
+        for name in 'SEND_END_EN,TERMCHAR,TERMCHAR_EN'.split(','):
+            attr = getattr(constants, 'VI_ATTR_' + name)
+            self.attrs[attr] = attr.default
 
     def read(self, count):
         """Reads data from device or interface synchronously.
@@ -115,16 +118,16 @@ class USBSession(Session):
         self.interface.close()
 
     def _get_attribute(self, attribute):
-        pass
+        raise Exception('Unknown attribute %s' % attribute)
 
     def _set_attribute(self, attribute, attribute_state):
-        pass
+        raise Exception('Unknown attribute %s' % attribute)
 
     @property
     def timeout(self):
-        pass
+        return self.timeout
 
     @timeout.setter
     def timeout(self, value):
-        pass
+        self.timeout = value
 

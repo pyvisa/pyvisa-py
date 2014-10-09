@@ -77,7 +77,7 @@ def register_subparser(interface_type, resource_class):
 
     :type interface_type: str
     :type resource_class: str
-    :return:
+    :return: a decorator
     """
     def deco(func):
         _SUBPARSER[(interface_type, resource_class)] = func
@@ -87,7 +87,15 @@ def register_subparser(interface_type, resource_class):
 
 
 def call_subparser(interface_type_part, resource_class, *parts):
+    """Call a subparser based on the interface_type and resource_class.
 
+    :type interface_type_part: str
+    :type resource_class: str
+    :return: dict mapping resource part to value.
+    :rtype: dict
+
+    :raises ValueError: if the interface is unknown.
+    """
     for interface_type, const in _INTERFACE_TYPES.items():
         if not interface_type_part.startswith(interface_type):
             continue
@@ -102,6 +110,13 @@ def call_subparser(interface_type_part, resource_class, *parts):
 
 
 def parse_resource_name(resource_name):
+    """Parse a resource name and return a dict mapping resource part to value.
+
+    :type resource_name: str
+    :rtype: dict
+
+    :raises InvalidResourceName: if the resource name is invalid.
+    """
     # TODO Remote VISA
 
     parts = resource_name.strip().split('::')
@@ -128,8 +143,13 @@ def parse_resource_name(resource_name):
 
 @register_subparser('GPIB', 'INSTR')
 def _gpib_instr(board, *parts):
+    """GPIB Instrument subparser.
 
-    # GPIB[board]::primary address[::secondary address][::INSTR]
+    Format:
+        GPIB[board]::primary address[::secondary address][::INSTR]
+
+    :raises InvalidResourceName: if the resource name is invalid.
+    """
 
     if not board:
         board = '0'
@@ -149,8 +169,14 @@ def _gpib_instr(board, *parts):
 
 @register_subparser('GPIB', 'INTFC')
 def _gpib_intfc(board, *parts):
+    """GPIB Interface subparser.
 
-    # GPIB[board]::INTFC
+    Format:
+        GPIB[board]::INTFC
+
+    :raises InvalidResourceName: if the resource name is invalid.
+    """
+
     if not board:
         board = '0'
 
@@ -163,8 +189,14 @@ def _gpib_intfc(board, *parts):
 
 @register_subparser('ASRL', 'INSTR')
 def _asrl_instr(board, *parts):
+    """ASRL Instrument subparser.
 
-    # ASRLboard[::INSTR]
+    Format:
+        ASRLboard[::INSTR]
+
+    :raises InvalidResourceName: if the resource name is invalid.
+    """
+
     if not board:
         raise ValueError('ASRL INSTR requires a board.')
 
@@ -177,8 +209,13 @@ def _asrl_instr(board, *parts):
 
 @register_subparser('TCPIP', 'INSTR')
 def _tcpip_instr(board, *parts):
+    """TCPIP Instrument subparser.
 
-    # TCPIP[board]::host address[::LAN device name][::INSTR]
+    Format:
+        TCPIP[board]::host address[::LAN device name][::INSTR]
+
+    :raises InvalidResourceName: if the resource name is invalid.
+    """
 
     if not board:
         board = '0'
@@ -198,8 +235,13 @@ def _tcpip_instr(board, *parts):
 
 @register_subparser('TCPIP', 'SOCKET')
 def _tcpip_socket(board, *parts):
+    """TCPIP Socket subparser.
 
-    # TCPIP[board]::host address::port::SOCKET
+    Format:
+        TCPIP[board]::host address::port::SOCKET
+
+    :raises InvalidResourceName: if the resource name is invalid.
+    """
 
     if not board:
         board = '0'
@@ -219,8 +261,13 @@ def _tcpip_socket(board, *parts):
 
 @register_subparser('USB', 'INSTR')
 def _usb_instr(board, *parts):
+    """USB Instrument subparser.
 
-    # USB[board]::manufacturer ID::model code::serial number[::USB interface number][::INSTR]
+    Format:
+        USB[board]::manufacturer ID::model code::serial number[::USB interface number][::INSTR]
+
+    :raises InvalidResourceName: if the resource name is invalid.
+    """
 
     if not board:
         board = '0'
@@ -243,8 +290,13 @@ def _usb_instr(board, *parts):
 
 @register_subparser('USB', 'RAW')
 def _usb_raw(board, *parts):
+    """USB Raw subparser.
 
-    # USB[board]::manufacturer ID::model code::serial number[::USB interface number]::RAW
+    Format:
+        USB[board]::manufacturer ID::model code::serial number[::USB interface number]::RAW
+
+    :raises InvalidResourceName: if the resource name is invalid.
+    """
 
     if not board:
         board = '0'

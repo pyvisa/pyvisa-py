@@ -24,7 +24,7 @@ SUCCESS = StatusCode.success
 
 @Session.register(constants.InterfaceType.tcpip, 'INSTR')
 class TCPIPSession(Session):
-    """A serial Session that uses PySerial to do the low level communication.
+    """A TCPIP Session that uses the network standard library to do the low level communication.
     """
 
     lock_timeout = 1000
@@ -58,6 +58,10 @@ class TCPIPSession(Session):
 
         self.link = link
         self.max_recv_size = min(max_recv_size, 2 ** 30) # 1GB
+
+        for name in 'SEND_END_EN,TERMCHAR,TERMCHAR_EN'.split(','):
+            attr = getattr(constants, 'VI_ATTR_' + name)
+            self.attrs[attr] = attr.default
 
     def _get_timeout(self):
         return self.timeout
@@ -184,9 +188,6 @@ class TCPIPSession(Session):
             raise NotImplementedError
 
         elif attribute == constants.VI_ATTR_TCPIP_PORT:
-            raise NotImplementedError
-
-        elif attribute == constants.VI_ATTR_SEND_END_EN:
             raise NotImplementedError
 
         elif attribute == constants.VI_ATTR_SUPPRESS_END_EN:

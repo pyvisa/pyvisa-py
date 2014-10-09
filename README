@@ -15,8 +15,8 @@ for most people. But NI-VISA is a proprietary library that only works on certain
 systems. That is when PyVISA-py jumps in.
 
 Starting form version 1.6, PyVISA allows to use different backends. These backends can be
-dinamically loaded. PyVISA-py is one of such backends. It implements most of the methods
-for Messge Based communication (Serial/USB/GPIB/Ethernet) using Python and some well developed,
+dynamically loaded. PyVISA-py is one of such backends. It implements most of the methods
+for Message Based communication (Serial/USB/GPIB/Ethernet) using Python and some well developed,
 easy to deploy and cross platform libraries
 
 .. _VISA: http://www.ivifoundation.org/Downloads/Specifications.htm
@@ -28,7 +28,7 @@ VISA and Python
 Python has a couple of features that make it very interesting for measurement controlling:
 
 - Python is an easy-to-learn scripting language with short development cycles.
-- It represents a high abstraction level [2], which perfectly blends with the abstraction
+- It represents a high abstraction level, which perfectly blends with the abstraction
   level of measurement programs.
 - It has a very rich set of native libraries, including numerical and plotting modules for
   data analysis and visualisation.
