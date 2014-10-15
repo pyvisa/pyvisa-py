@@ -17,7 +17,7 @@ import warnings
 import random
 
 from pyvisa import constants, errors, highlevel, logger
-from pyvisa.compat import integer_types
+from pyvisa.compat import integer_types, OrderedDict
 
 from . import common, sessions
 
@@ -50,14 +50,31 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
 
     from .tcpip import TCPIPSession
 
-    @property
-    def get_session_classes(self):
+    @classmethod
+    def get_session_classes(cls):
         return sessions.Session._session_classes
 
-    @property
-    def iter_session_classes_issues(self):
+    @classmethod
+    def iter_session_classes_issues(cls):
         return sessions.Session.iter_session_classes_issues()
 
+    @staticmethod
+    def get_debug_info():
+        """Return a list of lines with backend info.
+        """
+        from . import __version__
+        d = OrderedDict()
+        d['Version'] = '%s' % __version__
+
+        for key, val in PyVisaLibrary.get_session_classes().items():
+            key_name = '%s %s' % (key[0].name.upper(), key[1])
+            try:
+                d[key_name] = getattr(val, 'session_issue').split('\n')
+            except AttributeError:
+                d[key_name] = 'Available'
+
+
+        return d
 
     def _init(self):
 
