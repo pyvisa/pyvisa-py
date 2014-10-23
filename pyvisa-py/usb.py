@@ -64,6 +64,20 @@ class USBSession(Session):
                                   usb_interface_number=intfc))
         return out
 
+    @classmethod
+    def get_low_level_info(cls):
+        try:
+            ver = usb.__version__
+        except AttributeError:
+            ver = 'N/A'
+
+        try:
+            backend = usb.core.find()._ctx.backend.__class__.__module__.split('.')[-1]
+        except:
+            backend = 'N/A'
+
+        return 'via PyUSB (%s). Backend: %s' % (ver, backend)
+
     def after_parsing(self):
         self.interface = usbtmc.USBTMC(int(self.parsed['manufacturer_id']),
                                        int(self.parsed['model_code']),

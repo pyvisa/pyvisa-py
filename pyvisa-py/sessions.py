@@ -70,6 +70,10 @@ class Session(compat.with_metaclass(abc.ABCMeta)):
     session_type = None
 
     @classmethod
+    def get_low_level_info(cls):
+        return ''
+
+    @classmethod
     def iter_valid_session_classes(cls):
         """Yield (Interface Type, Resource Class), Session class pair for
         valid sessions classes.

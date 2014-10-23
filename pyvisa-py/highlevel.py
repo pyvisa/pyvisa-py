@@ -71,7 +71,7 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
             try:
                 d[key_name] = getattr(val, 'session_issue').split('\n')
             except AttributeError:
-                d[key_name] = 'Available'
+                d[key_name] = 'Available ' + val.get_low_level_info()
 
 
         return d

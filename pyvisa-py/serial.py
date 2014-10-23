@@ -48,6 +48,15 @@ class SerialSession(Session):
     def list_resources():
         return ['ASRL%s::INSTR' % port[0] for port in comports()]
 
+    @classmethod
+    def get_low_level_info(cls):
+        try:
+            ver = '.'.join(serial.version)
+        except AttributeError:
+            ver = 'N/A'
+
+        return 'via PySerial (%s)' % ver
+
     def after_parsing(self):
         self.interface = serial.Serial(port=self.parsed['board'], timeout=2000, writeTimeout=2000)
 
