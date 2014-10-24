@@ -229,6 +229,15 @@ class Session(compat.with_metaclass(abc.ABCMeta)):
         # or user defined because they are not defined by the interface.
         if attribute in self.attrs:
             self.attrs[attribute] = attribute_state
+            return constants.StatusCode.success
+        
+        elif attribute == constants.VI_ATTR_TMO_VALUE:
+            try:
+                self.timeout = attribute_state
+            except:
+                return constants.StatusCode.error_nonsupported_attribute_state
+
+            return constants.StatusCode.success
 
          # Dispatch to `_set_attribute`, which must be implemented by subclasses.
 
