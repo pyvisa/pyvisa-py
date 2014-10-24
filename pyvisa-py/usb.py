@@ -12,7 +12,7 @@
 
 from __future__ import division, unicode_literals, print_function, absolute_import
 
-from pyvisa import constants
+from pyvisa import constants, attributes
 
 from .sessions import Session
 
@@ -84,8 +84,8 @@ class USBSession(Session):
                                        self.parsed['serial_number'])
 
         for name in 'SEND_END_EN,TERMCHAR,TERMCHAR_EN'.split(','):
-            attr = getattr(constants, 'VI_ATTR_' + name)
-            self.attrs[attr] = attr.default
+            attribute = getattr(constants, 'VI_ATTR_' + name)
+            self.attrs[attribute] = attributes.AttributesByID[attribute].default
 
     def read(self, count):
         """Reads data from device or interface synchronously.

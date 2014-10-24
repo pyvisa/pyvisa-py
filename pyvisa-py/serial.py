@@ -12,7 +12,7 @@
 
 from __future__ import division, unicode_literals, print_function, absolute_import
 
-from pyvisa import constants
+from pyvisa import constants, attributes
 
 from .sessions import Session
 from . import common
@@ -62,8 +62,8 @@ class SerialSession(Session):
 
         for name in 'ASRL_END_IN,ASRL_END_OUT,SEND_END_EN,TERMCHAR,' \
                     'TERMCHAR_EN'.split(','):
-            attr = getattr(constants, 'VI_ATTR_' + name)
-            self.attrs[attr] = attr.default
+            attribute = getattr(constants, 'VI_ATTR_' + name)
+            self.attrs[attribute] = attributes.AttributesByID[attribute].default
 
     def _get_timeout(self):
         return self.interface.timeout

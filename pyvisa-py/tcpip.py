@@ -12,7 +12,7 @@
 
 import random
 
-from pyvisa import constants
+from pyvisa import constants, attributes
 
 from .sessions import Session
 from .protocols import vxi11
@@ -60,8 +60,8 @@ class TCPIPSession(Session):
         self.max_recv_size = min(max_recv_size, 2 ** 30) # 1GB
 
         for name in 'SEND_END_EN,TERMCHAR,TERMCHAR_EN'.split(','):
-            attr = getattr(constants, 'VI_ATTR_' + name)
-            self.attrs[attr] = attr.default
+            attribute = getattr(constants, 'VI_ATTR_' + name)
+            self.attrs[attribute] = attributes.AttributesByID[attribute].default
 
     def _get_timeout(self):
         return self.timeout
