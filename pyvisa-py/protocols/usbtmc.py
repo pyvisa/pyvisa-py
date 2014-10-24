@@ -156,10 +156,14 @@ class USBRaw(object):
 
         try:
             self.usb_dev.set_configuration() #self.CONFIGURATION
+        except usb.core.USBError as e:
+            raise Exception('failed to set configuration')
+
+        try:
             self.usb_dev.set_interface_altsetting()
         except usb.core.USBError as e:
             #self.log_error("Could not set configuration")
-            raise Exception('failed to set configuration')
+            pass
 
         self.usb_intf = self._find_interface(self.usb_dev, self.INTERFACE)
         #self.log_debug('Interface: {}'.format(self.usb_intf.index))
