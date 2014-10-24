@@ -124,13 +124,15 @@ class USBRaw(object):
     #: endpoint will be used.
     ENDPOINTS = (None, None)
 
-    TIMEOUT = 1000
+    timeout = 2000
 
     find_devices = staticmethod(find_devices)
 
     def __init__(self, vendor=None, product=None, serial_number=None,
                  device_filters=None, timeout=None, **kwargs):
         super(USBRaw, self).__init__()
+
+        self.timeout = timeout
 
         device_filters = device_filters or {}
         devices = list(self.find_devices(vendor, product, serial_number, None, **device_filters))
@@ -140,7 +142,7 @@ class USBRaw(object):
         elif len(devices) > 1:
             desc = '\n'.join(str(DeviceInfo.from_device(dev)) for dev in devices)
             raise ValueError('{} devices found:\n{}\n'
-                                  'Please narrow the search criteria'.format(len(devices), desc))
+                             'Please narrow the search criteria'.format(len(devices), desc))
 
         self.usb_dev, other = devices[0], devices[1:]
         nfo = DeviceInfo.from_device(self.usb_dev)
@@ -214,7 +216,7 @@ class USBRaw(object):
         if size <= 0:
             size = 1
 
-        data = self.usb_recv_ep.read(size, self.TIMEOUT).tobytes()
+        data = self.usb_recv_ep.read(size, self.timeout).tobytes()
 
         return data
 
@@ -256,7 +258,7 @@ class USBTMC(USBRaw):
                    0x0000,
                    self.usb_intf.index,
                    0x0018,
-                   timeout=self.TIMEOUT)
+                   timeout=self.timeout)
 
     def _find_interface(self, dev, setting):
         interfaces = find_interfaces(dev, bInterfaceClass=0xFE, bInterfaceSubClass=3)

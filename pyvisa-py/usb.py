@@ -35,15 +35,7 @@ class USBSession(Session):
     via usb port using pyUSB
     """
 
-    #: Configuration number to be used. If None, the default will be used.
-    CONFIGURATION = None
-    #: Interface index it be used
-    INTERFACE = (0, 0)
-    #: Receive and Send endpoints to be used. If None the first IN (or OUT) BULK
-    #: endpoint will be used.
-    ENDPOINTS = (None, None)
-
-    timeout = 2000
+    _timeout = 2000
 
     @staticmethod
     def list_resources():
@@ -72,6 +64,7 @@ class USBSession(Session):
             ver = 'N/A'
 
         try:
+            # noinspection PyProtectedMember
             backend = usb.core.find()._ctx.backend.__class__.__module__.split('.')[-1]
         except:
             backend = 'N/A'
@@ -139,9 +132,9 @@ class USBSession(Session):
 
     @property
     def timeout(self):
-        return self.timeout
+        return self.interface.timeout
 
     @timeout.setter
     def timeout(self, value):
-        self.timeout = value
+        self.interface.timeout = value
 
