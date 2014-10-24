@@ -133,7 +133,7 @@ class USBRaw(object):
         super(USBRaw, self).__init__()
 
         device_filters = device_filters or {}
-        devices = self.find_devices(vendor, product, serial_number, None, **device_filters)
+        devices = list(self.find_devices(vendor, product, serial_number, None, **device_filters))
 
         if not devices:
             raise ValueError('No device found.')
