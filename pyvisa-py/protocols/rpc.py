@@ -544,21 +544,21 @@ class PartialPortMapperClient(object):
 class TCPPortMapperClient(PartialPortMapperClient, RawTCPClient):
 
     def __init__(self, host):
-        RawTCPClient.__init__(self, host, PMAP_PROG, PortMapperVersion, PMAP_PORT)
+        RawTCPClient.__init__(self, host, PMAP_PROG, PMAP_VERS, PMAP_PORT)
         PartialPortMapperClient.__init__(self)
 
 
 class UDPPortMapperClient(PartialPortMapperClient, RawUDPClient):
 
     def __init__(self, host):
-        RawUDPClient.__init__(self, host, PMAP_PROG, PortMapperVersion, PMAP_PORT)
+        RawUDPClient.__init__(self, host, PMAP_PROG, PMAP_VERS, PMAP_PORT)
         PartialPortMapperClient.__init__(self)
 
 
 class BroadcastUDPPortMapperClient(PartialPortMapperClient, RawBroadcastUDPClient):
 
     def __init__(self, bcastaddr):
-        RawBroadcastUDPClient.__init__(self, bcastaddr, PMAP_PROG, PortMapperVersion, PMAP_PORT)
+        RawBroadcastUDPClient.__init__(self, bcastaddr, PMAP_PROG, PMAP_VERS, PMAP_PORT)
         PartialPortMapperClient.__init__(self)
 
 
