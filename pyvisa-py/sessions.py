@@ -230,7 +230,7 @@ class Session(compat.with_metaclass(abc.ABCMeta)):
         if attribute in self.attrs:
             self.attrs[attribute] = attribute_state
             return constants.StatusCode.success
-        
+
         elif attribute == constants.VI_ATTR_TMO_VALUE:
             try:
                 self.timeout = attribute_state
