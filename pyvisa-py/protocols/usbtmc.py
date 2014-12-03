@@ -25,6 +25,14 @@ import usb
 
 from .usbutil import find_devices, find_interfaces, find_endpoint, DeviceInfo, usb_find_desc
 
+import sys
+
+if sys.version_info < (3, 2):
+    def array_to_bytes(arr):
+        return arr.tostring()
+else:
+    array_to_bytes = array.array.tobytes
+
 
 class MsgID(enum.IntEnum):
     """From USB-TMC table2
@@ -216,7 +224,7 @@ class USBRaw(object):
         if size <= 0:
             size = 1
 
-        data = self.usb_recv_ep.read(size, self.timeout).tobytes()
+        data = array_to_bytes(self.usb_recv_ep.read(size, self.timeout))
 
         return data
 
@@ -325,4 +333,3 @@ class USBTMC(USBRaw):
         #self.log_debug('Received {!r} (len={})', received, len(received))
 
         return received
-
