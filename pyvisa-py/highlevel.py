@@ -15,6 +15,7 @@ from __future__ import division, unicode_literals, print_function, absolute_impo
 import warnings
 
 import random
+import re
 
 from pyvisa import constants, errors, highlevel, logger
 from pyvisa.compat import integer_types, OrderedDict
@@ -228,13 +229,17 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
         :rtype: ViFindList, int, unicode (Py2) or str (Py3), VISAStatus
         """
 
-        # TODO: Query not implemented
-
         # For each session type, ask for the list of connected resources and
         # merge them into a single list.
 
         resources = sum([st.list_resources()
                          for key, st in sessions.Session.iter_valid_session_classes()], [])
+
+        query = query.replace('?*', '.*')
+        matcher = re.compile(query, re.IGNORECASE)
+
+        resources = [res for res in resources if matcher.match(res)]
+
         count = len(resources)
         resources = iter(resources)
         if count:
