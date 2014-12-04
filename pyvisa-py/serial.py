@@ -65,10 +65,12 @@ class SerialSession(Session):
             attribute = getattr(constants, 'VI_ATTR_' + name)
             self.attrs[attribute] = attributes.AttributesByID[attribute].default
 
-    def _get_timeout(self):
+    @property
+    def timeout(self):
         return self.interface.timeout
 
-    def _set_timeout(self, value):
+    @timeout.setter
+    def timeout(self, value):
         self.interface.timeout = value
         self.interface.writeTimeout = value
 

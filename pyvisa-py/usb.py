@@ -35,7 +35,7 @@ class USBSession(Session):
     via usb port using pyUSB
     """
 
-    _timeout = 2000
+    timeout = 2000
 
     @staticmethod
     def list_resources():
@@ -129,12 +129,3 @@ class USBSession(Session):
 
     def _set_attribute(self, attribute, attribute_state):
         raise Exception('Unknown attribute %s' % attribute)
-
-    @property
-    def timeout(self):
-        return self.interface.timeout
-
-    @timeout.setter
-    def timeout(self, value):
-        self.interface.timeout = value
-

@@ -63,12 +63,6 @@ class TCPIPSession(Session):
             attribute = getattr(constants, 'VI_ATTR_' + name)
             self.attrs[attribute] = attributes.AttributesByID[attribute].default
 
-    def _get_timeout(self):
-        return self.timeout
-
-    def _set_timeout(self, value):
-        self.timeout = value
-
     def close(self):
         self.interface.destroy_link(self.link)
         self.interface.close()
