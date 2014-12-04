@@ -111,7 +111,7 @@ class SerialSession(Session):
                 else:
                     return ret, StatusCode.error_timeout
 
-        elif end_in == SerialTermination.term_char:
+        elif end_in == SerialTermination.termination_char:
             ret = b''
             term_char = self.get_attribute(constants.VI_ASRL_END_TERMCHAR)
             while True:
