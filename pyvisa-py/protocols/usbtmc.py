@@ -31,7 +31,8 @@ if sys.version_info < (3, 2):
     def array_to_bytes(arr):
         return arr.tostring()
 else:
-    array_to_bytes = array.array.tobytes
+    def array_to_bytes(arr):
+        return arr.tobytes()
 
 
 class MsgID(enum.IntEnum):
