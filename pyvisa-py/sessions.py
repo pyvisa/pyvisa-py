@@ -30,10 +30,6 @@ class Session(compat.with_metaclass(abc.ABCMeta)):
                    If not provided, the resource_name will be parsed.
     """
 
-    def _get_timeout(self): pass
-    def _set_timeout(self, value): pass
-    timeout = abc.abstractproperty(_get_timeout, _set_timeout)
-
     @abc.abstractmethod
     def _get_attribute(self, attribute):
         """Get the value for a given VISA attribute for this session.
