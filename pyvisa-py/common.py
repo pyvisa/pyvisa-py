@@ -97,7 +97,7 @@ def call_subparser(interface_type_part, resource_class, *parts):
     :raises ValueError: if the interface is unknown.
     """
     for interface_type, const in _INTERFACE_TYPES.items():
-        if not interface_type_part.startswith(interface_type):
+        if not interface_type_part.upper().startswith(interface_type):
             continue
 
         first_part = interface_type_part.lstrip(interface_type)
@@ -120,7 +120,7 @@ def parse_resource_name(resource_name):
     # TODO Remote VISA
 
     parts = resource_name.strip().split('::')
-    interface_type, parts = parts[0].upper(), parts[1:]
+    interface_type, parts = parts[0], parts[1:]
 
     if len(parts) == 0:
         resource_class = 'INSTR'
