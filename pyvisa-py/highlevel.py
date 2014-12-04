@@ -244,7 +244,8 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
         resources = iter(resources)
         if count:
             return resources, count, next(resources), constants.StatusCode.success
-        return resources, count, None, constants.StatusCode.success
+        
+        raise errors.VisaIOError(errors.StatusCode.error_resource_not_found.value)
 
     def parse_resource(self, session, resource_name):
         """Parse a resource string to get the interface information.
