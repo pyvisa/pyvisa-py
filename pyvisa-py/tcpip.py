@@ -86,7 +86,7 @@ class TCPIPSession(Session):
         flags = 0
         reason = 0
 
-        if self.get_attribute(constants.VI_ATTR_TERMCHAR_EN):
+        if self.get_attribute(constants.VI_ATTR_TERMCHAR_EN)[0]:
             term_char, _ = self.get_attribute(constants.VI_ATTR_TERMCHAR)
         else:
             term_char = 0
