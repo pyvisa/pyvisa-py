@@ -62,7 +62,7 @@ class Session(compat.with_metaclass(abc.ABCMeta)):
     #: dict[(Interface Type, Resource Class) , Session]
     _session_classes = dict()
 
-    #: Session handler for the resource manager.
+    #: Session type as (Interface Type, Resource Class)
     session_type = None
 
     @classmethod
@@ -115,6 +115,7 @@ class Session(compat.with_metaclass(abc.ABCMeta)):
                 logger.warning('%s is already registered in the ResourceManager. '
                                'Overwriting with %s' % ((interface_type, resource_class), python_class))
 
+            python_class.session_type = (interface_type, resource_class)
             cls._session_classes[(interface_type, resource_class)] = python_class
             return python_class
         return _internal
