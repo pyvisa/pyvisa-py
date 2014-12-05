@@ -87,7 +87,7 @@ class SerialSession(Session):
         :rtype: bytes, VISAStatus
         """
 
-        end_in = self.get_attribute(constants.VI_ATTR_ASRL_END_IN)
+        end_in, _ = self.get_attribute(constants.VI_ATTR_ASRL_END_IN)
 
         if end_in == SerialTermination.none:
             ret = self.interface.read(count)
@@ -113,7 +113,7 @@ class SerialSession(Session):
 
         elif end_in == SerialTermination.termination_char:
             ret = b''
-            term_char = self.get_attribute(constants.VI_ASRL_END_TERMCHAR)
+            term_char, _ = self.get_attribute(constants.VI_ASRL_END_TERMCHAR)
             while True:
                 ret += self.interface.read(1)
                 if ret[-1:] == term_char:
@@ -126,7 +126,7 @@ class SerialSession(Session):
                     return ret, StatusCode.error_timeout
 
         else:
-            raise ValueError('Unknown value for VI_ATTR_ASRL_END_IN: %d' % end_in)
+            raise ValueError('Unknown value for VI_ATTR_ASRL_END_IN: %s' % end_in)
 
     def write(self, data):
         """Writes data to device or interface synchronously.
@@ -134,7 +134,7 @@ class SerialSession(Session):
         Corresponds to viWrite function of the VISA library.
 
         :param data: data to be written.
-        :type data: str
+        :type data: bytes
         :return: Number of bytes actually transferred, return value of the library call.
         :rtype: int, VISAStatus
         """
@@ -144,8 +144,10 @@ class SerialSession(Session):
         send_end, _ = self.get_attribute(constants.VI_ATTR_SEND_END_EN)
 
         try:
+            # We need to wrap data in common.iter_bytes to Provide Python 2 and 3 compatibility
+
             if end_out == SerialTermination.none:
-                pass
+                data = common.iter_bytes(data)
 
             elif end_out == SerialTermination.last_bit:
                 last_bit, _ = self.get_attribute(constants.VI_ATTR_ASRL_DATA_BITS)
@@ -153,8 +155,11 @@ class SerialSession(Session):
                 data = common.iter_bytes(data, mask, send_end)
 
             elif end_out == SerialTermination.termination_char:
-                term_char, _ = self.get_attribute(constants.VI_ASRL_END_TERMCHAR)
-                data = data + term_char
+                term_char, _ = self.get_attribute(constants.VI_ATTR_TERMCHAR)
+                data = common.iter_bytes(data + term_char)
+
+            else:
+                raise ValueError('Unknown value for VI_ATTR_ASRL_END_OUT: %s' % end_out)
 
             count = 0
             for d in data:
