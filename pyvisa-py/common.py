@@ -31,8 +31,12 @@ class NamedObject(object):
 
 if sys.version >= '3':
     def iter_bytes(data, mask, send_end):
-        for d in data[:-1]:
-            yield bytes([d & ~mask])
+        if mask is None:
+            for d in data[:-1]:
+                yield bytes([d])
+        else:
+            for d in data[:-1]:
+                yield bytes([d & ~mask])
 
         if send_end:
             yield bytes([data[-1] | ~mask])
@@ -43,8 +47,12 @@ if sys.version >= '3':
     last_int = lambda val: val[-1]
 else:
     def iter_bytes(data, mask, send_end):
-        for d in data[:-1]:
-            yield chr(ord(d) & ~mask)
+        if mask is None:
+            for d in data[:-1]:
+                yield d
+        else:
+            for d in data[:-1]:
+                yield chr(ord(d) & ~mask)
 
         if send_end:
             yield chr(ord(data[-1]) | ~mask)
