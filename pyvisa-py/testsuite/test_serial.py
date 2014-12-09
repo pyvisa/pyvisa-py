@@ -7,8 +7,8 @@ from pyvisa.testsuite import BaseTestCase
 
 
 
-pyvisapy = __import__('pyvisa-py')
-SerialSession = pyvisapy.serial.SerialSession
+#pyvisapy = __import__('pyvisa-py')
+#SerialSession = pyvisapy.serial.SerialSession
 
 
 class Test():
