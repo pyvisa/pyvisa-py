@@ -58,7 +58,7 @@ class SerialSession(Session):
         return 'via PySerial (%s)' % ver
 
     def after_parsing(self):
-        self.interface = serial.Serial(port=self.parsed['board'], timeout=2000, writeTimeout=2000)
+        #self.interface = serial.Serial(port=self.parsed['board'], timeout=2000, writeTimeout=2000)
 
         for name in 'ASRL_END_IN,ASRL_END_OUT,SEND_END_EN,TERMCHAR,' \
                     'TERMCHAR_EN'.split(','):
@@ -113,17 +113,16 @@ class SerialSession(Session):
 
         elif end_in == SerialTermination.termination_char:
             ret = b''
-            term_char, _ = self.get_attribute(constants.VI_ASRL_END_TERMCHAR)
+            term_char, _ = self.get_attribute(constants.VI_ATTR_TERMCHAR)
+            term_char = common.int_to_byte(term_char)
             while True:
                 ret += self.interface.read(1)
                 if ret[-1:] == term_char:
                     # TODO: What is the correct success code??
-                    return ret, StatusCode.termination_char
+                    return ret, StatusCode.success_termination_character_read
                 #TODO: Should we stop here as well?
-                if len(ret) == count:
-                    return ret, StatusCode.success_max_count_read
-                else:
-                    return ret, StatusCode.error_timeout
+                #if len(ret) == count:
+                #    return ret, StatusCode.success_max_count_read
 
         else:
             raise ValueError('Unknown value for VI_ATTR_ASRL_END_IN: %s' % end_in)
@@ -146,7 +145,7 @@ class SerialSession(Session):
         try:
             # We need to wrap data in common.iter_bytes to Provide Python 2 and 3 compatibility
 
-            if end_out == SerialTermination.none:
+            if end_out in (SerialTermination.none, SerialTermination.termination_break):
                 data = common.iter_bytes(data)
 
             elif end_out == SerialTermination.last_bit:
