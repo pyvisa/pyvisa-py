@@ -83,7 +83,7 @@ _INTERFACE_TYPES = {'ASRL': constants.InterfaceType.asrl,
                     'USB': constants.InterfaceType.usb,
                     'VXI': constants.InterfaceType.vxi}
 
-_RESOURCE_CLASSES = ('INSTR', 'INTF', 'BACKPLANE', 'MEMACC', 'SOCKET', 'RAW', 'SERVANT')
+_RESOURCE_CLASSES = ('INSTR', 'INTFC', 'BACKPLANE', 'MEMACC', 'SOCKET', 'RAW', 'SERVANT')
 
 
 #: (str, str) -> (str, *str) -> {}
@@ -201,7 +201,7 @@ def _gpib_intfc(board, *parts):
         raise InvalidResourceName('GPIB[board]::INTFC')
 
     return dict(board=board,
-                canonical_resource_name='GPIB%(board)::INTFC')
+                canonical_resource_name='GPIB%(board)s::INTFC')
 
 
 @register_subparser('ASRL', 'INSTR')
