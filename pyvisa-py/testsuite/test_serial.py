@@ -10,7 +10,7 @@ except ImportError:
 from pyvisa.testsuite import BaseTestCase
 from pyvisa import constants
 
-pyvisapy = __import__('pyvisa-py')
+pyvisapy = __import__('pyvisa-py', fromlist=('serial', 'common'))
 SerialSession = pyvisapy.serial.SerialSession
 iter_bytes = pyvisapy.common.iter_bytes
 
