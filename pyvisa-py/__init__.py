@@ -25,5 +25,7 @@ except:             # pragma: no cover
 
 from .highlevel import PyVisaLibrary
 
+from . import serial
+
 WRAPPER_CLASS = PyVisaLibrary
 
