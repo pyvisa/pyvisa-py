@@ -2,6 +2,8 @@
 
 from __future__ import division, unicode_literals, print_function, absolute_import
 
+import importlib
+
 try:
     import Queue as queue
 except ImportError:
@@ -10,9 +12,10 @@ except ImportError:
 from pyvisa.testsuite import BaseTestCase
 from pyvisa import constants
 
-pyvisapy = __import__('pyvisa-py', fromlist=('serial', 'common'))
-SerialSession = pyvisapy.serial.SerialSession
-iter_bytes = pyvisapy.common.iter_bytes
+serial = importlib.import_module('pyvisa-py.serial')
+common = importlib.import_module('pyvisa-py.common')
+SerialSession = serial.SerialSession
+iter_bytes = common.iter_bytes
 
 
 class NamedObject(object):
