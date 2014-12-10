@@ -19,11 +19,16 @@ from . import common
 
 try:
     import serial
+    from serial import Serial
     from serial.tools.list_ports import comports
 except ImportError as e:
     Session.register_unavailable(constants.InterfaceType.asrl, 'INSTR',
                                  'Please install PySerial to use this resource type.\n%s' % e)
-    raise
+
+    def comports(*args, **kwargs):
+        raise ValueError('Please install PySerial to use this resource type')
+
+    Serial = comports
 
 
 def to_state(boolean_input):
@@ -58,7 +63,12 @@ class SerialSession(Session):
         return 'via PySerial (%s)' % ver
 
     def after_parsing(self):
-        #self.interface = serial.Serial(port=self.parsed['board'], timeout=2000, writeTimeout=2000)
+        if 'mock' in self.parsed:
+            cls = self.parsed['mock']
+        else:
+            cls = Serial
+
+        self.interface = cls(port=self.parsed['board'], timeout=2000, writeTimeout=2000)
 
         for name in 'ASRL_END_IN,ASRL_END_OUT,SEND_END_EN,TERMCHAR,' \
                     'TERMCHAR_EN'.split(','):

@@ -16,6 +16,12 @@ import sys
 from pyvisa import constants
 
 
+class MockInterface(object):
+
+    def __init__(self, resource_name):
+       self.resource_name = resource_name
+
+
 class NamedObject(object):
     """A class to construct named sentinels.
     """

@@ -39,11 +39,11 @@ class SpecialByte(NamedObject):
 
 EOM4882 = SpecialByte('EOM4882')
 
+class MockSerialInterface(common.MockInterface):
 
+    def __init__(self, resource_name, messages):
+        super(MockSerialInterface, self).__init__(resource_name)
 
-class MockSerialInterface(object):
-
-    def __init__(self, messages):
         #: Stores the queries accepted by the device.
         #: dict[tuple[bytes], tuple[bytes])
         self._queries = {}
@@ -60,6 +60,9 @@ class MockSerialInterface(object):
         #: Buffer in which the user can write
         #: [bytes]
         self._input_buffer = list()
+
+    def __call__(self, *args, **kwargs):
+        return self
 
     def write(self, data):
         """Write data into the device input buffer.
@@ -104,11 +107,10 @@ class Test(BaseTestCase):
 
     def test_simple(self):
 
-        sess = SerialSession(None, 'ASRL11::INSTR', None)
-
         a, b = b'*IDN?\n', b'Test\n'
 
-        sess.interface = MockSerialInterface({a: b})
+        sess = SerialSession(None, MockSerialInterface('ASRL11::INSTR', {a: b}))
+
         sess.write(a)
         self.assertEqual(sess.read(1), (b, constants.StatusCode.success_termination_character_read))
 
