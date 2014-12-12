@@ -94,48 +94,32 @@ class SerialSession(Session):
 
         :param count: Number of bytes to be read.
         :return: data read, return value of the library call.
-        :rtype: bytes, VISAStatus
+        :rtype: bytes, constants.StatusCode
         """
 
         end_in, _ = self.get_attribute(constants.VI_ATTR_ASRL_END_IN)
+        suppress_end_en, _ = self.get_attribute(constants.VI_ATTR_SUPPRESS_END_EN)
+
+        reader = lambda: self.interface.read(1)
 
         if end_in == SerialTermination.none:
-            ret = self.interface.read(count)
-            if len(ret) == count:
-                return ret, StatusCode.success_max_count_read
-            else:
-                return ret, StatusCode.error_timeout
+            checker = lambda current: False
 
         elif end_in == SerialTermination.last_bit:
-            ret = b''
             mask = 2 ** self.interface.bytesize
-            while True:
-                ret += self.interface.read(1)
-                if common.last_int(ret) & mask:
-                    # TODO: What is the correct success code??
-                    return ret, StatusCode.success
-
-                #TODO: Should we stop here as well?
-                if len(ret) == count:
-                    return ret, StatusCode.success_max_count_read
-                else:
-                    return ret, StatusCode.error_timeout
+            checker = lambda current: bool(common.last_int(current) & mask)
 
         elif end_in == SerialTermination.termination_char:
-            ret = b''
-            term_char, _ = self.get_attribute(constants.VI_ATTR_TERMCHAR)
-            term_char = common.int_to_byte(term_char)
-            while True:
-                ret += self.interface.read(1)
-                if ret[-1:] == term_char:
-                    # TODO: What is the correct success code??
-                    return ret, StatusCode.success_termination_character_read
-                #TODO: Should we stop here as well?
-                #if len(ret) == count:
-                #    return ret, StatusCode.success_max_count_read
+            end_char, _ = self.get_attribute(constants.VI_ATTR_TERMCHAR)
+
+            checker = lambda current: common.last_int(current) == end_char
 
         else:
             raise ValueError('Unknown value for VI_ATTR_ASRL_END_IN: %s' % end_in)
+
+        return self._read(reader, count, checker, suppress_end_en, None, False,
+                          serial.SerialTimeoutException)
+
 
     def write(self, data):
         """Writes data to device or interface synchronously.

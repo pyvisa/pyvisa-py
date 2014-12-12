@@ -13,6 +13,7 @@
 from __future__ import division, unicode_literals, print_function, absolute_import
 
 import abc
+import time
 
 from pyvisa import logger, constants, attributes, compat
 
@@ -248,4 +249,53 @@ class Session(compat.with_metaclass(abc.ABCMeta)):
         except ValueError:
             return constants.StatusCode.error_nonsupported_attribute_state
 
+    def _read(self, reader, count, end_indicator_checker, suppress_end_en,
+              termination_char, termination_char_en, timeout_exception):
+        """Reads data from device or interface synchronously.
 
+        Corresponds to viRead function of the VISA library.
+
+        :param reader: Function to read a single byte.
+        :type reader: () -> byte
+        :param count: Number of bytes to be read.
+        :type count: int
+        :param end_indicator_checker: Function to check if the byte.
+        :type end_indicator_checker: (byte) -> boolean
+        :param suppress_end_en: suppress end.
+        :type suppress_end_en: bool
+        :param termination_char: Number of bytes to be read.
+        :param termination_char_en: termination char enabled.
+        :type termination_char_en: boolean
+        :param: timeout_exception: Exception to capture time out for the given interface.
+        :type: Exception
+        :return: data read, return value of the library call.
+        :rtype: bytes, constants.StatusCode
+        """
+
+        timeout = self.get_attribute(constants.VI_ATTR_TMO_VALUE)[0] / 1000.
+
+        start = time.time()
+        out = b''
+        while True:
+            try:
+                current = reader()
+            except timeout_exception:
+                return out, constants.StatusCode.error_timeout
+
+            if current:
+                out += current
+                end_indicator_received = end_indicator_checker(current)
+                if end_indicator_received and not suppress_end_en:
+                    # RULE 6.1.1
+                    return out, constants.StatusCode.success
+
+                elif not end_indicator_received and current == termination_char and termination_char_en:
+                    # RULE 6.1.2
+                    return out, constants.StatusCode.success_termination_character_read
+
+                elif not end_indicator_received and current != termination_char and len(out) == count:
+                    # RULE 6.1.3
+                    return out, constants.StatusCode.success_max_count_read
+
+            if time.time() - start > timeout:
+                return out, constants.StatusCode.error_timeout
