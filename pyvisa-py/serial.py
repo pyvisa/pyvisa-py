@@ -71,7 +71,7 @@ class SerialSession(Session):
         self.interface = cls(port=self.parsed['board'], timeout=2000, writeTimeout=2000)
 
         for name in 'ASRL_END_IN,ASRL_END_OUT,SEND_END_EN,TERMCHAR,' \
-                    'TERMCHAR_EN'.split(','):
+                    'TERMCHAR_EN,SUPPRESS_END_EN'.split(','):
             attribute = getattr(constants, 'VI_ATTR_' + name)
             self.attrs[attribute] = attributes.AttributesByID[attribute].default
 
@@ -245,9 +245,6 @@ class SerialSession(Session):
         elif attribute == constants.VI_ATTR_INTF_TYPE:
             return constants.InterfaceType.asrl
 
-        elif attribute == constants.VI_ATTR_SUPPRESS_END_EN:
-            raise NotImplementedError
-
         raise Exception('Unknown attribute %s' % attribute)
 
     def _set_attribute(self, attribute, attribute_state):
@@ -270,6 +267,7 @@ class SerialSession(Session):
 
         elif attribute == constants.VI_ATTR_ASRL_DATA_BITS:
             self.interface.bytesize = attribute_state
+            return StatusCode.success
 
         elif attribute == constants.VI_ATTR_ASRL_DCD_STATE:
             raise NotImplementedError
@@ -327,9 +325,6 @@ class SerialSession(Session):
             raise Exception('Unknown bits value: %r' % bits)
 
         elif attribute == constants.VI_ATTR_ASRL_XOFF_CHAR:
-            raise NotImplementedError
-
-        elif attribute == constants.VI_ATTR_SUPPRESS_END_EN:
             raise NotImplementedError
 
         raise Exception('Unknown attribute %s' % attribute)
