@@ -160,41 +160,6 @@ def ep_attributes(ep):
     return ', '.join(attrs)
 
 
-def list_devices():
-    devs = find_devices()
-    print('{} devices found'.format(len(devs)))
-    for ndx, dev in enumerate(devs):
-        print('Device #{}'.format(ndx))
-        c, s, p = dev.bDeviceClass, dev.bDeviceSubClass, dev.bDeviceProtocol
-        a, b = ClassCodes.get(c, ('Unknown', 'Unknown'))
-        nfo = DeviceInfo.from_device(dev)
-        print('- Class: {}, {} ({})'.format(a, b, c))
-        print('- Subclass and protocol: {} ({} {})'.format(AllCodes.get((c, s, p), 'Unknown'), s, p))
-        print('- Manufacturer: {} ({})'.format(nfo.manufacturer, dev.idVendor))
-        print('- Product: {} ({})'.format(nfo.product, dev.idProduct))
-        print('- Serial Number: {}'.format(nfo.serial_number))
-        print('- Number of configurations: {}'.format(dev.bNumConfigurations))
-        try:
-            for cfg in dev:
-                print('- Configurations #{}'.format(cfg.bConfigurationValue))
-                for intf in cfg:
-                    print('-- Interface: {}'.format(intf.bInterfaceNumber))
-                    print('-- Alternate: {}'.format(intf.bAlternateSetting))
-                    print('-- Endpoints:')
-                    for ep in intf:
-                        if usb.util.endpoint_direction(ep.bEndpointAddress) == usb.util.ENDPOINT_OUT:
-                            inout = 'out'
-                        else:
-                            inout = 'in'
-                        print('--- {} ({})'.format(ep.bEndpointAddress, inout))
-                        print('--- Max Packet Size: {}'.format(ep.wMaxPacketSize))
-                        print('--- Polling interval: {}'.format(ep.bInterval))
-                        print('--- Attributes: {}'.format(ep_attributes(ep)))
-        except Exception as e:
-            print('- Exception: {}'.format(e))
-        print('-------')
-
-
 def find_devices(vendor=None, product=None, serial_number=None, custom_match=None, **kwargs):
     """Find connected USB devices matching certain keywords.
 
@@ -226,9 +191,8 @@ def find_devices(vendor=None, product=None, serial_number=None, custom_match=Non
         def cm(dev):
             if custom_match is not None and not custom_match(dev):
                 return False
-            info = DeviceInfo.from_device(dev)
             for attr, pattern in attrs.items():
-                if not fnmatch(getattr(info, attr).lower(), pattern.lower()):
+                if not fnmatch(getattr(dev, attr).lower(), pattern.lower()):
                     return False
             return True
     else:
@@ -260,22 +224,6 @@ def find_endpoint(interface, direction, type):
                                             usb.util.endpoint_type(e.bmAttributes) == type
          )
     return ep
-
-
-class DeviceInfo(namedtuple('DeviceInfo', 'manufacturer product serial_number')):
-
-    def __str__(self):
-        return '{} {}. S/N {}'.format(self.manufacturer, self.product, self.serial_number)
-
-    @classmethod
-    def from_device(cls, device):
-        ret = []
-        for attr in ('iManufacturer', 'iProduct', 'iSerialNumber'):
-            try:
-                ret.append(usb_get_string(device, 255, getattr(device, attr)).strip())
-            except Exception as e:
-                ret.append('Unknown')
-        return cls(*ret)
 
 
 def _patch_endpoint(ep, log_func=print):
