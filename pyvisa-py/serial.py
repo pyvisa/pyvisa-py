@@ -12,9 +12,9 @@
 
 from __future__ import division, unicode_literals, print_function, absolute_import
 
-from pyvisa import constants, attributes
+from pyvisa import constants, attributes, logger
 
-from .sessions import Session
+from .sessions import Session, UnknownAttribute
 from . import common
 
 try:
@@ -97,6 +97,7 @@ class SerialSession(Session):
         :rtype: bytes, constants.StatusCode
         """
 
+
         end_in, _ = self.get_attribute(constants.VI_ATTR_ASRL_END_IN)
         suppress_end_en, _ = self.get_attribute(constants.VI_ATTR_SUPPRESS_END_EN)
 
@@ -131,7 +132,7 @@ class SerialSession(Session):
         :return: Number of bytes actually transferred, return value of the library call.
         :rtype: int, VISAStatus
         """
-
+        logger.debug('Serial.write %r' % data)
         # TODO: How to deal with VI_ATTR_TERMCHAR_EN
         end_out, _ = self.get_attribute(constants.VI_ATTR_ASRL_END_OUT)
         send_end, _ = self.get_attribute(constants.VI_ATTR_SEND_END_EN)
@@ -149,7 +150,7 @@ class SerialSession(Session):
 
             elif end_out == SerialTermination.termination_char:
                 term_char, _ = self.get_attribute(constants.VI_ATTR_TERMCHAR)
-                data = common.iter_bytes(data + term_char)
+                data = common.iter_bytes(data + common.int_to_byte(term_char))
 
             else:
                 raise ValueError('Unknown value for VI_ATTR_ASRL_END_OUT: %s' % end_out)
@@ -159,6 +160,7 @@ class SerialSession(Session):
                 count += self.interface.write(d)
 
             if end_out == SerialTermination.termination_break:
+                logger.debug('Serial.sendBreak')
                 self.interface.sendBreak()
 
             return count, constants.StatusCode.success
@@ -205,7 +207,9 @@ class SerialSession(Session):
             raise NotImplementedError
 
         elif attribute == constants.VI_ATTR_ASRL_FLOW_CNTRL:
-            raise NotImplementedError
+            return (self.interface.xonxoff * constants.VI_ASRL_FLOW_XON_XOFF |
+                    self.interface.rtscts * constants.VI_ASRL_FLOW_RTS_CTS |
+                    self.interface.dsrdtr * constants.VI_ASRL_FLOW_DTR_DSR)
 
         elif attribute == constants.VI_ATTR_ASRL_PARITY:
             parity = self.interface.parity
@@ -245,7 +249,7 @@ class SerialSession(Session):
         elif attribute == constants.VI_ATTR_INTF_TYPE:
             return constants.InterfaceType.asrl
 
-        raise Exception('Unknown attribute %s' % attribute)
+        raise UnknownAttribute(attribute)
 
     def _set_attribute(self, attribute, attribute_state):
 
@@ -282,7 +286,20 @@ class SerialSession(Session):
             raise NotImplementedError
 
         elif attribute == constants.VI_ATTR_ASRL_FLOW_CNTRL:
-            raise NotImplementedError
+            if not isinstance(attribute_state, int):
+                return StatusCode.error_nonsupported_attribute_state
+
+            if not 0 < attribute_state < 8:
+                return StatusCode.error_nonsupported_attribute_state
+
+            try:
+                self.interface.xonxoff = attribute_state & constants.VI_ASRL_FLOW_XON_XOFF
+                self.interface.rtscts = attribute_state & constants.VI_ASRL_FLOW_RTS_CTS
+                self.interface.dsrdtr = attribute_state & constants.VI_ASRL_FLOW_DTR_DSR
+                return StatusCode.success
+            except:
+                return StatusCode.error_nonsupported_attribute_state
+
 
         elif attribute == constants.VI_ATTR_ASRL_PARITY:
             if attribute_state == constants.Parity.none:
@@ -327,4 +344,4 @@ class SerialSession(Session):
         elif attribute == constants.VI_ATTR_ASRL_XOFF_CHAR:
             raise NotImplementedError
 
-        raise Exception('Unknown attribute %s' % attribute)
+        raise UnknownAttribute(attribute)

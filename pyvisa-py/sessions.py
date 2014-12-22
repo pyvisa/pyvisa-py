@@ -20,6 +20,26 @@ from pyvisa import logger, constants, attributes, compat
 from . import common
 
 
+class UnknownAttribute(Exception):
+
+    def __init__(self, attribute):
+        self.attribute = attribute
+
+    def __str__(self):
+        attr = self.attribute
+        if isinstance(attr, int):
+            try:
+                name = attributes.AttributesByID[attr].visa_name
+            except KeyError:
+                name = 'Name not found'
+
+            return 'Unknown attribute %s (%s - %s)' % (attr, hex(attr), name)
+
+        return 'Unknown attribute %s' % attr
+
+    __repr__ = __str__
+
+
 class Session(compat.with_metaclass(abc.ABCMeta)):
     """A base class for Session objects.
 
@@ -201,7 +221,11 @@ class Session(compat.with_metaclass(abc.ABCMeta)):
 
         # Dispatch to `_get_attribute`, which must be implemented by subclasses.
 
-        return self._get_attribute(attribute), constants.StatusCode.success
+        try:
+            return self._get_attribute(attribute), constants.StatusCode.success
+        except UnknownAttribute as e:
+            logger.exception(str(e))
+            return constants.StatusCode.error_nonsupported_attribute
 
     def set_attribute(self, attribute, attribute_state):
         """Set the attribute_state value for a given VISA attribute for this session.
@@ -248,6 +272,9 @@ class Session(compat.with_metaclass(abc.ABCMeta)):
             return self._set_attribute(attribute, attribute_state)
         except ValueError:
             return constants.StatusCode.error_nonsupported_attribute_state
+        except UnknownAttribute as e:
+            logger.exception(str(e))
+            return constants.StatusCode.error_nonsupported_attribute
 
     def _read(self, reader, count, end_indicator_checker, suppress_end_en,
               termination_char, termination_char_en, timeout_exception):
