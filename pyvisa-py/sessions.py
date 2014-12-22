@@ -272,6 +272,10 @@ class Session(compat.with_metaclass(abc.ABCMeta)):
             return self._set_attribute(attribute, attribute_state)
         except ValueError:
             return constants.StatusCode.error_nonsupported_attribute_state
+        except NotImplementedError:
+            e = UnknownAttribute(attribute)
+            logger.exception(str(e))
+            return constants.StatusCode.error_nonsupported_attribute
         except UnknownAttribute as e:
             logger.exception(str(e))
             return constants.StatusCode.error_nonsupported_attribute

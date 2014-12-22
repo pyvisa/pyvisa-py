@@ -14,7 +14,7 @@ from __future__ import division, unicode_literals, print_function, absolute_impo
 
 from pyvisa import constants, attributes
 
-from .sessions import Session
+from .sessions import Session, UnknownAttribute
 
 try:
     import usb
@@ -127,7 +127,7 @@ class USBSession(Session):
         self.interface.close()
 
     def _get_attribute(self, attribute):
-        raise Exception('Unknown attribute %s' % attribute)
+        raise UnknownAttribute(attribute)
 
     def _set_attribute(self, attribute, attribute_state):
-        raise Exception('Unknown attribute %s' % attribute)
+        raise UnknownAttribute(attribute)
