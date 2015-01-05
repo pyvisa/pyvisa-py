@@ -93,7 +93,7 @@ class TCPIPSession(Session):
 
         if term_char:
             flags = vxi11.OP_FLAG_TERMCHAR_SET
-            term_char = str(self.term_char).encode('utf-8')[0]
+            term_char = str(term_char).encode('utf-8')[0]
 
         read_data = b''
 
