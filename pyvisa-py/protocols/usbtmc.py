@@ -23,7 +23,7 @@ from collections import namedtuple
 
 import usb
 
-from .usbutil import find_devices, find_interfaces, find_endpoint, DeviceInfo, usb_find_desc
+from .usbutil import find_devices, find_interfaces, find_endpoint, usb_find_desc
 
 import sys
 
@@ -149,12 +149,11 @@ class USBRaw(object):
         if not devices:
             raise ValueError('No device found.')
         elif len(devices) > 1:
-            desc = '\n'.join(str(DeviceInfo.from_device(dev)) for dev in devices)
+            desc = '\n'.join(str(dev) for dev in devices)
             raise ValueError('{} devices found:\n{}\n'
                              'Please narrow the search criteria'.format(len(devices), desc))
 
         self.usb_dev, other = devices[0], devices[1:]
-        nfo = DeviceInfo.from_device(self.usb_dev)
         #self.log_debug('- Manufacturer: {} ({})'.format(nfo.manufacturer, self.usb_dev.idVendor))
         #self.log_debug('- Product: {} ({})'.format(nfo.product, self.usb_dev.idProduct))
         #self.log_debug('- Serial Number: {}'.format(nfo.serial_number))
@@ -230,7 +229,7 @@ class USBRaw(object):
         return data
 
     def close(self):
-        #self.log_debug('Closing device {}', str(DeviceInfo.from_device(self.usb_dev)))
+        #self.log_debug('Closing device {}', dev)
         return usb.util.dispose_resources(self.usb_dev)
 
 

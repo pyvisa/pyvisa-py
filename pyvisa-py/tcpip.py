@@ -14,7 +14,7 @@ import random
 
 from pyvisa import constants, attributes
 
-from .sessions import Session
+from .sessions import Session, UnknownAttribute
 from .protocols import vxi11
 
 
@@ -91,9 +91,9 @@ class TCPIPSession(Session):
         else:
             term_char = 0
 
-        if self.term_char:
+        if term_char:
             flags = vxi11.OP_FLAG_TERMCHAR_SET
-            term_char = str(self.term_char).encode('utf-8')[0]
+            term_char = str(term_char).encode('utf-8')[0]
 
         read_data = b''
 
@@ -187,7 +187,7 @@ class TCPIPSession(Session):
         elif attribute == constants.VI_ATTR_SUPPRESS_END_EN:
             raise NotImplementedError
 
-        raise Exception('Unknown attribute %s' % attribute)
+        raise UnknownAttribute(attribute)
 
     def _set_attribute(self, attribute, attribute_state):
         """Sets the state of an attribute.
@@ -200,7 +200,7 @@ class TCPIPSession(Session):
         :rtype: VISAStatus
         """
 
-        raise Exception('Unknown attribute %s' % attribute)
+        raise UnknownAttribute(attribute)
 
     def assert_trigger(self, protocol):
         """Asserts software or hardware trigger.

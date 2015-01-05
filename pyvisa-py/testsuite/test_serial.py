@@ -81,7 +81,6 @@ class MockSerialInterface(common.MockInterface):
         # After writing to the input buffer, tries to see if the query is in the
         # list of messages it understands and reply accordingly.
         try:
-            print(tuple(self._input_buffer))
             answer = self._queries[tuple(self._input_buffer)]
             for part in answer:
                 self._output_buffer.put(part)

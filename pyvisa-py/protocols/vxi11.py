@@ -197,13 +197,6 @@ class CoreClient(rpc.TCPClient):
         self.packer = Vxi11Packer()
         self.unpacker = Vxi11Unpacker('')
         super(CoreClient, self).__init__(host, DEVICE_CORE_PROG, DEVICE_CORE_VERS)
-        # I have disabled the creation of the socket by overriding connect.
-        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-
-    def connect(self):
-        # Overrides connect method from parent class to avoid automatic
-        # opening of connection.
-        pass
 
     def create_link(self, id, lock_device, lock_timeout, name):
         params = (id, lock_device, lock_timeout, name)

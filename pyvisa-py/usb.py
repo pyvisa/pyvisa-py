@@ -14,7 +14,7 @@ from __future__ import division, unicode_literals, print_function, absolute_impo
 
 from pyvisa import constants, attributes
 
-from .sessions import Session
+from .sessions import Session, UnknownAttribute
 
 try:
     import usb
@@ -24,6 +24,7 @@ except ImportError as e:
                                  'Please install PyUSB to use this resource type.\n%s' % e)
     raise
 
+from . import common
 
 StatusCode = constants.StatusCode
 SUCCESS = StatusCode.success
@@ -43,7 +44,6 @@ class USBSession(Session):
         fmt = 'USB%(board)s::%(manufacturer_id)s::%(model_code)s::' \
               '%(serial_number)s::%(usb_interface_number)s::INSTR'
         for dev in usbtmc.find_tmc_devices():
-            nfo = usbutil.DeviceInfo.from_device(dev)
             intfc = usbutil.find_interfaces(dev, bInterfaceClass=0xfe, bInterfaceSubClass=3)
             try:
                 intfc = intfc[0].index
@@ -52,7 +52,7 @@ class USBSession(Session):
             out.append(fmt % dict(board=0,
                                   manufacturer_id=dev.idVendor,
                                   model_code=dev.idProduct,
-                                  serial_number=nfo.serial_number,
+                                  serial_number=dev.serial_number,
                                   usb_interface_number=intfc))
         return out
 
@@ -89,20 +89,22 @@ class USBSession(Session):
         :return: data read, return value of the library call.
         :rtype: bytes, VISAStatus
         """
-        ret = b''
-        term_char, _ = self.get_attribute(constants.VI_ATTR_TERMCHAR)
-        while True:
-            ret += self.interface.read(1)
-            if ret[-1:] == term_char:
-                # TODO: What is the correct success code??
-                return ret, StatusCode.termination_char
-            #TODO: Should we stop here as well?
-            if len(ret) == count:
-                return ret, StatusCode.success_max_count_read
-            else:
-                return ret, StatusCode.error_timeout
 
-        return ret, SUCCESS
+        supress_end_en, _ = self.get_attribute(constants.VI_ATTR_SUPPRESS_END_EN)
+
+        if supress_end_en:
+            raise ValueError('VI_ATTR_SUPPRESS_END_EN == True is currently unsupported by pyvisa-py')
+
+        term_char, _ = self.get_attribute(constants.VI_ATTR_TERMCHAR)
+        term_char_en, _ = self.get_attribute(constants.VI_ATTR_TERMCHAR_EN)
+
+        return self._read(lambda: self.interface.read(1),
+                          count,
+                          lambda current: False,
+                          supress_end_en,
+                          term_char,
+                          term_char_en,
+                          usb.USBError)
 
     def write(self, data):
         """Writes data to device or interface synchronously.
@@ -125,7 +127,7 @@ class USBSession(Session):
         self.interface.close()
 
     def _get_attribute(self, attribute):
-        raise Exception('Unknown attribute %s' % attribute)
+        raise UnknownAttribute(attribute)
 
     def _set_attribute(self, attribute, attribute_state):
-        raise Exception('Unknown attribute %s' % attribute)
+        raise UnknownAttribute(attribute)
