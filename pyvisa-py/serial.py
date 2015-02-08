@@ -30,6 +30,8 @@ except ImportError as e:
 
     Serial = comports
 
+    raise
+
 
 def to_state(boolean_input):
     """Convert a boolean input into a LineState value
