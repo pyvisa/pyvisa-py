@@ -11,4 +11,7 @@ PyVISA-py Changelog
 0.1 (2015-02-08)
 ----------------
 
-- Nothing changed yet.
+- Initial release. Preliminary support for :
+  - USB INSTR
+  - TCPIP INSTR
+  - ASRL INSTR
