@@ -14,7 +14,7 @@ National Instruments VISA library in your system. This works most of the time,
 for most people. But NI-VISA is a proprietary library that only works on certain
 systems. That is when PyVISA-py jumps in.
 
-Starting form version 1.6, PyVISA allows to use different backends. These backends can be
+Starting from version 1.6, PyVISA allows to use different backends. These backends can be
 dynamically loaded. PyVISA-py is one of such backends. It implements most of the methods
 for Message Based communication (Serial/USB/GPIB/Ethernet) using Python and some well developed,
 easy to deploy and cross platform libraries
