@@ -51,7 +51,7 @@ respectively. For **TCPIP** we use the :py:mod:`socket` module in the Python Sta
 **GPIB** resources are not currently supported but they are in the plan using `linux-gpib`_.
 
 
-Ìf I only need **TCPIP**, do I need to install PySerial and PyUSB?
+If I only need **TCPIP**, do I need to install PySerial and PyUSB?
 ------------------------------------------------------------------
 
 No. Libraries are loaded on demand.
@@ -105,16 +105,16 @@ We wanted to provide a compatible alternative.
 Why not using LibreVISA?
 ------------------------
 
-LibreVISA_ is stil young. However, you can already use it with the NI backend as it
-has the same API. We thing that PyVISA-py is easier to hack and we can quickly
-reach feature parity with NI-VISA for message based instruments.
+LibreVISA_ is still young. However, you can already use it with the NI backend as it
+has the same API. We think that PyVISA-py is easier to hack and we can quickly
+reach feature parity with NI-VISA for message-based instruments.
 
 
 Why putting PyVISA in the middle?
 ---------------------------------
 
 Because it allows you to change the backend easily without changing your application.
-In other projects we implemented classes to calls USBTMC devices without PyVISA.
+In other projects we implemented classes to call USBTMC devices without PyVISA.
 But this leads to code duplication or an adapter class in your code.
 By using PyVISA as a frontend to many backends, we abstract these things
 from higher level applications.
