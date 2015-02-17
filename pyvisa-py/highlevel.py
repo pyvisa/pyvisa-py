@@ -331,7 +331,7 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
         except KeyError:
             return None, constants.StatusCode.error_invalid_object
 
-        return sess.get_attribute(attribute)
+        return sess.get_attribute(attribute), constants.StatusCode.sucess
 
     def set_attribute(self, session, attribute, attribute_state):
         """Sets the state of an attribute.
@@ -350,4 +350,4 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
         except KeyError:
             return None, constants.StatusCode.error_invalid_object
 
-        return sess.set_attribute(attribute, attribute_state)
+        return sess.set_attribute(attribute, attribute_state), constants.StatusCode.sucess

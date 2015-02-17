@@ -162,7 +162,7 @@ class TCPIPSession(Session):
 
             return offset, SUCCESS
         except vxi11.Vxi11Error:
-            return StatusCode.error_timeout
+            return 0, StatusCode.error_timeout
 
     def _get_attribute(self, attribute):
 
