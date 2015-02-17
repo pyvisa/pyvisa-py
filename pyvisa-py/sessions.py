@@ -225,7 +225,7 @@ class Session(compat.with_metaclass(abc.ABCMeta)):
             return self._get_attribute(attribute), constants.StatusCode.success
         except UnknownAttribute as e:
             logger.exception(str(e))
-            return constants.StatusCode.error_nonsupported_attribute
+            return 0, constants.StatusCode.error_nonsupported_attribute
 
     def set_attribute(self, attribute, attribute_state):
         """Set the attribute_state value for a given VISA attribute for this session.
