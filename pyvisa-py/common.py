@@ -19,7 +19,7 @@ from pyvisa import constants
 class MockInterface(object):
 
     def __init__(self, resource_name):
-       self.resource_name = resource_name
+        self.resource_name = resource_name
 
 
 class NamedObject(object):
@@ -92,8 +92,9 @@ _INTERFACE_TYPES = {'ASRL': constants.InterfaceType.asrl,
 _RESOURCE_CLASSES = ('INSTR', 'INTFC', 'BACKPLANE', 'MEMACC', 'SOCKET', 'RAW', 'SERVANT')
 
 
-#: (str, str) -> (str, *str) -> {}
+# :type: (str, str) -> (str, *str) -> {}
 _SUBPARSER = {}
+
 
 def register_subparser(interface_type, resource_class):
     """Register a subparser for a given interface type and resource class.

@@ -2,9 +2,12 @@
 
 from __future__ import division, unicode_literals, print_function, absolute_import
 
+# In Python 2.6, importlib is installed from PyPI
+# noinspection PyCompatibility
 import importlib
 
 try:
+    # noinspection PyPep8Naming
     import Queue as queue
 except ImportError:
     import queue
@@ -39,6 +42,7 @@ class SpecialByte(NamedObject):
 
 EOM4882 = SpecialByte('EOM4882')
 
+
 class MockSerialInterface(common.MockInterface):
 
     def __init__(self, resource_name, messages):
@@ -61,6 +65,7 @@ class MockSerialInterface(common.MockInterface):
         #: [bytes]
         self._input_buffer = list()
 
+    # noinspection PyUnusedLocal
     def __call__(self, *args, **kwargs):
         return self
 
@@ -99,7 +104,6 @@ class MockSerialInterface(common.MockInterface):
             out += self._output_buffer.get_nowait()
 
         return out
-
 
 
 class Test(BaseTestCase):

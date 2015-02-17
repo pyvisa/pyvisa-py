@@ -44,7 +44,7 @@ class MsgID(enum.IntEnum):
     vendor_specific_out = 126
     request_vendor_specific_in = 127
     vendor_specific_in = 127
-    trigger = 128 # for USB488
+    trigger = 128  # for USB488
 
 
 class Request(enum.IntEnum):
@@ -119,7 +119,6 @@ class BulkInMessage(namedtuple('BulkInMessage', 'msgid btag btaginverse '
                struct.pack("<LBBxx", transfer_size, transfer_attributes, term_char)
 
 
-
 class USBRaw(object):
     """Base class for drivers that communicate with instruments
     via usb port using pyUSB
@@ -154,35 +153,26 @@ class USBRaw(object):
                              'Please narrow the search criteria'.format(len(devices), desc))
 
         self.usb_dev, other = devices[0], devices[1:]
-        #self.log_debug('- Manufacturer: {} ({})'.format(nfo.manufacturer, self.usb_dev.idVendor))
-        #self.log_debug('- Product: {} ({})'.format(nfo.product, self.usb_dev.idProduct))
-        #self.log_debug('- Serial Number: {}'.format(nfo.serial_number))
+
         try:
             if self.usb_dev.is_kernel_driver_active(0):
                     self.usb_dev.detach_kernel_driver(0)
         except (usb.core.USBError, NotImplementedError) as e:
             pass
-            #self.log_warning(repr(e))
 
         try:
-            self.usb_dev.set_configuration() #self.CONFIGURATION
+            self.usb_dev.set_configuration()
         except usb.core.USBError as e:
-            raise Exception('failed to set configuration')
+            raise Exception('failed to set configuration\n %s' % e)
 
         try:
             self.usb_dev.set_interface_altsetting()
         except usb.core.USBError as e:
-            #self.log_error("Could not set configuration")
             pass
 
         self.usb_intf = self._find_interface(self.usb_dev, self.INTERFACE)
-        #self.log_debug('Interface: {}'.format(self.usb_intf.index))
-
 
         self.usb_recv_ep, self.usb_send_ep = self._find_endpoints(self.usb_intf, self.ENDPOINTS)
-
-        #self.log_debug('EP Address: recv={}, send={}'.format(self.usb_recv_ep.bEndpointAddress,
-        #                                                      self.usb_send_ep.bEndpointAddress))
 
     def _find_interface(self, dev, setting):
         return self.usb_dev.get_active_configuration()[self.INTERFACE]
@@ -229,9 +219,7 @@ class USBRaw(object):
         return data
 
     def close(self):
-        #self.log_debug('Closing device {}', dev)
         return usb.util.dispose_resources(self.usb_dev)
-
 
 
 class USBTMC(USBRaw):
@@ -243,7 +231,6 @@ class USBTMC(USBRaw):
     def __init__(self, vendor=None, product=None, serial_number=None, **kwargs):
         super(USBTMC, self).__init__(vendor, product, serial_number, **kwargs)
         self.usb_intr_in = find_endpoint(self.usb_intf, usb.ENDPOINT_IN, usb.ENDPOINT_TYPE_INTERRUPT)
-        #self.log_debug('EP Address: intr={}'.format(self.usb_intr_in.bEndpointAddress))
 
         self.usb_dev.reset()
         self.usb_dev.set_configuration()
@@ -274,7 +261,6 @@ class USBTMC(USBRaw):
             raise ValueError('USB TMC interface not found.')
         elif len(interfaces) > 1:
             pass
-            #self.log_warning('More than one interface found, selecting first.')
 
         return interfaces[0]
 
@@ -284,8 +270,6 @@ class USBTMC(USBRaw):
         :param data: bytes to be sent to the instrument
         :type data: bytes
         """
-
-        #self.log_debug('Sending {}', data)
 
         begin, end, size = 0, 0, len(data)
         bytes_sent = 0
@@ -329,7 +313,5 @@ class USBTMC(USBRaw):
             received += response.data
 
             eom = response.transfer_attributes & 1
-
-        #self.log_debug('Received {!r} (len={})', received, len(received))
 
         return received

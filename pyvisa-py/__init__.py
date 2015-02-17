@@ -19,8 +19,8 @@ __version__ = "unknown"
 try:                # pragma: no cover
     __version__ = pkg_resources.get_distribution('pyvisa-py').version
 except:             # pragma: no cover
-    pass  # we seem to have a local copy without any repository control or installed without setuptools
-          # so the reported version will be __unknown__
+    pass    # we seem to have a local copy without any repository control or installed without setuptools
+            # so the reported version will be __unknown__
 
 
 from .highlevel import PyVisaLibrary

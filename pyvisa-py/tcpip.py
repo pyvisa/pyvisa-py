@@ -57,7 +57,7 @@ class TCPIPSession(Session):
             raise Exception("error creating link: %d" % error)
 
         self.link = link
-        self.max_recv_size = min(max_recv_size, 2 ** 30) # 1GB
+        self.max_recv_size = min(max_recv_size, 2 ** 30)  # 1GB
 
         for name in 'SEND_END_EN,TERMCHAR,TERMCHAR_EN'.split(','):
             attribute = getattr(constants, 'VI_ATTR_' + name)
@@ -165,9 +165,17 @@ class TCPIPSession(Session):
             return 0, StatusCode.error_timeout
 
     def _get_attribute(self, attribute):
+        """Get the value for a given VISA attribute for this session.
+
+        Use to implement custom logic for attributes.
+
+        :param attribute: Resource attribute for which the state query is made
+        :return: The state of the queried attribute for a specified resource, return value of the library call.
+        :rtype: (unicode | str | list | int, VISAStatus)
+        """
 
         if attribute == constants.VI_ATTR_TCPIP_ADDR:
-            return self.host_address
+            return self.host_address, SUCCESS
 
         elif attribute == constants.VI_ATTR_TCPIP_DEVICE_NAME:
             raise NotImplementedError
@@ -270,7 +278,7 @@ class TCPIPSession(Session):
         :rtype: str, VISAStatus
         """
 
-        #TODO: lock type not implemented
+        #  TODO: lock type not implemented
         flags = 0
 
         error = self.interface.device_lock(self.link, flags, self.lock_timeout)

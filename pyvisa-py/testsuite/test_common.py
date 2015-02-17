@@ -11,7 +11,6 @@ pyvisapy = __import__('pyvisa-py')
 parse = pyvisapy.common.parse_resource_name
 
 
-
 class TestParsers(BaseTestCase):
 
     def _parse_test(self, rn, **kwargs):

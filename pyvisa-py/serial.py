@@ -99,7 +99,6 @@ class SerialSession(Session):
         :rtype: bytes, constants.StatusCode
         """
 
-
         end_in, _ = self.get_attribute(constants.VI_ATTR_ASRL_END_IN)
         suppress_end_en, _ = self.get_attribute(constants.VI_ATTR_SUPPRESS_END_EN)
 
@@ -122,7 +121,6 @@ class SerialSession(Session):
 
         return self._read(reader, count, checker, suppress_end_en, None, False,
                           serial.SerialTimeoutException)
-
 
     def write(self, data):
         """Writes data to device or interface synchronously.
@@ -171,15 +169,23 @@ class SerialSession(Session):
             return 0, StatusCode.error_timeout
 
     def _get_attribute(self, attribute):
+        """Get the value for a given VISA attribute for this session.
+
+        Use to implement custom logic for attributes.
+
+        :param attribute: Resource attribute for which the state query is made
+        :return: The state of the queried attribute for a specified resource, return value of the library call.
+        :rtype: (unicode | str | list | int, VISAStatus)
+        """
 
         if attribute == constants.VI_ATTR_ASRL_ALLOW_TRANSMIT:
             raise NotImplementedError
 
         elif attribute == constants.VI_ATTR_ASRL_AVAIL_NUM:
-            return self.interface.inWaiting()
+            return self.interface.inWaiting(), SUCCESS
 
         elif attribute == constants.VI_ATTR_ASRL_BAUD:
-            return self.interface.baudrate
+            return self.interface.baudrate, SUCCESS
 
         elif attribute == constants.VI_ATTR_ASRL_BREAK_LEN:
             raise NotImplementedError
@@ -191,10 +197,10 @@ class SerialSession(Session):
             raise NotImplementedError
 
         elif attribute == constants.VI_ATTR_ASRL_CTS_STATE:
-            return to_state(self.interface.getCTS())
+            return to_state(self.interface.getCTS()), SUCCESS
 
         elif attribute == constants.VI_ATTR_ASRL_DATA_BITS:
-            return self.interface.bytesize
+            return self.interface.bytesize, SUCCESS
 
         elif attribute == constants.VI_ATTR_ASRL_DCD_STATE:
             raise NotImplementedError
@@ -203,7 +209,7 @@ class SerialSession(Session):
             raise NotImplementedError
 
         elif attribute == constants.VI_ATTR_ASRL_DSR_STATE:
-            return to_state(self.interface.getDSR())
+            return to_state(self.interface.getDSR()), SUCCESS
 
         elif attribute == constants.VI_ATTR_ASRL_DTR_STATE:
             raise NotImplementedError
@@ -211,20 +217,20 @@ class SerialSession(Session):
         elif attribute == constants.VI_ATTR_ASRL_FLOW_CNTRL:
             return (self.interface.xonxoff * constants.VI_ASRL_FLOW_XON_XOFF |
                     self.interface.rtscts * constants.VI_ASRL_FLOW_RTS_CTS |
-                    self.interface.dsrdtr * constants.VI_ASRL_FLOW_DTR_DSR)
+                    self.interface.dsrdtr * constants.VI_ASRL_FLOW_DTR_DSR), SUCCESS
 
         elif attribute == constants.VI_ATTR_ASRL_PARITY:
             parity = self.interface.parity
             if parity == serial.PARITY_NONE:
-                return constants.Parity.none
+                return constants.Parity.none, SUCCESS
             elif parity == serial.PARITY_EVEN:
-                return constants.Parity.even
+                return constants.Parity.even, SUCCESS
             elif parity == serial.PARITY_ODD:
-                return constants.Parity.odd
+                return constants.Parity.odd, SUCCESS
             elif parity == serial.PARITY_MARK:
-                return constants.Parity.mark
+                return constants.Parity.mark, SUCCESS
             elif parity == serial.PARITY_SPACE:
-                return constants.Parity.space
+                return constants.Parity.space, SUCCESS
 
             raise Exception('Unknown parity value: %r' % parity)
 
@@ -237,11 +243,11 @@ class SerialSession(Session):
         elif attribute == constants.VI_ATTR_ASRL_STOP_BITS:
             bits = self.interface.stopbits
             if bits == serial.STOPBITS_ONE:
-                return constants.StopBits.one
+                return constants.StopBits.one, SUCCESS
             elif bits == serial.STOPBITS_ONE_POINT_FIVE:
-                return constants.StopBits.one_and_a_half
+                return constants.StopBits.one_and_a_half, SUCCESS
             elif bits == serial.STOPBITS_TWO:
-                return constants.StopBits.two
+                return constants.StopBits.two, SUCCESS
 
             raise Exception('Unknown bits value: %r' % bits)
 
@@ -249,11 +255,20 @@ class SerialSession(Session):
             raise NotImplementedError
 
         elif attribute == constants.VI_ATTR_INTF_TYPE:
-            return constants.InterfaceType.asrl
+            return constants.InterfaceType.asrl, SUCCESS
 
         raise UnknownAttribute(attribute)
 
     def _set_attribute(self, attribute, attribute_state):
+        """Sets the state of an attribute.
+
+        Corresponds to viSetAttribute function of the VISA library.
+
+        :param attribute: Attribute for which the state is to be modified. (Attributes.*)
+        :param attribute_state: The state of the attribute to be set for the specified object.
+        :return: return value of the library call.
+        :rtype: VISAStatus
+        """
 
         if attribute == constants.VI_ATTR_ASRL_ALLOW_TRANSMIT:
             raise NotImplementedError
@@ -301,7 +316,6 @@ class SerialSession(Session):
                 return StatusCode.success
             except:
                 return StatusCode.error_nonsupported_attribute_state
-
 
         elif attribute == constants.VI_ATTR_ASRL_PARITY:
             if attribute_state == constants.Parity.none:

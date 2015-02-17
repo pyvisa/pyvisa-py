@@ -17,7 +17,6 @@
 
 from __future__ import division, unicode_literals, print_function, absolute_import
 
-from collections import namedtuple
 from fnmatch import fnmatch
 
 import usb
@@ -128,7 +127,7 @@ class LantzUSBTimeoutError(usb.core.USBError):
 def ep_attributes(ep):
     c = ep.bmAttributes
     attrs = []
-    tp = c &usb.ENDPOINT_TYPE_MASK
+    tp = c & usb.ENDPOINT_TYPE_MASK
     if tp == usb.ENDPOINT_TYPE_CONTROL:
         attrs.append('Control')
     elif tp == usb.ENDPOINT_TYPE_ISOCHRONOUS:
@@ -152,7 +151,7 @@ def ep_attributes(ep):
         attrs.append('Data endpoint')
     elif usage == 1:
         attrs.append('Feedback endpoint')
-    elif usage ==2:
+    elif usage == 2:
         attrs.append('Subordinate Feedback endpoint')
     elif usage == 3:
         attrs.append('Reserved')
@@ -235,7 +234,7 @@ def _patch_endpoint(ep, log_func=print):
         log_func('reading from {}'.format(ep.bEndpointAddress))
         log_func('args: {}'.format(args))
         log_func('kwargs: {}'.format(kwargs))
-        ret =_read(*args, **kwargs)
+        ret = _read(*args, **kwargs)
         log_func('returned', ret)
         log_func('---')
         return ret

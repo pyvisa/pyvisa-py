@@ -87,7 +87,7 @@ class USBSession(Session):
 
         :param count: Number of bytes to be read.
         :return: data read, return value of the library call.
-        :rtype: bytes, VISAStatus
+        :rtype: (bytes, VISAStatus)
         """
 
         supress_end_en, _ = self.get_attribute(constants.VI_ATTR_SUPPRESS_END_EN)
@@ -114,7 +114,7 @@ class USBSession(Session):
         :param data: data to be written.
         :type data: bytes
         :return: Number of bytes actually transferred, return value of the library call.
-        :rtype: int, VISAStatus
+        :rtype: (int, VISAStatus)
         """
 
         send_end, _ = self.get_attribute(constants.VI_ATTR_SEND_END_EN)
@@ -127,7 +127,26 @@ class USBSession(Session):
         self.interface.close()
 
     def _get_attribute(self, attribute):
+        """Get the value for a given VISA attribute for this session.
+
+        Use to implement custom logic for attributes.
+
+        :param attribute: Resource attribute for which the state query is made
+        :return: The state of the queried attribute for a specified resource, return value of the library call.
+        :rtype: (unicode | str | list | int, VISAStatus)
+        """
+
         raise UnknownAttribute(attribute)
 
     def _set_attribute(self, attribute, attribute_state):
+        """Sets the state of an attribute.
+
+        Corresponds to viSetAttribute function of the VISA library.
+
+        :param attribute: Attribute for which the state is to be modified. (Attributes.*)
+        :param attribute_state: The state of the attribute to be set for the specified object.
+        :return: return value of the library call.
+        :rtype: VISAStatus
+        """
+
         raise UnknownAttribute(attribute)

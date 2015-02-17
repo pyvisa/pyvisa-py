@@ -74,7 +74,6 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
             except AttributeError:
                 d[key_name] = 'Available ' + val.get_low_level_info()
 
-
         return d
 
     def _init(self):
@@ -192,7 +191,7 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
         """
         try:
             sess = self.sessions[session]
-            if not sess is self:
+            if sess is not self:
                 sess.close()
         except KeyError:
             return constants.StatusCode.error_invalid_object
@@ -214,7 +213,7 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
 
         :param find_list: Describes a find list. This parameter must be created by find_resources().
         :return: Returns a string identifying the location of a device, return value of the library call.
-        :rtype: unicode (Py2) or str (Py3), VISAStatus
+        :rtype: unicode | str, VISAStatus
         """
         return next(find_list), constants.StatusCode.success
 
@@ -226,7 +225,7 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
         :param session: Unique logical identifier to a session (unused, just to uniform signatures).
         :param query: A regular expression followed by an optional logical expression. Use '?*' for all.
         :return: find_list, return_counter, instrument_description, return value of the library call.
-        :rtype: ViFindList, int, unicode (Py2) or str (Py3), VISAStatus
+        :rtype: ViFindList | int | unicode | str, VISAStatus
         """
 
         # For each session type, ask for the list of connected resources and
@@ -324,7 +323,7 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
         :param session: Unique logical identifier to a session, event, or find list.
         :param attribute: Resource attribute for which the state query is made (see Attributes.*)
         :return: The state of the queried attribute for a specified resource, return value of the library call.
-        :rtype: unicode (Py2) or str (Py3), list or other type, VISAStatus
+        :rtype: unicode | str | list | int, VISAStatus
         """
         try:
             sess = self.sessions[session]
@@ -348,6 +347,6 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
         try:
             sess = self.sessions[session]
         except KeyError:
-            return None, constants.StatusCode.error_invalid_object
+            return constants.StatusCode.error_invalid_object
 
-        return sess.set_attribute(attribute, attribute_state), constants.StatusCode.sucess
+        return sess.set_attribute(attribute, attribute_state)
