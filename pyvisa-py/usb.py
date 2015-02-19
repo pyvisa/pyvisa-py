@@ -16,8 +16,6 @@ from pyvisa import constants, attributes
 
 from .sessions import Session, UnknownAttribute
 
-import abc
-
 try:
     import usb
     from .protocols import usbtmc, usbutil
@@ -45,9 +43,10 @@ class USBSession(Session):
 
     timeout = 2000
 
-    @abc.abstractmethod
+    @staticmethod
     def list_resources():
         """Return list of resources for this type of USB device"""
+        raise NotImplementedError
 
     @classmethod
     def get_low_level_info(cls):
