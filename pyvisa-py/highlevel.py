@@ -49,6 +49,11 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
     except ImportError as e:
         pass
 
+    try:
+        from .usb import USBRawSession
+    except ImportError as e:
+        pass
+
     from .tcpip import TCPIPSession
 
     @classmethod
