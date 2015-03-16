@@ -20,8 +20,15 @@ from . import common
 try:
     import gpib
     from Gpib import Gpib
-except ImportError:
-    raise ValueError('Please install linux-gpib to use this resource type')
+except ImportError as e:
+    Session.register_unavailable(constants.InterfaceType.gpib, 'INSTR',
+                                 'Please install linux-gpib to use this resource type.\n%s' % e)
+    def gpib(*args, **kwargs):
+        raise ValueError('Please install linux-gpib to use this resource type')
+
+    Gpib = gpib
+    
+    raise
 
 
 StatusCode = constants.StatusCode
@@ -38,15 +45,16 @@ class GPIBSession(Session):
     @staticmethod
     def list_resources():
         def find_listeners():
-            for i in range(1,31):
+            for i in range(1, 31):
                 if gpib.listener(0, i):
                     yield i
 
-        return ['GPIB0::%d::INSTR' % listener for listener in find_listeners()]
+        return ['GPIB0::%d::INSTR' % pad for pad in find_listeners()]
 
     def after_parsing(self):
-        # TODO: Make common.parse_resource_name return integers for GPIB sessions.
-        handle = gpib.dev(int(self.parsed['board']), int(self.parsed['primary_address']))
+        minor = self.parsed['board']
+        pad = self.parsed['primary_address']
+        handle = gpib.dev(int(minor), int(pad))
         self.interface = Gpib(handle)
 
     @property
@@ -72,11 +80,10 @@ class GPIBSession(Session):
         :rtype: bytes, constants.StatusCode
         """
 
-        # TODO: This is mostly broken for some reason. Figure out why and fix it.
-        # TODO: We probably want some kind of termination character logic here.
-        reader = lambda: self.interface.read(1)
+        # 0x2000 = 8192 = END
+        checker = lambda current: self.interface.ibsta() & 8192
 
-        checker = lambda current: False
+        reader = lambda: self.interface.read(1)
 
         return self._read(reader, count, checker, False, None, False, gpib.GpibError)
 
@@ -91,18 +98,17 @@ class GPIBSession(Session):
         :rtype: int, VISAStatus
         """
 
-        logger.debug('Serial.write %r' % data)
+        logger.debug('GPIB.write %r' % data)
 
         try:
-            # TODO: We may want some termination character logic here too.
             self.interface.write(data)
 
             return SUCCESS
 
-        # TODO: linux-gpib only has a single generic exception, GpibError, so how
-        #       can we tell what went wrong?
         except gpib.GpibError:
-            return 0, StatusCode.error_timeout
+            # 0x4000 = 16384 = TIMO
+            if self.interface.ibsta() & 16384:
+                return 0, StatusCode.error_timeout
 
     # TODO: Implement some useful attributes.
     def _get_attribute(self, attribute):
