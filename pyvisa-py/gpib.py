@@ -118,33 +118,33 @@ class GPIBSession(Session):
             self.interface.timeout(1)
         elif value <= 3e-2:
             self.interface.timeout(2)
-        elif value <= 1e-2:
+        elif value <= 1e-1:
             self.interface.timeout(3)
-        elif value <= 3e-2:
+        elif value <= 3e-1:
             self.interface.timeout(4)
-        elif value <= 1e-2:
+        elif value <= 1e0:
             self.interface.timeout(5)
-        elif value <= 3e-2:
+        elif value <= 3e0:
             self.interface.timeout(6)
-        elif value <= 1e-2:
+        elif value <= 1e1:
             self.interface.timeout(7)
-        elif value <= 3e-2:
+        elif value <= 3e1:
             self.interface.timeout(8)
-        elif value <= 1e-2:
+        elif value <= 1e2:
             self.interface.timeout(9)
-        elif value <= 3e-2:
+        elif value <= 3e2:
             self.interface.timeout(10)
-        elif value <= 1e-2:
+        elif value <= 1e3:
             self.interface.timeout(11)
-        elif value <= 3e-2:
+        elif value <= 3e3:
             self.interface.timeout(12)
-        elif value <= 1e-2:
+        elif value <= 1e4:
             self.interface.timeout(13)
-        elif value <= 3e-2:
+        elif value <= 3e4:
             self.interface.timeout(14)
-        elif value <= 1e-2:
+        elif value <= 1e5:
             self.interface.timeout(15)
-        elif value <= 3e-2:
+        elif value <= 3e5:
             self.interface.timeout(16)
         else:
             self.interface.timeout(17)
