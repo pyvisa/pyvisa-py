@@ -11,6 +11,7 @@
 """
 
 from __future__ import division, unicode_literals, print_function, absolute_import
+from bisect import bisect
 
 from pyvisa import constants, attributes, logger
 
@@ -33,28 +34,9 @@ except ImportError as e:
 
 StatusCode = constants.StatusCode
 SUCCESS = StatusCode.success
-
-# linux-gpib timeout constants, in milliseconds. See ibtmo.
-timetable = {
-    '0': 0,
-    '1': 1e-2,
-    '2': 3e-2,
-    '3': 1e-1,
-    '4': 3e-1,
-    '5': 1e0,
-    '6': 3e0,
-    '7': 1e1,
-    '8': 3e1,
-    '9': 1e2,
-    '10': 3e2,
-    '11': 1e3,
-    '12': 3e3,
-    '13': 1e4,
-    '14': 3e4,
-    '15': 1e5,
-    '16': 3e5,
-    '17': 1e6
-    }
+# linux-gpib timeout constants, in milliseconds. See self.timeout.
+TIMETABLE = (0, 1e-2, 3e-2, 1e-1, 3e-1, 1e0, 3e0, 1e1, 3e1, 1e2, 3e2, 1e3, 3e3,
+             1e4, 3e4, 1e5, 3e5, 1e6)
 
 
 # TODO: Check board indices other than 0.
@@ -83,7 +65,7 @@ class GPIBSession(Session):
     def timeout(self):
         # 0x3 is the hexadecimal reference to the IbaTMO (timeout) configuration
         # option in linux-gpib.
-        return timetable[str(self.interface.ask(3))]
+        return TIMETABLE[self.interface.ask(3)]
 
     @timeout.setter
     def timeout(self, value):
@@ -112,42 +94,7 @@ class GPIBSession(Session):
 
         :param value: Requested timeout value in milliseconds
         """
-        if value == 0:
-            self.interface.timeout(0)
-        elif value <= 1e-2:
-            self.interface.timeout(1)
-        elif value <= 3e-2:
-            self.interface.timeout(2)
-        elif value <= 1e-1:
-            self.interface.timeout(3)
-        elif value <= 3e-1:
-            self.interface.timeout(4)
-        elif value <= 1e0:
-            self.interface.timeout(5)
-        elif value <= 3e0:
-            self.interface.timeout(6)
-        elif value <= 1e1:
-            self.interface.timeout(7)
-        elif value <= 3e1:
-            self.interface.timeout(8)
-        elif value <= 1e2:
-            self.interface.timeout(9)
-        elif value <= 3e2:
-            self.interface.timeout(10)
-        elif value <= 1e3:
-            self.interface.timeout(11)
-        elif value <= 3e3:
-            self.interface.timeout(12)
-        elif value <= 1e4:
-            self.interface.timeout(13)
-        elif value <= 3e4:
-            self.interface.timeout(14)
-        elif value <= 1e5:
-            self.interface.timeout(15)
-        elif value <= 3e5:
-            self.interface.timeout(16)
-        else:
-            self.interface.timeout(17)
+        self.interface.timeout(bisect(TIMETABLE, value))
             
     def close(self):
         self.interface.close()
