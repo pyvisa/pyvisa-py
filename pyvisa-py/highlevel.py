@@ -56,6 +56,11 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
 
     from .tcpip import TCPIPSession
 
+    try:
+        from .gpib import GPIBSession
+    except ImportError as e:
+        pass
+
     @classmethod
     def get_session_classes(cls):
         return sessions.Session._session_classes
