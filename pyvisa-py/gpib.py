@@ -12,7 +12,6 @@
 
 from __future__ import division, unicode_literals, print_function, absolute_import
 from bisect import bisect
-from re import findall
 
 from pyvisa import constants, attributes, logger
 
@@ -59,8 +58,8 @@ class GPIBSession(Session):
     def after_parsing(self):
         minor = self.parsed['board']
         pad = self.parsed['primary_address']
-        handle = gpib.dev(int(minor), int(pad))
-        self.interface = Gpib(handle)
+        self.handle = gpib.dev(int(minor), int(pad))
+        self.interface = Gpib(self.handle)
 
     @property
     def timeout(self):
@@ -98,13 +97,7 @@ class GPIBSession(Session):
         self.interface.timeout(bisect(TIMETABLE, value))
 
     def close(self):
-        # Closes a Gpib object. The Gpib object has no native close() function,
-        # so we need to use the lower level gpib.close() instead. gpib.close()
-        # takes the device handle which was used to initialize the Gpib object as
-        # its argument, so we use a regular expression to extract that device
-        # handle from the Gpib object.
-        handle = int(findall(r'\d+', repr(self.interface))[0])
-        gpib.close(handle)
+        gpib.close(self.handle)
 
     def read(self, count):
         """Reads data from device or interface synchronously.
