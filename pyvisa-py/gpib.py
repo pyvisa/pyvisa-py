@@ -146,7 +146,6 @@ class GPIBSession(Session):
             if self.interface.ibsta() & 16384:
                 return 0, StatusCode.error_timeout
 
-    # TODO: Implement some useful attributes.
     def _get_attribute(self, attribute):
         """Get the value for a given VISA attribute for this session.
 
@@ -161,40 +160,66 @@ class GPIBSession(Session):
             raise NotImplementedError
 
         elif attribute == constants.VI_ATTR_GPIB_ATN_STATE:
+            # This could be checked with linux-gpib's iblines function, but this
+            # function is not exposed in the Python bindings.
             raise NotImplementedError
 
         elif attribute == constants.VI_ATTR_GPIB_ADDR_STATE:
-            raise NotImplementedError
+            if self.interface.ibsta() & 4:
+                return constants.VI_GPIB_LISTENER, SUCCESS
+            elif self.interface.ibsta() & 8:
+                return constants.VI_GPIB_TALKER, SUCCESS
+            else:
+                return constants.VI_GPIB_UNADDRESSED, SUCCESS
 
         elif attribute == constants.VI_ATTR_GPIB_CIC_STATE:
-            raise NotImplementedError
+            if self.interface.ibsta() & 32:
+                return constants.VI_TRUE, SUCCESS
+            else:
+                return constants.VI_FALSE, SUCCESS
 
         elif attribute == constants.VI_ATTR_GPIB_NDAC_STATE:
+            # See VI_ATTR_GPIB_ATN_STATE
             raise NotImplementedError
 
         elif attribute == constants.VI_ATTR_GPIB_SRQ_STATE:
+            # See VI_ATTR_GPIB_ATN_STATE
             raise NotImplementedError
 
         elif attribute == constants.VI_ATTR_GPIB_SYS_CNTRL_STATE:
-            raise NotImplementedError
+            if self.interface.ask(10):
+                return constants.VI_TRUE, SUCCESS
+            else:
+                return constants.VI_FALSE, SUCCESS
 
         elif attribute == constants.VI_ATTR_GPIB_HS488_CBL_LEN:
-            raise NotImplementedError
+            return constants.VI_GPIB_HS488_NIMPL, StatusCode.VI_ERROR_NIMPL_OPER
 
         elif attribute == constants.VI_ATTR_GPIB_PRIMARY_ADDR:
-            raise NotImplementedError
+            return self.interface.ask(1), SUCCESS
 
         elif attribute == constants.VI_ATTR_GPIB_SECONDARY_ADDR:
-            raise NotImplementedError
+            sad = self.interface.ask(2)
+            if sad:
+                return sad - 96, SUCCESS
+            else:
+                return constants.VI_NO_SEC_ADDR, SUCCESS
 
         elif attribute == constants.VI_ATTR_GPIB_REN_STATE:
+            # See VI_ATTR_GPIB_ATN_STATE
             raise NotImplementedError
 
         elif attribute == constants.VI_ATTR_GPIB_UNADDR_EN:
-            raise NotImplementedError
+            if self.interface.ask(27):
+                return constants.VI_TRUE, SUCCESS
+            else:
+                return constants.VI_FALSE, SUCCESS
 
         elif attribute == constants.VI_ATTR_GPIB_RECV_CIC_STATE:
             raise NotImplementedError
+
+        elif attribute == constants.VI_ATTR_INTF_TYPE:
+            return constants.InterfaceType.gpib, SUCCESS
 
         raise UnknownAttribute(attribute)
 
@@ -212,26 +237,8 @@ class GPIBSession(Session):
         if attribute == constants.VI_ATTR_GPIB_READDR_EN:
             raise NotImplementedError
 
-        elif attribute == constants.VI_ATTR_GPIB_ATN_STATE:
-            raise NotImplementedError
-
-        elif attribute == constants.VI_ATTR_GPIB_ADDR_STATE:
-            raise NotImplementedError
-
-        elif attribute == constants.VI_ATTR_GPIB_CIC_STATE:
-            raise NotImplementedError
-
-        elif attribute == constants.VI_ATTR_GPIB_NDAC_STATE:
-            raise NotImplementedError
-
-        elif attribute == constants.VI_ATTR_GPIB_SRQ_STATE:
-            raise NotImplementedError
-
-        elif attribute == constants.VI_ATTR_GPIB_SYS_CNTRL_STATE:
-            raise NotImplementedError
-
         elif attribute == constants.VI_ATTR_GPIB_HS488_CBL_LEN:
-            raise NotImplementedError
+            return StatusCode.VI_ERROR_NIMPL_OPER
 
         elif attribute == constants.VI_ATTR_GPIB_PRIMARY_ADDR:
             raise NotImplementedError
@@ -239,13 +246,7 @@ class GPIBSession(Session):
         elif attribute == constants.VI_ATTR_GPIB_SECONDARY_ADDR:
             raise NotImplementedError
 
-        elif attribute == constants.VI_ATTR_GPIB_REN_STATE:
-            raise NotImplementedError
-
         elif attribute == constants.VI_ATTR_GPIB_UNADDR_EN:
-            raise NotImplementedError
-
-        elif attribute == constants.VI_ATTR_GPIB_RECV_CIC_STATE:
             raise NotImplementedError
 
         raise UnknownAttribute(attribute)
