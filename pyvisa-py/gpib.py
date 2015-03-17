@@ -12,6 +12,7 @@
 
 from __future__ import division, unicode_literals, print_function, absolute_import
 from bisect import bisect
+from re import findall
 
 from pyvisa import constants, attributes, logger
 
@@ -95,9 +96,15 @@ class GPIBSession(Session):
         :param value: Requested timeout value in milliseconds
         """
         self.interface.timeout(bisect(TIMETABLE, value))
-            
+
     def close(self):
-        self.interface.close()
+        # Closes a Gpib object. The Gpib object has no native close() function,
+        # so we need to use the lower level gpib.close() instead. gpib.close()
+        # takes the device handle which was used to initialize the Gpib object as
+        # its argument, so we use a regular expression to extract that device
+        # handle from the Gpib object.
+        handle = int(findall(r'\d+', repr(self.interface))[0])
+        gpib.close(handle)
 
     def read(self, count):
         """Reads data from device or interface synchronously.
@@ -154,10 +161,10 @@ class GPIBSession(Session):
             raise NotImplementedError
 
         elif attribute == constants.VI_ATTR_GPIB_ATN_STATE:
-            return NotImplementedError
+            raise NotImplementedError
 
         elif attribute == constants.VI_ATTR_GPIB_ADDR_STATE:
-            return NotImplementedError
+            raise NotImplementedError
 
         elif attribute == constants.VI_ATTR_GPIB_CIC_STATE:
             raise NotImplementedError
@@ -169,10 +176,10 @@ class GPIBSession(Session):
             raise NotImplementedError
 
         elif attribute == constants.VI_ATTR_GPIB_SYS_CNTRL_STATE:
-            return NotImplementedError
+            raise NotImplementedError
 
         elif attribute == constants.VI_ATTR_GPIB_HS488_CBL_LEN:
-            return NotImplementedError
+            raise NotImplementedError
 
         elif attribute == constants.VI_ATTR_GPIB_PRIMARY_ADDR:
             raise NotImplementedError
@@ -188,7 +195,7 @@ class GPIBSession(Session):
 
         elif attribute == constants.VI_ATTR_GPIB_RECV_CIC_STATE:
             raise NotImplementedError
-        
+
         raise UnknownAttribute(attribute)
 
     def _set_attribute(self, attribute, attribute_state):
@@ -206,10 +213,10 @@ class GPIBSession(Session):
             raise NotImplementedError
 
         elif attribute == constants.VI_ATTR_GPIB_ATN_STATE:
-            return NotImplementedError
+            raise NotImplementedError
 
         elif attribute == constants.VI_ATTR_GPIB_ADDR_STATE:
-            return NotImplementedError
+            raise NotImplementedError
 
         elif attribute == constants.VI_ATTR_GPIB_CIC_STATE:
             raise NotImplementedError
@@ -221,10 +228,10 @@ class GPIBSession(Session):
             raise NotImplementedError
 
         elif attribute == constants.VI_ATTR_GPIB_SYS_CNTRL_STATE:
-            return NotImplementedError
+            raise NotImplementedError
 
         elif attribute == constants.VI_ATTR_GPIB_HS488_CBL_LEN:
-            return NotImplementedError
+            raise NotImplementedError
 
         elif attribute == constants.VI_ATTR_GPIB_PRIMARY_ADDR:
             raise NotImplementedError
@@ -240,5 +247,6 @@ class GPIBSession(Session):
 
         elif attribute == constants.VI_ATTR_GPIB_RECV_CIC_STATE:
             raise NotImplementedError
-        
+
         raise UnknownAttribute(attribute)
+
