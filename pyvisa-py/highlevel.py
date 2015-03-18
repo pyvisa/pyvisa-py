@@ -56,6 +56,11 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
 
     from .tcpip import TCPIPSession
 
+    try:
+        from .gpib import GPIBSession
+    except ImportError as e:
+        pass
+
     @classmethod
     def get_session_classes(cls):
         return sessions.Session._session_classes
@@ -355,3 +360,12 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
             return constants.StatusCode.error_invalid_object
 
         return sess.set_attribute(attribute, attribute_state)
+    
+    def disable_event(self, session, event_type, mechanism):
+        # TODO: implement this for GPIB finalization
+        pass
+
+    def discard_events(self, session, event_type, mechanism):
+        # TODO: implement this for GPIB finalization
+        pass
+
