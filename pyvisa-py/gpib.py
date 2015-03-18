@@ -153,43 +153,8 @@ class GPIBSession(Session):
         """
 
         if attribute == constants.VI_ATTR_GPIB_READDR_EN:
+            # Not implemented in linux-gpib.
             raise NotImplementedError
-
-        elif attribute == constants.VI_ATTR_GPIB_ATN_STATE:
-            # This could be checked with linux-gpib's iblines function, but this
-            # function is not exposed in the Python bindings.
-            raise NotImplementedError
-
-        elif attribute == constants.VI_ATTR_GPIB_ADDR_STATE:
-            if self.interface.ibsta() & 4:
-                return constants.VI_GPIB_LISTENER, SUCCESS
-            elif self.interface.ibsta() & 8:
-                return constants.VI_GPIB_TALKER, SUCCESS
-            else:
-                return constants.VI_GPIB_UNADDRESSED, SUCCESS
-
-        elif attribute == constants.VI_ATTR_GPIB_CIC_STATE:
-            if self.interface.ibsta() & 32:
-                return constants.VI_TRUE, SUCCESS
-            else:
-                return constants.VI_FALSE, SUCCESS
-
-        elif attribute == constants.VI_ATTR_GPIB_NDAC_STATE:
-            # See VI_ATTR_GPIB_ATN_STATE
-            raise NotImplementedError
-
-        elif attribute == constants.VI_ATTR_GPIB_SRQ_STATE:
-            # See VI_ATTR_GPIB_ATN_STATE
-            raise NotImplementedError
-
-        elif attribute == constants.VI_ATTR_GPIB_SYS_CNTRL_STATE:
-            if self.interface.ask(10):
-                return constants.VI_TRUE, SUCCESS
-            else:
-                return constants.VI_FALSE, SUCCESS
-
-        elif attribute == constants.VI_ATTR_GPIB_HS488_CBL_LEN:
-            return constants.VI_GPIB_HS488_NIMPL, StatusCode.VI_ERROR_NIMPL_OPER
 
         elif attribute == constants.VI_ATTR_GPIB_PRIMARY_ADDR:
             return self.interface.ask(1), SUCCESS
@@ -202,7 +167,7 @@ class GPIBSession(Session):
                 return constants.VI_NO_SEC_ADDR, SUCCESS
 
         elif attribute == constants.VI_ATTR_GPIB_REN_STATE:
-            # See VI_ATTR_GPIB_ATN_STATE
+            # Not exposed via linux-gpib's python bindings.
             raise NotImplementedError
 
         elif attribute == constants.VI_ATTR_GPIB_UNADDR_EN:
@@ -210,9 +175,6 @@ class GPIBSession(Session):
                 return constants.VI_TRUE, SUCCESS
             else:
                 return constants.VI_FALSE, SUCCESS
-
-        elif attribute == constants.VI_ATTR_GPIB_RECV_CIC_STATE:
-            raise NotImplementedError
 
         elif attribute == constants.VI_ATTR_INTF_TYPE:
             return constants.InterfaceType.gpib, SUCCESS
@@ -231,19 +193,25 @@ class GPIBSession(Session):
         """
 
         if attribute == constants.VI_ATTR_GPIB_READDR_EN:
+            # Not implemented in linux-gpib.
             raise NotImplementedError
-
-        elif attribute == constants.VI_ATTR_GPIB_HS488_CBL_LEN:
-            return StatusCode.VI_ERROR_NIMPL_OPER
 
         elif attribute == constants.VI_ATTR_GPIB_PRIMARY_ADDR:
-            raise NotImplementedError
+            if isinstance(attribute_state, int) and 0 <= attribute_state <= 30:
+                self.interface.config(1, attribute_state)
+                return SUCCESS
+            else:
+                return StatusCode.error_nonsupported_attribute_state
 
         elif attribute == constants.VI_ATTR_GPIB_SECONDARY_ADDR:
             raise NotImplementedError
 
         elif attribute == constants.VI_ATTR_GPIB_UNADDR_EN:
-            raise NotImplementedError
+            try:
+                self.interface.config(27, attribute_state)
+                return SUCCESS
+            except gpib.GpibError:
+                return StatusCode.error_nonsupported_attribute_state
 
         raise UnknownAttribute(attribute)
 
