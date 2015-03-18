@@ -18,15 +18,11 @@ from .sessions import Session, UnknownAttribute
 
 try:
     import usb
-    from .protocols import usbtmc, usbutil
+    from .protocols import usbtmc, usbutil, usbraw
 except ImportError as e:
     Session.register_unavailable(constants.InterfaceType.usb, 'INSTR',
                                  'Please install PyUSB to use this resource type.\n%s' % e)
-    raise
 
-try:
-    from .protocols import usbraw
-except ImportError as e:
     Session.register_unavailable(constants.InterfaceType.usb, 'RAW',
                                  'Please install PyUSB to use this resource type.\n%s' % e)
     raise
