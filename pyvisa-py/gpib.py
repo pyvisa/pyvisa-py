@@ -31,7 +31,7 @@ except ImportError as e:
 def _find_listeners():
     """Find GPIB listeners.
     """
-    for i in range(1, 31):
+    for i in range(31):
         if gpib.listener(0, i):
             yield i
 
