@@ -5,13 +5,17 @@ PyVISA-py Changelog
 0.2 (unreleased)
 ----------------
 
-- Nothing changed yet.
+- Added support for GPIB INSTR using linux-gpib.
+  (Issue #24, thanks bessman)
+- Added support for USB RAW.
+  (Issue #18, kopp)
+- Better error reporting.
 
 
 0.1 (2015-02-08)
 ----------------
 
-- Initial release. Preliminary support for :
+- Initial release. Preliminary support for:
   - USB INSTR
   - TCPIP INSTR
   - ASRL INSTR
