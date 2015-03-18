@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
-    pyvisa-py.serial
-    ~~~~~~~~~~~~~~~~
+    pyvisa-py.gpib
+    ~~~~~~~~~~~~~~
 
     GPIB Session implementation using linux-gpib.
 
@@ -13,10 +13,9 @@
 from __future__ import division, unicode_literals, print_function, absolute_import
 from bisect import bisect
 
-from pyvisa import constants, attributes, logger
+from pyvisa import constants, logger
 
 from .sessions import Session, UnknownAttribute
-from . import common
 
 try:
     import gpib
@@ -39,6 +38,7 @@ def _find_listeners():
 
 StatusCode = constants.StatusCode
 SUCCESS = StatusCode.success
+
 # linux-gpib timeout constants, in milliseconds. See self.timeout.
 TIMETABLE = (0, 1e-2, 3e-2, 1e-1, 3e-1, 1e0, 3e0, 1e1, 3e1, 1e2, 3e2, 1e3, 3e3,
              1e4, 3e4, 1e5, 3e5, 1e6)
@@ -63,13 +63,16 @@ class GPIBSession(Session):
 
     @property
     def timeout(self):
+
         # 0x3 is the hexadecimal reference to the IbaTMO (timeout) configuration
         # option in linux-gpib.
         return TIMETABLE[self.interface.ask(3)]
 
     @timeout.setter
     def timeout(self, value):
-        """linux-gpib only supports 18 discrete timeout values. If a timeout
+
+        """
+        linux-gpib only supports 18 discrete timeout values. If a timeout
         value other than these is requested, it will be rounded up to the closest
         available value. Values greater than the largest available timout value
         will instead be rounded down. The available timeout values are:
@@ -91,8 +94,6 @@ class GPIBSession(Session):
         15  100 seconds
         16  300 seconds
         17  1000 seconds
-
-        :param value: Requested timeout value in milliseconds
         """
         self.interface.timeout(bisect(TIMETABLE, value))
 

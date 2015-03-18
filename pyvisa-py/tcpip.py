@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
     pyvisa-py.tcpip
-    ~~~~~~~~~~~~~~~~
+    ~~~~~~~~~~~~~~~
 
     TCPIP Session implementation using Python Standard library.
 
