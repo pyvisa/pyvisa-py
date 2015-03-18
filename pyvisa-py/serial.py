@@ -25,11 +25,6 @@ except ImportError as e:
     Session.register_unavailable(constants.InterfaceType.asrl, 'INSTR',
                                  'Please install PySerial to use this resource type.\n%s' % e)
 
-    def comports(*args, **kwargs):
-        raise ValueError('Please install PySerial to use this resource type')
-
-    Serial = comports
-
     raise
 
 
