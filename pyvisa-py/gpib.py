@@ -32,7 +32,7 @@ def _find_listeners():
     """Find GPIB listeners.
     """
     for i in range(31):
-        if gpib.listener(0, i):
+        if gpib.listener(BOARD, i) and gpib.ask(BOARD, 1) != i:
             yield i
 
 
@@ -45,6 +45,7 @@ TIMETABLE = (0, 1e-2, 3e-2, 1e-1, 3e-1, 1e0, 3e0, 1e1, 3e1, 1e2, 3e2, 1e3, 3e3,
 
 
 # TODO: Check board indices other than 0.
+BOARD = 0
 # TODO: Check secondary addresses.
 @Session.register(constants.InterfaceType.gpib, 'INSTR')
 class GPIBSession(Session):
