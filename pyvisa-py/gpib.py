@@ -139,6 +139,8 @@ class GPIBSession(Session):
             # 0x4000 = 16384 = TIMO
             if self.interface.ibsta() & 16384:
                 return 0, StatusCode.error_timeout
+            else:
+                return 0, StatusCode.error_system_error
 
     def _get_attribute(self, attribute):
         """Get the value for a given VISA attribute for this session.
