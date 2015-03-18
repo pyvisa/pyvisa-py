@@ -21,15 +21,20 @@ from . import common
 try:
     import gpib
     from Gpib import Gpib
+
 except ImportError as e:
     Session.register_unavailable(constants.InterfaceType.gpib, 'INSTR',
                                  'Please install linux-gpib to use this resource type.\n%s' % e)
-    def gpib(*args, **kwargs):
-        raise ValueError('Please install linux-gpib to use this resource type')
 
-    Gpib = gpib
-    
     raise
+
+
+def _find_listeners():
+    """Find GPIB listeners.
+    """
+    for i in range(1, 31):
+        if gpib.listener(0, i):
+            yield i
 
 
 StatusCode = constants.StatusCode
@@ -48,12 +53,7 @@ class GPIBSession(Session):
 
     @staticmethod
     def list_resources():
-        def find_listeners():
-            for i in range(1, 31):
-                if gpib.listener(0, i):
-                    yield i
-
-        return ['GPIB0::%d::INSTR' % pad for pad in find_listeners()]
+        return ['GPIB0::%d::INSTR' % pad for pad in _find_listeners()]
 
     def after_parsing(self):
         minor = self.parsed['board']
