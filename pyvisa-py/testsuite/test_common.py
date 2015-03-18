@@ -85,6 +85,15 @@ class TestParsers(BaseTestCase):
                          canonical_resource_name='GPIB3::INTFC')
 
     def test_tcpip_intr(self):
+
+        self._parse_test('TCPIP::192.168.134.102',
+                         interface_type=constants.InterfaceType.tcpip,
+                         resource_class='INSTR',
+                         host_address='192.168.134.102',
+                         board='0',
+                         lan_device_name='inst0',
+                         canonical_resource_name='TCPIP0::192.168.134.102::inst0::INSTR')
+
         self._parse_test('TCPIP::dev.company.com::INSTR',
                          interface_type=constants.InterfaceType.tcpip,
                          resource_class='INSTR',
