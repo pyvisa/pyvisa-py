@@ -154,28 +154,44 @@ class GPIBSession(Session):
         """
 
         if attribute == constants.VI_ATTR_GPIB_READDR_EN:
-            # Not implemented in linux-gpib.
-            raise NotImplementedError
+            # IbaREADDR 0x6
+            # Setting has no effect in linux-gpib.
+            return self.interface.ask(6), SUCCESS
 
         elif attribute == constants.VI_ATTR_GPIB_PRIMARY_ADDR:
+            # IbaPAD 0x1
             return self.interface.ask(1), SUCCESS
 
         elif attribute == constants.VI_ATTR_GPIB_SECONDARY_ADDR:
+            # IbaSAD 0x2
+            # Remove 0x60 because National Instruments.
             sad = self.interface.ask(2)
-            if sad:
-                return sad - 96, SUCCESS
+            if self.interface.ask(2):
+                return self.interface.ask(2) - 96, SUCCESS
             else:
                 return constants.VI_NO_SEC_ADDR, SUCCESS
 
         elif attribute == constants.VI_ATTR_GPIB_REN_STATE:
-            # Not exposed via linux-gpib's python bindings.
+            # I have no idea how to implement this.
             raise NotImplementedError
 
         elif attribute == constants.VI_ATTR_GPIB_UNADDR_EN:
+            # IbaUnAddr 0x1b
             if self.interface.ask(27):
                 return constants.VI_TRUE, SUCCESS
             else:
                 return constants.VI_FALSE, SUCCESS
+
+        elif attribute == constants.VI_ATTR_SEND_END_EN:
+            # IbaEndBitIsNormal 0x1a
+            if self.interface.ask(26):
+                return constants.VI_TRUE, SUCCESS
+            else:
+                return constants.VI_FALSE, SUCCESS
+
+        elif Attribute == constants.VI_ATTR_INTF_NUM:
+            # IbaBNA 0x200
+            return self.interface.ask(512), SUCCESS
 
         elif attribute == constants.VI_ATTR_INTF_TYPE:
             return constants.InterfaceType.gpib, SUCCESS
@@ -194,10 +210,16 @@ class GPIBSession(Session):
         """
 
         if attribute == constants.VI_ATTR_GPIB_READDR_EN:
-            # Not implemented in linux-gpib.
-            raise NotImplementedError
+            # IbcREADDR 0x6
+            # Setting has no effect in linux-gpib.
+            if isinstance(attribute_state, int):
+                self.interface.config(6, attribute_state)
+                return SUCCESS
+            else:
+                return StatusCode.error_nonsupported_attribute_state
 
         elif attribute == constants.VI_ATTR_GPIB_PRIMARY_ADDR:
+            # IbcPAD 0x1
             if isinstance(attribute_state, int) and 0 <= attribute_state <= 30:
                 self.interface.config(1, attribute_state)
                 return SUCCESS
@@ -205,13 +227,31 @@ class GPIBSession(Session):
                 return StatusCode.error_nonsupported_attribute_state
 
         elif attribute == constants.VI_ATTR_GPIB_SECONDARY_ADDR:
-            raise NotImplementedError
+            # IbcSAD 0x2
+            # Add 0x60 because National Instruments.
+            if isinstance(attribute_state, int) and 0 <= attribute_state <= 30:
+                if self.interface.ask(2):
+                    self.interface.config(2, attribute_state + 96)
+                    return SUCCESS
+                else:
+                    return StatusCode.error_nonsupported_attribute
+            else:
+                return StatusCode.error_nonsupported_attribute_state
 
         elif attribute == constants.VI_ATTR_GPIB_UNADDR_EN:
+            # IbcUnAddr 0x1b
             try:
                 self.interface.config(27, attribute_state)
                 return SUCCESS
             except gpib.GpibError:
+                return StatusCode.error_nonsupported_attribute_state
+
+        elif attribute == constants.VI_ATTR_SEND_END_EN:
+            # IbcEndBitIsNormal 0x1a
+            if isinstance(attribute_state, int):
+                self.interface.config(26, attribute_state)
+                return SUCCESS
+            else:
                 return StatusCode.error_nonsupported_attribute_state
 
         raise UnknownAttribute(attribute)
