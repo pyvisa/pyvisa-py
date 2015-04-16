@@ -41,6 +41,7 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
     # Try to import packages implementing lower level functionality.
     try:
         from .serial import SerialSession
+        logger.debug('SerialSession was ')
     except ImportError as e:
         pass
 
@@ -54,7 +55,10 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
     except ImportError as e:
         pass
 
-    from .tcpip import TCPIPSession
+    try:
+        from .tcpip import TCPIPSession
+    except ImportError as e:
+        pass
 
     try:
         from .gpib import GPIBSession
@@ -216,26 +220,10 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
         """
         return self._register(self), constants.StatusCode.success
 
-    def find_next(self, find_list):
-        """Returns the next resource from the list of resources found during a previous call to find_resources().
+    def list_resources(self, session, query='?*::INSTR'):
+        """Returns a tuple of all connected devices matching query.
 
-        Corresponds to viFindNext function of the VISA library.
-
-        :param find_list: Describes a find list. This parameter must be created by find_resources().
-        :return: Returns a string identifying the location of a device, return value of the library call.
-        :rtype: unicode | str, VISAStatus
-        """
-        return next(find_list), constants.StatusCode.success
-
-    def find_resources(self, session, query):
-        """Queries a VISA system to locate the resources associated with a specified interface.
-
-        Corresponds to viFindRsrc function of the VISA library.
-
-        :param session: Unique logical identifier to a session (unused, just to uniform signatures).
-        :param query: A regular expression followed by an optional logical expression. Use '?*' for all.
-        :return: find_list, return_counter, instrument_description, return value of the library call.
-        :rtype: ViFindList | int | unicode | str, VISAStatus
+        :param query: regular expression used to match devices.
         """
 
         # For each session type, ask for the list of connected resources and
@@ -247,12 +235,10 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
         query = query.replace('?*', '.*')
         matcher = re.compile(query, re.IGNORECASE)
 
-        resources = [res for res in resources if matcher.match(res)]
+        resources = tuple(res for res in resources if matcher.match(res))
 
-        count = len(resources)
-        resources = iter(resources)
-        if count:
-            return resources, count, next(resources), constants.StatusCode.success
+        if resources:
+            return resources
 
         raise errors.VisaIOError(errors.StatusCode.error_resource_not_found.value)
 
