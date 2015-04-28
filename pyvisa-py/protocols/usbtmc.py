@@ -17,7 +17,7 @@
 from __future__ import division, unicode_literals, print_function, absolute_import
 
 import enum
-import struct
+from pyvisa.compat import struct
 import time
 from collections import namedtuple
 

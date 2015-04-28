@@ -28,7 +28,7 @@ import sys
 import enum
 import xdrlib
 import socket
-import struct
+from pyvisa.compat import struct
 
 #: Version of the protocol
 RPCVERSION = 2
