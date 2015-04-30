@@ -53,7 +53,7 @@ class SerialSession(Session):
     @classmethod
     def get_low_level_info(cls):
         try:
-            ver = '.'.join(serial.VERSION)
+            ver = serial.VERSION
         except AttributeError:
             ver = 'N/A'
 

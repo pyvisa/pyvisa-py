@@ -17,10 +17,11 @@ import warnings
 import random
 import re
 
-from pyvisa import constants, errors, highlevel, logger
+from pyvisa import constants, errors, highlevel
 from pyvisa.compat import integer_types, OrderedDict
 
 from . import common, sessions
+from .common import logger
 
 
 class PyVisaLibrary(highlevel.VisaLibraryBase):
@@ -41,29 +42,33 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
     # Try to import packages implementing lower level functionality.
     try:
         from .serial import SerialSession
-        logger.debug('SerialSession was ')
+        logger.debug('SerialSession was correctly imported.')
     except ImportError as e:
-        pass
+        logger.debug('SerialSession was not imported %s.' % e)
 
     try:
         from .usb import USBSession
+        logger.debug('USBSession was correctly imported.')
     except ImportError as e:
-        pass
+        logger.debug('USBSession was not imported %s.' % e)
 
     try:
         from .usb import USBRawSession
+        logger.debug('USBRawSession was correctly imported.')
     except ImportError as e:
-        pass
+        logger.debug('USBRawSession was not imported %s.' % e)
 
     try:
         from .tcpip import TCPIPSession
+        logger.debug('TCPIPSession was correctly imported.')
     except ImportError as e:
-        pass
+        logger.debug('TCPIPSession was not imported %s.' % e)
 
     try:
         from .gpib import GPIBSession
+        logger.debug('GPIBSession was correctly imported.')
     except ImportError as e:
-        pass
+        logger.debug('GPIBSession was not imported %s.' % e)
 
     @classmethod
     def get_session_classes(cls):
