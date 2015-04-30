@@ -111,12 +111,15 @@ class GPIBSession(Session):
         :rtype: bytes, constants.StatusCode
         """
 
-        # 0x2000 = 8192 = END
-        checker = lambda current: self.interface.ibsta() & 8192
+        try:
+            return self.interface.read(count), SUCCESS
 
-        reader = lambda: self.interface.read(1)
-
-        return self._read(reader, count, checker, False, None, False, gpib.GpibError)
+        except gpib.GpibError:
+            # 0x4000 = 16384 = TIMO
+            if self.interface.ibsta() & 16384:
+                return b'', StatusCode.error_timeout
+            else:
+                return b'', StatusCode.error_system_error
 
     def write(self, data):
         """Writes data to device or interface synchronously.
@@ -189,7 +192,7 @@ class GPIBSession(Session):
             else:
                 return constants.VI_FALSE, SUCCESS
 
-        elif Attribute == constants.VI_ATTR_INTF_NUM:
+        elif attribute == constants.VI_ATTR_INTF_NUM:
             # IbaBNA 0x200
             return self.interface.ask(512), SUCCESS
 
