@@ -11,9 +11,12 @@
 
 from __future__ import division, unicode_literals, print_function, absolute_import
 
+import logging
 import sys
 
-from pyvisa import constants
+from pyvisa import constants, logger
+
+logger = logging.LoggerAdapter(logger, {'backend': 'py'})
 
 
 class MockInterface(object):
