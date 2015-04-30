@@ -155,9 +155,9 @@ class USBInstrSession(USBSession):
         return out
 
     def after_parsing(self):
-        self.interface = usbtmc.USBTMC(int(self.parsed['manufacturer_id'], 0),
-                                       int(self.parsed['model_code'], 0),
-                                       self.parsed['serial_number'])
+        self.interface = usbtmc.USBTMC(int(self.parsed.manufacturer_id, 0),
+                                       int(self.parsed.model_code, 0),
+                                       self.parsed.serial_number)
 
         for name in 'SEND_END_EN,TERMCHAR,TERMCHAR_EN'.split(','):
             attribute = getattr(constants, 'VI_ATTR_' + name)
@@ -189,9 +189,9 @@ class USBRawSession(USBSession):
         return out
 
     def after_parsing(self):
-        self.interface = usbraw.USBRawDevice(int(self.parsed['manufacturer_id'], 0),
-                                             int(self.parsed['model_code'], 0),
-                                             self.parsed['serial_number'])
+        self.interface = usbraw.USBRawDevice(int(self.parsed.manufacturer_id, 0),
+                                             int(self.parsed.model_code, 0),
+                                             self.parsed.serial_number)
 
         for name in 'SEND_END_EN,TERMCHAR,TERMCHAR_EN'.split(','):
             attribute = getattr(constants, 'VI_ATTR_' + name)

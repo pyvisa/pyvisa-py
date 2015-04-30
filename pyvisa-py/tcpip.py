@@ -42,7 +42,7 @@ class TCPIPSession(Session):
     def after_parsing(self):
         # TODO: board_number not handled
         # TODO: lan_device_name not handled
-        self.interface = vxi11.CoreClient(self.parsed['host_address'])
+        self.interface = vxi11.CoreClient(self.parsed.host_address)
 
         self.lock_timeout = 10000
         self.timeout = 10000
@@ -51,7 +51,7 @@ class TCPIPSession(Session):
         (error, link,
          abort_port,
          max_recv_size) = self.interface.create_link(self.client_id, 0, self.lock_timeout,
-                                                     self.parsed['lan_device_name'])
+                                                     self.parsed.lan_device_name)
 
         if error:
             raise Exception("error creating link: %d" % error)

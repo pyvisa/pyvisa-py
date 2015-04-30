@@ -17,7 +17,7 @@ import warnings
 import random
 import re
 
-from pyvisa import constants, errors, highlevel
+from pyvisa import constants, errors, highlevel, rname
 from pyvisa.compat import integer_types, OrderedDict
 
 from . import common, sessions
@@ -189,11 +189,11 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
             raise ValueError('open_timeout (%r) must be an integer (or compatible type)' % open_timeout)
 
         try:
-            parsed = common.parse_resource_name(resource_name)
-        except common.InvalidResourceName:
+            parsed = rname.parse_resource_name(resource_name)
+        except rname.InvalidResourceName:
             return 0, constants.StatusCode.error_invalid_resource_name
 
-        cls = sessions.Session.get_session_class(parsed['interface_type'], parsed['resource_class'])
+        cls = sessions.Session.get_session_class(parsed.interface_type_const, parsed.resource_class)
 
         sess = cls(session, resource_name, parsed)
 
@@ -274,9 +274,9 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
         try:
             parsed = common.parse_resource_name(resource_name)
 
-            return (highlevel.ResourceInfo(parsed['interface_type'],
-                                           parsed['board'],
-                                           parsed['resource_class'], None, None),
+            return (highlevel.ResourceInfo(parsed.interface_type_const,
+                                           parsed.board,
+                                           parsed.resource_class, None, None),
                     constants.StatusCode.success)
         except ValueError:
             return 0, constants.StatusCode.error_invalid_resource_name

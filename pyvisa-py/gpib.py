@@ -57,8 +57,8 @@ class GPIBSession(Session):
         return ['GPIB0::%d::INSTR' % pad for pad in _find_listeners()]
 
     def after_parsing(self):
-        minor = self.parsed['board']
-        pad = self.parsed['primary_address']
+        minor = self.parsed.board
+        pad = self.parsed.primary_address
         self.handle = gpib.dev(int(minor), int(pad))
         self.interface = Gpib(self.handle)
 
