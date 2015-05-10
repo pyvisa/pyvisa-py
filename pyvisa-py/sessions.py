@@ -15,7 +15,7 @@ from __future__ import division, unicode_literals, print_function, absolute_impo
 import abc
 import time
 
-from pyvisa import logger, constants, attributes, compat
+from pyvisa import logger, constants, attributes, compat, rname
 
 from . import common
 
@@ -163,11 +163,11 @@ class Session(compat.with_metaclass(abc.ABCMeta)):
 
     def __init__(self, resource_manager_session, resource_name, parsed=None):
         if isinstance(resource_name, common.MockInterface):
-            parsed = common.parse_resource_name(resource_name.resource_name)
+            parsed = rname.parse_resource_name(resource_name.resource_name)
             parsed['mock'] = resource_name
 
         elif parsed is None:
-            parsed = common.parse_resource_name(resource_name)
+            parsed = rname.parse_resource_name(resource_name)
 
         self.parsed = parsed
 
@@ -178,9 +178,9 @@ class Session(compat.with_metaclass(abc.ABCMeta)):
         #: Values are get or set automatically by get_attribute and set_attribute
         #: Add your own by overriding after_parsing.
         self.attrs = {constants.VI_ATTR_RM_SESSION: resource_manager_session,
-                      constants.VI_ATTR_RSRC_NAME: parsed['canonical_resource_name'],
-                      constants.VI_ATTR_RSRC_CLASS: parsed['resource_class'],
-                      constants.VI_ATTR_INTF_TYPE: parsed['interface_type']}
+                      constants.VI_ATTR_RSRC_NAME: str(parsed),
+                      constants.VI_ATTR_RSRC_CLASS: parsed.resource_class,
+                      constants.VI_ATTR_INTF_TYPE: parsed.interface_type}
         self.after_parsing()
 
     def after_parsing(self):
