@@ -20,7 +20,7 @@ import re
 from pyvisa import constants, errors, highlevel, rname
 from pyvisa.compat import integer_types, OrderedDict
 
-from . import common, sessions
+from . import sessions
 from .common import logger
 
 
@@ -272,7 +272,7 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
         :rtype: :class:`pyvisa.highlevel.ResourceInfo`, :class:`pyvisa.constants.StatusCode`
         """
         try:
-            parsed = common.parse_resource_name(resource_name)
+            parsed = rname.parse_resource_name(resource_name)
 
             return (highlevel.ResourceInfo(parsed.interface_type_const,
                                            parsed.board,
