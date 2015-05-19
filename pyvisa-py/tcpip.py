@@ -101,6 +101,8 @@ class TCPIPSession(Session):
 
         read_fun = self.interface.device_read
 
+        status = SUCCESS
+
         while reason & end_reason == 0:
             error, reason, data = read_fun(self.link, chunk_length, self.timeout,
                                            self.lock_timeout, flags, term_char)
@@ -112,11 +114,12 @@ class TCPIPSession(Session):
             count -= len(data)
 
             if count <= 0:
+                status = StatusCode.success_max_count_read
                 break
 
             chunk_length = min(count, chunk_length)
 
-        return read_data, SUCCESS
+        return read_data, status
 
     def write(self, data):
         """Writes data to device or interface synchronously.
