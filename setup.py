@@ -28,14 +28,14 @@ long_description = '\n\n'.join([read('README'),
 
 __doc__ = long_description
 
-requirements = ['pyvisa>=1.6.3']
+requirements = ['pyvisa>=1.7']
 
 if sys.version_info < (2, 7):
     requirements.append('importlib')
 
 setup(name='PyVISA-py',
       description='Python VISA bindings for GPIB, RS232, and USB instruments',
-      version='0.2.dev0',
+      version='0.2.dev2',
       long_description=long_description,
       author='Hernan E. Grecco',
       author_email='hernan.grecco@gmail.com',
