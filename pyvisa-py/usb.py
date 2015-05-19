@@ -27,6 +27,22 @@ except ImportError as e:
                                  'Please install PyUSB to use this resource type.\n%s' % e)
     raise
 
+try:
+    _ = usb.core.find()
+except ValueError as e:
+    msg = 'PyUSB does not seem to be properly installed.\n' \
+          'Please refer to PyUSB documentation and ' \
+          'install a suitable backend like ' \
+          'libusb 0.1, libusb 1.0, libusbx, ' \
+          'libusb-win32 or OpenUSB\%s' % e
+
+    Session.register_unavailable(constants.InterfaceType.usb, 'INSTR', msg)
+
+    Session.register_unavailable(constants.InterfaceType.usb, 'RAW', msg)
+
+    raise
+
+
 from . import common
 
 StatusCode = constants.StatusCode
