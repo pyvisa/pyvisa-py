@@ -93,7 +93,7 @@ class Vxi11Packer(rpc.Packer):
         self.pack_int(id)
         self.pack_bool(lock_device)
         self.pack_uint(lock_timeout)
-        self.pack_string(device)
+        self.pack_string(device.encode('ascii'))
     
     def pack_device_write_parms(self, params):
         link, io_timeout, lock_timeout, flags, data = params
