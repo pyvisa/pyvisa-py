@@ -28,7 +28,10 @@ import sys
 import enum
 import xdrlib
 import socket
+
 from pyvisa.compat import struct
+
+from ..common import logger
 
 #: Version of the protocol
 RPCVERSION = 2
@@ -234,6 +237,8 @@ class Client(object):
 
     def make_call(self, proc, args, pack_func, unpack_func):
         # Don't normally override this (but see Broadcast)
+        logger.debug('Make call %r, %r, %r, %r', proc, args, str(pack_func), str(unpack_func))
+
         if pack_func is None and args is not None:
             raise TypeError('non-null args with null pack_func')
         self.start_call(proc)
@@ -288,6 +293,7 @@ def sendfrag(sock, last, frag):
 
 
 def sendrecord(sock, record):
+    logger.debug('Sending record through %s: %s', sock, record)
     sendfrag(sock, 1, record)
 
 
@@ -314,6 +320,9 @@ def recvrecord(sock):
     while not last:
         last, frag = recvfrag(sock)
         record = record + frag
+
+    logger.debug('Received record through %s: %s', sock, record)
+
     return record
 
 
@@ -325,10 +334,12 @@ class RawTCPClient(Client):
         self.connect()
     
     def connect(self):
+        logger.debug('RawTCPClient: connecting to socket at (%s, %s)', self.host, self.port)
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.sock.connect((self.host, self.port))
         
     def close(self):
+        logger.debug('RawTCPClient: closing socket')
         self.sock.close()
     
     def do_call(self):
@@ -351,10 +362,12 @@ class RawUDPClient(Client):
         self.connect()
     
     def connect(self):
+        logger.debug('RawTCPClient: connecting to socket at (%s, %s)', self.host, self.port)
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.sock.connect((self.host, self.port))
         
     def close(self):
+        logger.debug('RawTCPClient: closing socket')
         self.sock.close()
 
     def do_call(self):
@@ -363,7 +376,7 @@ class RawUDPClient(Client):
         try:
             from select import select
         except ImportError:
-            print('WARNING: select not found, RPC may hang')
+            logger.warn('select not found, RPC may hang')
             select = None
         BUFSIZE = 8192  # Max UDP buffer size
         timeout = 1
@@ -419,7 +432,7 @@ class RawBroadcastUDPClient(RawUDPClient):
         try:
             from select import select
         except ImportError:
-            print('WARNING: select not found, broadcast will hang')
+            logger.warn('select not found, broadcast will hang')
             select = None
         BUFSIZE = 8192  # Max UDP buffer size (for reply)
         replies = []
@@ -763,7 +776,7 @@ class TCPServer(Server):
             except EOFError:
                 break
             except socket.error:
-                print('socket error:', sys.exc_info()[0])
+                logger.exception('socket error: %r', sys.exc_info()[0])
                 break
             reply = self.handle(call)
             if reply is not None:
