@@ -47,16 +47,10 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
         logger.debug('SerialSession was not imported %s.' % e)
 
     try:
-        from .usb import USBSession
-        logger.debug('USBSession was correctly imported.')
+        from .usb import USBSession, USBRawSession
+        logger.debug('USBSession and USBRawSession were correctly imported.')
     except ImportError as e:
-        logger.debug('USBSession was not imported %s.' % e)
-
-    try:
-        from .usb import USBRawSession
-        logger.debug('USBRawSession was correctly imported.')
-    except ImportError as e:
-        logger.debug('USBRawSession was not imported %s.' % e)
+        logger.debug('USBSession and USBRawSession were not imported %s.' % e)
 
     try:
         from .tcpip import TCPIPSession
