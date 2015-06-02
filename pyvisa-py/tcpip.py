@@ -387,7 +387,8 @@ class TCPIPSocketSession(Session):
                     constants.StatusCode.success_termination_character_read)
 
         while now - start <= timeout:
-	    select.select([self.interface], [], [])
+            # use select to wait for read ready
+            select.select([self.interface], [], [])
             last = read_fun(chunk_length)
 
             if not last:
@@ -430,6 +431,7 @@ class TCPIPSocketSession(Session):
             block = data[offset:min(offset+chunk_size, sz)]
 
             try:
+                # use select to wait for write ready
                 select.select([], [self.interface], [])
                 size = self.interface.send(block)
             except socket.timeout as e:
