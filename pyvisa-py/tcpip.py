@@ -12,6 +12,7 @@
 
 import random
 import socket
+import select
 import time
 
 from pyvisa import constants, attributes
@@ -333,11 +334,10 @@ class TCPIPSocketSession(Session):
         # TODO: board_number not handled
 
         self.interface = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-
         self.interface.setblocking(0)
 
         try:
-            self.interface.connect((self.parsed.host_address, self.parsed.port))
+            self.interface.connect_ex((self.parsed.host_address, int(self.parsed.port)))
         except Exception as e:
             raise Exception("could not create socket: %s" % e)
 
@@ -374,7 +374,7 @@ class TCPIPSocketSession(Session):
 
         end_byte = common.int_to_byte(end_char) if end_char else b''
 
-        read_fun = self.socket.recv
+        read_fun = self.interface.recv
 
         now = start = time.time()
 
@@ -387,6 +387,7 @@ class TCPIPSocketSession(Session):
                     constants.StatusCode.success_termination_character_read)
 
         while now - start <= timeout:
+	    select.select([self.interface], [], [])
             last = read_fun(chunk_length)
 
             if not last:
@@ -429,7 +430,8 @@ class TCPIPSocketSession(Session):
             block = data[offset:min(offset+chunk_size, sz)]
 
             try:
-                size = self.socket.send(block)
+                select.select([], [self.interface], [])
+                size = self.interface.send(block)
             except socket.timeout as e:
                 return offset, StatusCode.error_io
 
