@@ -11,11 +11,14 @@
 """
 
 import random
+import socket
+import time
 
 from pyvisa import constants, attributes
 
 from .sessions import Session, UnknownAttribute
 from .protocols import vxi11
+from . import common
 
 
 StatusCode = constants.StatusCode
@@ -23,8 +26,9 @@ SUCCESS = StatusCode.success
 
 
 @Session.register(constants.InterfaceType.tcpip, 'INSTR')
-class TCPIPSession(Session):
-    """A TCPIP Session that uses the network standard library to do the low level communication.
+class TCPIPInstrSession(Session):
+    """A TCPIP Session that uses the network standard library to do the low level communication
+    using VXI-11
     """
 
     lock_timeout = 1000
@@ -305,3 +309,168 @@ class TCPIPSession(Session):
         if error:
             # TODO: Which message to return
             raise Exception("error unlocking: %d" % error)
+
+
+@Session.register(constants.InterfaceType.tcpip, 'SOCKET')
+class TCPIPSocketSession(Session):
+    """A TCPIP Session that uses the network standard library to do the low level communication.
+    """
+
+    lock_timeout = 1000
+    timeout = 1000
+
+    max_recv_size = 4096
+
+    # This buffer is used to store the bytes that appeared after termination char
+    _pending_buffer = b''
+
+    @staticmethod
+    def list_resources():
+        # TODO: is there a way to get this?
+        return []
+
+    def after_parsing(self):
+        # TODO: board_number not handled
+
+        self.interface = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
+        self.interface.setblocking(0)
+
+        try:
+            self.interface.connect((self.parsed.host_address, self.parsed.port))
+        except Exception as e:
+            raise Exception("could not create socket: %s" % e)
+
+        self.attrs[constants.VI_ATTR_TCPIP_ADDR] = self.parsed.host_address
+        self.attrs[constants.VI_ATTR_TCPIP_PORT] = self.parsed.port
+        self.attrs[constants.VI_ATTR_INTF_NUM] = self.parsed.board
+
+        for name in 'TERMCHAR,TERMCHAR_EN'.split(','):
+            attribute = getattr(constants, 'VI_ATTR_' + name)
+            self.attrs[attribute] = attributes.AttributesByID[attribute].default
+
+    def close(self):
+        self.interface.close()
+        self.interface = None
+
+    def read(self, count):
+        """Reads data from device or interface synchronously.
+
+        Corresponds to viRead function of the VISA library.
+
+        :param count: Number of bytes to be read.
+        :return: data read, return value of the library call.
+        :rtype: bytes, VISAStatus
+        """
+        if count < self.max_recv_size:
+            chunk_length = count
+        else:
+            chunk_length = self.max_recv_size
+
+        end_char, _ = self.get_attribute(constants.VI_ATTR_TERMCHAR)
+        enabled, _ = self.get_attribute(constants.VI_ATTR_TERMCHAR_EN)
+        timeout, _ = self.get_attribute(constants.VI_ATTR_TMO_VALUE)
+        timeout /= 1000
+
+        end_byte = common.int_to_byte(end_char) if end_char else b''
+
+        read_fun = self.socket.recv
+
+        now = start = time.time()
+
+        out = self._pending_buffer
+
+        if enabled and end_byte in out:
+            parts = out.split(end_byte)
+            self._pending_buffer = b''.join(parts[1:])
+            return (out + parts[0] + end_byte,
+                    constants.StatusCode.success_termination_character_read)
+
+        while now - start <= timeout:
+            last = read_fun(chunk_length)
+
+            if not last:
+                time.sleep(.01)
+                now = time.time()
+                continue
+
+            if enabled and end_byte in last:
+                parts = last.split(end_byte)
+                self._pending_buffer = b''.join(parts[1:])
+                return (out + parts[0] + end_byte,
+                        constants.StatusCode.success_termination_character_read)
+
+            out += last
+
+            if len(out) == count:
+                return out, constants.StatusCode.success_max_count_read
+        else:
+            return out, constants.StatusCode.error_timeout
+
+    def write(self, data):
+        """Writes data to device or interface synchronously.
+
+        Corresponds to viWrite function of the VISA library.
+
+        :param data: data to be written.
+        :type data: str
+        :return: Number of bytes actually transferred, return value of the library call.
+        :rtype: int, VISAStatus
+        """
+
+        chunk_size = 4096
+
+        num = sz = len(data)
+
+        offset = 0
+
+        while num > 0:
+
+            block = data[offset:min(offset+chunk_size, sz)]
+
+            try:
+                size = self.socket.send(block)
+            except socket.timeout as e:
+                return offset, StatusCode.error_io
+
+            if size < len(block):
+                return offset, StatusCode.error_io
+
+            offset += size
+            num -= size
+
+        return offset, SUCCESS
+
+    def _get_attribute(self, attribute):
+        """Get the value for a given VISA attribute for this session.
+
+        Use to implement custom logic for attributes.
+
+        :param attribute: Resource attribute for which the state query is made
+        :return: The state of the queried attribute for a specified resource, return value of the library call.
+        :rtype: (unicode | str | list | int, VISAStatus)
+        """
+
+        if attribute == constants.VI_ATTR_TCPIP_HOSTNAME:
+            raise NotImplementedError
+
+        elif attribute == constants.VI_ATTR_TCPIP_KEEPALIVE:
+            raise NotImplementedError
+
+        elif attribute == constants.VI_ATTR_TCPIP_NODELAY:
+            raise NotImplementedError
+
+        raise UnknownAttribute(attribute)
+
+    def _set_attribute(self, attribute, attribute_state):
+        """Sets the state of an attribute.
+
+        Corresponds to viSetAttribute function of the VISA library.
+
+        :param attribute: Attribute for which the state is to be modified. (Attributes.*)
+        :param attribute_state: The state of the attribute to be set for the specified object.
+        :return: return value of the library call.
+        :rtype: VISAStatus
+        """
+
+        raise UnknownAttribute(attribute)
