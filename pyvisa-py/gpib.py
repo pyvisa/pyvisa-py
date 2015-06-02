@@ -189,7 +189,7 @@ class GPIBSession(Session):
             else:
                 return constants.VI_FALSE, SUCCESS
 
-        elif Attribute == constants.VI_ATTR_INTF_NUM:
+        elif attribute == constants.VI_ATTR_INTF_NUM:
             # IbaBNA 0x200
             return self.interface.ask(512), SUCCESS
 
