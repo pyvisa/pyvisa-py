@@ -78,8 +78,9 @@ class SerialSession(Session):
 
     @timeout.setter
     def timeout(self, value):
-        self.interface.timeout = value
-        self.interface.writeTimeout = value
+        value_in_seconds = value / 1e3
+        self.interface.timeout = value_in_seconds
+        self.interface.writeTimeout = value_in_seconds
 
     def close(self):
         self.interface.close()
