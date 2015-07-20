@@ -100,7 +100,7 @@ class TCPIPInstrSession(Session):
             flags = vxi11.OP_FLAG_TERMCHAR_SET
             term_char = str(term_char).encode('utf-8')[0]
 
-        read_data = b''
+        read_data = bytearray()
 
         end_reason = vxi11.RX_END | vxi11.RX_CHR
 
@@ -115,7 +115,7 @@ class TCPIPInstrSession(Session):
             if error:
                 return read_data, StatusCode.error_io
 
-            read_data += data
+            read_data.extend(data)
             count -= len(data)
 
             if count <= 0:
@@ -124,7 +124,7 @@ class TCPIPInstrSession(Session):
 
             chunk_length = min(count, chunk_length)
 
-        return read_data, status
+        return bytes(read_data), status
 
     def write(self, data):
         """Writes data to device or interface synchronously.
