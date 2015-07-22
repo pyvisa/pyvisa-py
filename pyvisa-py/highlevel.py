@@ -53,7 +53,7 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
         logger.debug('USBSession and USBRawSession were not imported %s.' % e)
 
     try:
-        from .tcpip import TCPIPSession
+        from .tcpip import TCPIPInstrSession, TCPIPSocketSession
         logger.debug('TCPIPSession was correctly imported.')
     except ImportError as e:
         logger.debug('TCPIPSession was not imported %s.' % e)
@@ -311,7 +311,7 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
             return constants.StatusCode.error_invalid_object
 
         return sess.set_attribute(attribute, attribute_state)
-    
+
     def disable_event(self, session, event_type, mechanism):
         # TODO: implement this for GPIB finalization
         pass
