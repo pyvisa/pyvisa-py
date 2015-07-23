@@ -15,7 +15,6 @@ from __future__ import division, unicode_literals, print_function, absolute_impo
 import warnings
 
 import random
-import re
 
 from pyvisa import constants, errors, highlevel, rname
 from pyvisa.compat import integer_types, OrderedDict
@@ -231,10 +230,7 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
         resources = sum([st.list_resources()
                          for key, st in sessions.Session.iter_valid_session_classes()], [])
 
-        query = query.replace('?*', '.*')
-        matcher = re.compile(query, re.IGNORECASE)
-
-        resources = tuple(res for res in resources if matcher.match(res))
+        resources = rname.filter(resources, query)
 
         if resources:
             return resources
