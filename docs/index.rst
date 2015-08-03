@@ -9,7 +9,7 @@ PyVISA-py: Pure Python backend for PyVISA
 
 
 PyVISA-py is a backend for PyVISA_. It implements most of the methods
-for Message Based communication (Serial/USB/GPIB/Ethernet) using Python
+for message-based communication (Serial/USB/GPIB/Ethernet) using Python
 and some well developed, easy to deploy and cross platform libraries.
 
 You can select the PyVISA-py backend using **@py** when instantiating the
@@ -48,7 +48,7 @@ Which libraries are used by PyVISA-py?
 
 It depends on the interface type. For **ASRL** and **USB** we use PySerial_ and PyUSB_
 respectively. For **TCPIP** we use the :py:mod:`socket` module in the Python Standard Library.
-**GPIB** resources are not currently supported but they are in the plan using `linux-gpib`_.
+**GPIB** resources are supported via `linux-gpib`_.
 
 
 If I only need **TCPIP**, do I need to install PySerial and PyUSB?
@@ -75,17 +75,14 @@ Now:
 - ASRL INSTR
 - USB INSTR
 - TCPIP INSTR
+- GPIB INSTR
 
 Soon we will be supporting:
 
 - USB RAW
 - TCPIP SOCKET
 
-And later:
-
-- GPIB INSTR
-
-If you want that `soon` or `later` becomes now, give us a hand!
+If you want that `soon` or becomes now, give us a hand!
 
 
 Are all VISA attributes and methods implemented?
