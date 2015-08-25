@@ -2,7 +2,7 @@ PyVISA-py Changelog
 ===================
 
 
-0.2 (unreleased)
+0.2 (2015-08-25)
 ----------------
 
 - Added support for TCPIP Socket.
