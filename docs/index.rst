@@ -75,17 +75,10 @@ Now:
 - ASRL INSTR
 - USB INSTR
 - TCPIP INSTR
-
-Soon we will be supporting:
-
 - USB RAW
 - TCPIP SOCKET
-
-And later:
-
 - GPIB INSTR
 
-If you want that `soon` or `later` becomes now, give us a hand!
 
 
 Are all VISA attributes and methods implemented?
