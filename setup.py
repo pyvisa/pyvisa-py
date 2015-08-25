@@ -35,7 +35,7 @@ if sys.version_info < (2, 7):
 
 setup(name='PyVISA-py',
       description='Python VISA bindings for GPIB, RS232, and USB instruments',
-      version='0.2',
+      version='0.3.dev0',
       long_description=long_description,
       author='Hernan E. Grecco',
       author_email='hernan.grecco@gmail.com',
