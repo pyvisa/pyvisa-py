@@ -5,11 +5,26 @@ PyVISA-py Changelog
 0.2 (unreleased)
 ----------------
 
+- Added support for TCPIP Socket.
+  (Issue #38, thanks Thorsten Liebig)
 - Added support for GPIB INSTR using linux-gpib.
   (Issue #24, thanks bessman)
 - Added support for USB RAW.
   (Issue #18, kopp)
-- Better error reporting.
+- Better error reporting when pyusb or pyserial is missing.
+- Fixed logging of unicode strings.
+  (Issue #54)
+- Fixed timeout in SerialSession.
+  (Issue #44)
+- Moved resource name parsing to PyVISA.
+- VXI11 protocol performance enhancement.
+  (thanks alexforencich)
+- Improved pyusb importing.
+- Fixed large binary reads in TCPIP.
+- Added backend information to logger.
+- Use pyvisa compat/struct.py for python < 2.7.8
+  (thanks Martin Ritter)
+
 
 
 0.1 (2015-02-08)
