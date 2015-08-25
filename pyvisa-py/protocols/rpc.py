@@ -237,7 +237,7 @@ class Client(object):
 
     def make_call(self, proc, args, pack_func, unpack_func):
         # Don't normally override this (but see Broadcast)
-        logger.debug('Make call %r, %r, %r, %r', proc, args, str(pack_func), str(unpack_func))
+        logger.debug('Make call %r, %r, %r, %r', proc, args, pack_func, unpack_func)
 
         if pack_func is None and args is not None:
             raise TypeError('non-null args with null pack_func')
@@ -321,7 +321,7 @@ def recvrecord(sock):
         last, frag = recvfrag(sock)
         record = record + frag
 
-    logger.debug('Received record through %s: %s', sock, record)
+    logger.debug('Received record through %s: %r', sock, record)
 
     return record
 
