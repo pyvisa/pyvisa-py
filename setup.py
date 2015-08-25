@@ -28,7 +28,7 @@ long_description = '\n\n'.join([read('README'),
 
 __doc__ = long_description
 
-requirements = ['pyvisa>=1.7']
+requirements = ['pyvisa>=1.8']
 
 if sys.version_info < (2, 7):
     requirements.append('importlib')
