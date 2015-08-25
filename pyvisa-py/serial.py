@@ -74,10 +74,24 @@ class SerialSession(Session):
 
     @property
     def timeout(self):
-        return self.interface.timeout
+        value = self.interface.timeout
+
+        if value is None:
+            return constants.VI_TMO_INFINITE
+        elif value == 0:
+            return constants.VI_TMO_IMMEDIATE
+        else:
+            return int(value * 1000)
 
     @timeout.setter
     def timeout(self, value):
+        if value == constants.VI_TMO_INFINITE:
+            value = None
+        elif value == constants.VI_TMO_IMMEDIATE:
+            value = 0
+        else:
+            value = value / 1000.
+
         self.interface.timeout = value
         self.interface.writeTimeout = value
 
