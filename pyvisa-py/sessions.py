@@ -287,15 +287,16 @@ class Session(compat.with_metaclass(abc.ABCMeta)):
 
         Corresponds to viRead function of the VISA library.
 
-        :param reader: Function to read a single byte.
-        :type reader: () -> byte
+        :param reader: Function to read one or more bytes.
+        :type reader: () -> str
         :param count: Number of bytes to be read.
         :type count: int
-        :param end_indicator_checker: Function to check if the byte.
-        :type end_indicator_checker: (byte) -> boolean
+        :param end_indicator_checker: Function to check if the message is complete.
+        :type end_indicator_checker: (str) -> boolean
         :param suppress_end_en: suppress end.
         :type suppress_end_en: bool
-        :param termination_char: Number of bytes to be read.
+        :param termination_char: Stop reading if this character is received.
+        :type suppress_end_en: int or str
         :param termination_char_en: termination char enabled.
         :type termination_char_en: boolean
         :param: timeout_exception: Exception to capture time out for the given interface.
@@ -304,7 +305,16 @@ class Session(compat.with_metaclass(abc.ABCMeta)):
         :rtype: bytes, constants.StatusCode
         """
 
+        # NOTE: Some interfaces return not only a single byte but a complete block for each read
+        # therefore we must handle the case that the termination character is in the middle of the  block
+        # or that the maximum number of bytes is exceeded
         timeout = self.get_attribute(constants.VI_ATTR_TMO_VALUE)[0] / 1000.
+
+        # Make sure termination_char is a string
+        try:
+             termination_char = chr(termination_char)
+        except TypeError:
+            pass
 
         start = time.time()
         out = b''
@@ -317,17 +327,19 @@ class Session(compat.with_metaclass(abc.ABCMeta)):
             if current:
                 out += current
                 end_indicator_received = end_indicator_checker(current)
-                if end_indicator_received and not suppress_end_en:
-                    # RULE 6.1.1
-                    return out, constants.StatusCode.success
-
-                elif not end_indicator_received and current == termination_char and termination_char_en:
-                    # RULE 6.1.2
-                    return out, constants.StatusCode.success_termination_character_read
-
-                elif not end_indicator_received and current != termination_char and len(out) == count:
-                    # RULE 6.1.3
-                    return out, constants.StatusCode.success_max_count_read
+                if end_indicator_received:
+                    if not suppress_end_en:
+                        # RULE 6.1.1
+                        return out, constants.StatusCode.success
+                else:
+                    if termination_char_en and termination_char in current:
+                        # RULE 6.1.2
+                        # Return everything upto and including the termination character
+                        return out[:out.index(termination_char)+1], constants.StatusCode.success_termination_character_read
+                    elif len(out) >= count:
+                        # RULE 6.1.3
+                        # Return at most the number of bytes requested
+                        return out[:count], constants.StatusCode.success_max_count_read
 
             if time.time() - start > timeout:
                 return out, constants.StatusCode.error_timeout
