@@ -93,9 +93,9 @@ class USBSession(Session):
         term_char, _ = self.get_attribute(constants.VI_ATTR_TERMCHAR)
         term_char_en, _ = self.get_attribute(constants.VI_ATTR_TERMCHAR_EN)
 
-        return self._read(lambda: self.interface.read(1),
+        return self._read(lambda: self.interface.read(count),
                           count,
-                          lambda current: False,
+                          lambda current: True, # USB always returns a complete message
                           supress_end_en,
                           term_char,
                           term_char_en,
