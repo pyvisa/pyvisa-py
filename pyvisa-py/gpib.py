@@ -56,6 +56,15 @@ class GPIBSession(Session):
     def list_resources():
         return ['GPIB0::%d::INSTR' % pad for pad in _find_listeners()]
 
+    @classmethod
+    def get_low_level_info(cls):
+        try:
+            ver = gpib.version()
+        except AttributeError:
+            ver = '< 4.0'
+
+        return 'via Linux GPIB (%s)' % ver
+
     def after_parsing(self):
         minor = self.parsed.board
         pad = self.parsed.primary_address
