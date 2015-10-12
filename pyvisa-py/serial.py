@@ -67,8 +67,8 @@ class SerialSession(Session):
 
         self.interface = cls(port=self.parsed.board, timeout=2000, writeTimeout=2000)
 
-        for name in 'ASRL_END_IN,ASRL_END_OUT,SEND_END_EN,TERMCHAR,' \
-                    'TERMCHAR_EN,SUPPRESS_END_EN'.split(','):
+        for name in ('ASRL_END_IN', 'ASRL_END_OUT', 'SEND_END_EN', 'TERMCHAR',
+                    'TERMCHAR_EN', 'SUPPRESS_END_EN'):
             attribute = getattr(constants, 'VI_ATTR_' + name)
             self.attrs[attribute] = attributes.AttributesByID[attribute].default
 

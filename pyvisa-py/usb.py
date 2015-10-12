@@ -194,7 +194,7 @@ class USBInstrSession(USBSession):
                                        int(self.parsed.model_code, 0),
                                        self.parsed.serial_number)
 
-        for name in 'SEND_END_EN,TERMCHAR,TERMCHAR_EN'.split(','):
+        for name in ('SEND_END_EN', 'TERMCHAR', 'TERMCHAR_EN'):
             attribute = getattr(constants, 'VI_ATTR_' + name)
             self.attrs[attribute] = attributes.AttributesByID[attribute].default
 
@@ -228,6 +228,6 @@ class USBRawSession(USBSession):
                                              int(self.parsed.model_code, 0),
                                              self.parsed.serial_number)
 
-        for name in 'SEND_END_EN,TERMCHAR,TERMCHAR_EN'.split(','):
+        for name in ('SEND_END_EN', 'TERMCHAR', 'TERMCHAR_EN'):
             attribute = getattr(constants, 'VI_ATTR_' + name)
             self.attrs[attribute] = attributes.AttributesByID[attribute].default

@@ -64,7 +64,7 @@ class TCPIPInstrSession(Session):
         self.link = link
         self.max_recv_size = min(max_recv_size, 2 ** 30)  # 1GB
 
-        for name in 'SEND_END_EN,TERMCHAR,TERMCHAR_EN'.split(','):
+        for name in ('SEND_END_EN', 'TERMCHAR', 'TERMCHAR_EN'):
             attribute = getattr(constants, 'VI_ATTR_' + name)
             self.attrs[attribute] = attributes.AttributesByID[attribute].default
 
@@ -345,7 +345,7 @@ class TCPIPSocketSession(Session):
         self.attrs[constants.VI_ATTR_TCPIP_PORT] = self.parsed.port
         self.attrs[constants.VI_ATTR_INTF_NUM] = self.parsed.board
 
-        for name in 'TERMCHAR,TERMCHAR_EN'.split(','):
+        for name in ('TERMCHAR', 'TERMCHAR_EN'):
             attribute = getattr(constants, 'VI_ATTR_' + name)
             self.attrs[attribute] = attributes.AttributesByID[attribute].default
 
