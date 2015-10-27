@@ -75,6 +75,25 @@ class USBSession(Session):
 
         return 'via PyUSB (%s). Backend: %s' % (ver, backend)
 
+    @property
+    def timeout(self):
+        value = self.interface.timeout
+
+        if value is None:
+            return constants.VI_TMO_INFINITE
+        elif value == 0:
+            return constants.VI_TMO_IMMEDIATE
+        else:
+            return value
+
+    @timeout.setter
+    def timeout(self, value):
+        if value == constants.VI_TMO_INFINITE:
+            value = None
+        elif value == constants.VI_TMO_IMMEDIATE:
+            value = 0
+        self.interface.timeout = value
+
     def read(self, count):
         """Reads data from device or interface synchronously.
 
