@@ -265,3 +265,5 @@ class GPIBSession(Session):
 
         raise UnknownAttribute(attribute)
 
+    def read_stb(self):
+        return self.interface.serial_poll()
