@@ -14,6 +14,7 @@ from __future__ import division, unicode_literals, print_function, absolute_impo
 
 import abc
 import time
+import six
 
 from pyvisa import logger, constants, attributes, compat, rname
 
@@ -320,7 +321,11 @@ class Session(compat.with_metaclass(abc.ABCMeta)):
         out = b''
         while True:
             try:
-                current = reader().encode('ascii')
+                dtmp = reader()
+                if isinstance(dtmp, six.text_type):
+                    dtmp = dtmp.decode('ascii')
+                current = dtmp
+
             except timeout_exception:
                 return out, constants.StatusCode.error_timeout
 
