@@ -29,7 +29,7 @@ except ImportError as e:
 
 try:
     _ = usb.core.find()
-except ValueError as e:
+except Exception as e:
     msg = 'PyUSB does not seem to be properly installed.\n' \
           'Please refer to PyUSB documentation and ' \
           'install a suitable backend like ' \

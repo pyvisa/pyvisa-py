@@ -42,25 +42,25 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
     try:
         from .serial import SerialSession
         logger.debug('SerialSession was correctly imported.')
-    except ImportError as e:
+    except Exception as e:
         logger.debug('SerialSession was not imported %s.' % e)
 
     try:
         from .usb import USBSession, USBRawSession
         logger.debug('USBSession and USBRawSession were correctly imported.')
-    except ImportError as e:
+    except Exception as e:
         logger.debug('USBSession and USBRawSession were not imported %s.' % e)
 
     try:
         from .tcpip import TCPIPInstrSession, TCPIPSocketSession
         logger.debug('TCPIPSession was correctly imported.')
-    except ImportError as e:
+    except Exception as e:
         logger.debug('TCPIPSession was not imported %s.' % e)
 
     try:
         from .gpib import GPIBSession
         logger.debug('GPIBSession was correctly imported.')
-    except ImportError as e:
+    except Exception as e:
         logger.debug('GPIBSession was not imported %s.' % e)
 
     @classmethod
