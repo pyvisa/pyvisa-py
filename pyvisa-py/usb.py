@@ -31,10 +31,10 @@ try:
     _ = usb.core.find()
 except Exception as e:
     msg = 'PyUSB does not seem to be properly installed.\n' \
-          'Please refer to PyUSB documentation and ' \
-          'install a suitable backend like ' \
-          'libusb 0.1, libusb 1.0, libusbx, ' \
-          'libusb-win32 or OpenUSB\%s' % e
+          'Please refer to PyUSB documentation and \n' \
+          'install a suitable backend like \n' \
+          'libusb 0.1, libusb 1.0, libusbx, \n' \
+          'libusb-win32 or OpenUSB.\n%s' % e
 
     Session.register_unavailable(constants.InterfaceType.usb, 'INSTR', msg)
 
