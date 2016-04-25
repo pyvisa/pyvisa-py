@@ -126,7 +126,7 @@ class GPIBSession(Session):
         # 0x2000 = 8192 = END
         checker = lambda current: self.interface.ibsta() & 8192
 
-        reader = lambda: self.interface.read(1)
+        reader = lambda: self.interface.read(count)
 
         return self._read(reader, count, checker, False, None, False, gpib.GpibError)
 
