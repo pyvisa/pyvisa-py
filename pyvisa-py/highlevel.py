@@ -162,7 +162,8 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
 
     # noinspection PyShadowingBuiltins
     def open(self, session, resource_name,
-             access_mode=constants.AccessModes.no_lock, open_timeout=constants.VI_TMO_IMMEDIATE):
+             access_mode=constants.AccessModes.no_lock,
+             open_timeout=constants.VI_TMO_IMMEDIATE):
         """Opens a session to the specified resource.
 
         Corresponds to viOpen function of the VISA library.
@@ -250,9 +251,14 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
 
         # from the session handle, dispatch to the read method of the session object.
         try:
-            return self.sessions[session].read(count)
+            ret = self.sessions[session].read(count)
         except KeyError:
-            return constants.StatusCode.error_invalid_object
+            return 0, constants.StatusCode.error_invalid_object
+
+        if ret[1] < 0:
+            raise errors.VisaIOError(ret[1])
+
+        return ret
 
     def write(self, session, data):
         """Writes data to device or interface synchronously.
@@ -268,9 +274,14 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
 
         # from the session handle, dispatch to the write method of the session object.
         try:
-            return self.sessions[session].write(data)
+            ret = self.sessions[session].write(data)
         except KeyError:
-            return constants.StatusCode.error_invalid_object
+            return 0, constants.StatusCode.error_invalid_object
+
+        if ret[1] < 0:
+            raise errors.VisaIOError(ret[1])
+
+        return ret
 
     def get_attribute(self, session, attribute):
         """Retrieves the state of an attribute.
@@ -315,4 +326,3 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
     def discard_events(self, session, event_type, mechanism):
         # TODO: implement this for GPIB finalization
         pass
-
