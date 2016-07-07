@@ -87,14 +87,14 @@ class Vxi11Packer(rpc.Packer):
 
     def pack_device_link(self, link):
         self.pack_int(link)
-    
+
     def pack_create_link_parms(self, params):
         id, lock_device, lock_timeout, device = params
         self.pack_int(id)
         self.pack_bool(lock_device)
         self.pack_uint(lock_timeout)
         self.pack_string(device.encode('ascii'))
-    
+
     def pack_device_write_parms(self, params):
         link, io_timeout, lock_timeout, flags, data = params
         self.pack_int(link)
@@ -102,7 +102,7 @@ class Vxi11Packer(rpc.Packer):
         self.pack_uint(lock_timeout)
         self.pack_int(flags)
         self.pack_opaque(data)
-    
+
     def pack_device_read_parms(self, params):
         link, request_size, io_timeout, lock_timeout, flags, term_char = params
         self.pack_int(link)
@@ -111,14 +111,14 @@ class Vxi11Packer(rpc.Packer):
         self.pack_uint(lock_timeout)
         self.pack_int(flags)
         self.pack_int(term_char)
-    
+
     def pack_device_generic_parms(self, params):
         link, flags, lock_timeout, io_timeout = params
         self.pack_int(link)
         self.pack_int(flags)
         self.pack_uint(lock_timeout)
         self.pack_uint(io_timeout)
-    
+
     def pack_device_remote_func_parms(self, params):
         host_addr, host_port, prog_num, prog_vers, prog_family = params
         self.pack_uint(host_addr)
@@ -126,7 +126,7 @@ class Vxi11Packer(rpc.Packer):
         self.pack_uint(prog_num)
         self.pack_uint(prog_vers)
         self.pack_int(prog_family)
-    
+
     def pack_device_enable_srq_parms(self, params):
         link, enable, handle = params
         self.pack_int(link)
@@ -134,13 +134,13 @@ class Vxi11Packer(rpc.Packer):
         if len(handle) > 40:
             raise Vxi11Error("array length too long")
         self.pack_opaque(handle)
-    
+
     def pack_device_lock_parms(self, params):
         link, flags, lock_timeout = params
         self.pack_int(link)
         self.pack_int(flags)
         self.pack_uint(lock_timeout)
-    
+
     def pack_device_docmd_parms(self, params):
         link, flags, io_timeout, lock_timeout, cmd, network_order, datasize, data_in = params
         self.pack_int(link)
@@ -156,33 +156,33 @@ class Vxi11Packer(rpc.Packer):
 class Vxi11Unpacker(rpc.Unpacker):
     def unpack_device_link(self):
         return self.unpack_int()
-    
+
     def unpack_device_error(self):
         return self.unpack_int()
-    
+
     def unpack_create_link_resp(self):
         error = self.unpack_int()
         link = self.unpack_int()
         abort_port = self.unpack_uint()
         max_recv_size = self.unpack_uint()
         return error, link, abort_port, max_recv_size
-    
+
     def unpack_device_write_resp(self):
         error = self.unpack_int()
         size = self.unpack_uint()
         return error, size
-    
+
     def unpack_device_read_resp(self):
         error = self.unpack_int()
         reason = self.unpack_int()
         data = self.unpack_opaque()
         return error, reason, data
-    
+
     def unpack_device_read_stb_resp(self):
         error = self.unpack_int()
         stb = self.unpack_uint()
         return error, stb
-    
+
     def unpack_device_docmd_resp(self):
         error = self.unpack_int()
         data_out = self.unpack_opaque()
@@ -271,20 +271,14 @@ class CoreClient(rpc.TCPClient):
         return self.make_call(DESTROY_LINK, link,
                               self.packer.pack_device_link,
                               self.unpacker.unpack_device_error)
-    
+
     def create_intr_chan(self, host_addr, host_port, prog_num, prog_vers, prog_family):
         params = (host_addr, host_port, prog_num, prog_vers, prog_family)
         return self.make_call(CREATE_INTR_CHAN, params,
                               self.packer.pack_device_docmd_parms,
                               self.unpacker.unpack_device_error)
-    
+
     def destroy_intr_chan(self):
         return self.make_call(DESTROY_INTR_CHAN, None,
                               None,
                               self.unpacker.unpack_device_error)
-
-
-
-
-
-
