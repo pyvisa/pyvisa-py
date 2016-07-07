@@ -15,10 +15,10 @@ import socket
 import select
 import time
 
-from pyvisa import constants, attributes
+from pyvisa import constants, attributes, errors
 
 from .sessions import Session, UnknownAttribute
-from .protocols import vxi11
+from .protocols import vxi11, rpc
 from . import common
 
 
@@ -35,7 +35,6 @@ class TCPIPInstrSession(Session):
     lock_timeout = 1000
     timeout = 1000
     client_id = None
-
     link = None
     max_recv_size = 1024
 
@@ -53,10 +52,8 @@ class TCPIPInstrSession(Session):
         self.timeout = 10000
         self.client_id = random.getrandbits(31)
 
-        (error, link,
-         abort_port,
-         max_recv_size) = self.interface.create_link(self.client_id, 0, self.lock_timeout,
-                                                     self.parsed.lan_device_name)
+        error, link, abort_port, max_recv_size = self.interface.create_link(
+            self.client_id, 0, self.lock_timeout, self.parsed.lan_device_name)
 
         if error:
             raise Exception("error creating link: %d" % error)
@@ -64,12 +61,16 @@ class TCPIPInstrSession(Session):
         self.link = link
         self.max_recv_size = min(max_recv_size, 2 ** 30)  # 1GB
 
-        for name in 'SEND_END_EN,TERMCHAR,TERMCHAR_EN'.split(','):
+        for name in ("SEND_END_EN", "TERMCHAR", "TERMCHAR_EN"):
             attribute = getattr(constants, 'VI_ATTR_' + name)
             self.attrs[attribute] = attributes.AttributesByID[attribute].default
 
     def close(self):
-        self.interface.destroy_link(self.link)
+        try:
+            self.interface.destroy_link(self.link)
+        except (errors.VisaIOError, socket.error, rpc.RPCError) as e:
+            print("Error closing VISA link: {}".format(e))
+
         self.interface.close()
         self.link = None
         self.interface = None
@@ -88,32 +89,27 @@ class TCPIPInstrSession(Session):
         else:
             chunk_length = self.max_recv_size
 
-        flags = 0
-        reason = 0
-
         if self.get_attribute(constants.VI_ATTR_TERMCHAR_EN)[0]:
             term_char, _ = self.get_attribute(constants.VI_ATTR_TERMCHAR)
-        else:
-            term_char = 0
-
-        if term_char:
-            flags = vxi11.OP_FLAG_TERMCHAR_SET
             term_char = str(term_char).encode('utf-8')[0]
+            flags = vxi11.OP_FLAG_TERMCHAR_SET
+        else:
+            term_char = flags = 0
 
         read_data = bytearray()
-
+        reason = 0
         end_reason = vxi11.RX_END | vxi11.RX_CHR
-
         read_fun = self.interface.device_read
-
         status = SUCCESS
 
         while reason & end_reason == 0:
             error, reason, data = read_fun(self.link, chunk_length, self.timeout,
                                            self.lock_timeout, flags, term_char)
 
-            if error:
-                return read_data, StatusCode.error_io
+            if error == vxi11.ErrorCodes.io_timeout:
+                return bytes(read_data), StatusCode.error_timeout
+            elif error:
+                return bytes(read_data), StatusCode.error_io
 
             read_data.extend(data)
             count -= len(data)
@@ -138,37 +134,37 @@ class TCPIPInstrSession(Session):
         """
 
         send_end, _ = self.get_attribute(constants.VI_ATTR_SEND_END_EN)
-
         chunk_size = 1024
-        try:
 
+        try:
             if send_end:
                 flags = vxi11.OP_FLAG_TERMCHAR_SET
             else:
                 flags = 0
 
             num = len(data)
-
             offset = 0
 
             while num > 0:
                 if num <= chunk_size:
                     flags |= vxi11.OP_FLAG_END
 
-                block = data[offset:offset+self.max_recv_size]
+                block = data[offset:offset + self.max_recv_size]
 
-                error, size = self.interface.device_write(self.link, self.timeout,
-                                                          self.lock_timeout, flags, block)
+                error, size = self.interface.device_write(
+                    self.link, self.timeout, self.lock_timeout, flags, block)
 
-                if error:
-                    return offset, StatusCode.error_io
-                elif size < len(block):
+                if error == vxi11.ErrorCodes.io_timeout:
+                    return offset, StatusCode.error_timeout
+
+                elif error or size < len(block):
                     return offset, StatusCode.error_io
 
                 offset += size
                 num -= size
 
             return offset, SUCCESS
+
         except vxi11.Vxi11Error:
             return 0, StatusCode.error_timeout
 
@@ -228,9 +224,8 @@ class TCPIPInstrSession(Session):
         :rtype: VISAStatus
         """
 
-        flags = 0
-
-        error = self.interface.device_trigger(self.link, flags, self.lock_timeout, self.io_timeout)
+        error = self.interface.device_trigger(self.link, 0, self.lock_timeout,
+                                              self.io_timeout)
 
         if error:
             # TODO: Which status to return
@@ -247,13 +242,14 @@ class TCPIPInstrSession(Session):
         :rtype: VISAStatus
         """
 
-        flags = 0
-
-        error = self.interface.device_clear(self.link, flags, self.lock_timeout, self.io_timeout)
+        error = self.interface.device_clear(self.link, 0, self.lock_timeout,
+                                            self.io_timeout)
 
         if error:
             # TODO: Which status to return
             raise Exception("error clearing: %d" % error)
+
+        return SUCCESS
 
     def read_stb(self):
         """Reads a status byte of the service request.
@@ -263,9 +259,10 @@ class TCPIPInstrSession(Session):
         :return: Service request status byte, return value of the library call.
         :rtype: int, VISAStatus
         """
-        flags = 0
 
-        error, stb = self.interface.device_read_stb(self.link, flags, self.lock_timeout, self.io_timeout)
+        error, stb = self.interface.device_read_stb(self.link, 0,
+                                                    self.lock_timeout,
+                                                    self.io_timeout)
 
         if error:
             # TODO: Which status to return
@@ -303,8 +300,6 @@ class TCPIPInstrSession(Session):
         :return: return value of the library call.
         :rtype: VISAStatus
         """
-        flags = 0
-
         error = self.interface.device_unlock(self.link)
 
         if error:
@@ -345,7 +340,7 @@ class TCPIPSocketSession(Session):
         self.attrs[constants.VI_ATTR_TCPIP_PORT] = self.parsed.port
         self.attrs[constants.VI_ATTR_INTF_NUM] = self.parsed.board
 
-        for name in 'TERMCHAR,TERMCHAR_EN'.split(','):
+        for name in ("TERMCHAR", "TERMCHAR_EN"):
             attribute = getattr(constants, 'VI_ATTR_' + name)
             self.attrs[attribute] = attributes.AttributesByID[attribute].default
 
@@ -428,7 +423,7 @@ class TCPIPSocketSession(Session):
 
         while num > 0:
 
-            block = data[offset:min(offset+chunk_size, sz)]
+            block = data[offset:min(offset + chunk_size, sz)]
 
             try:
                 # use select to wait for write ready
