@@ -320,7 +320,7 @@ class Session(compat.with_metaclass(abc.ABCMeta)):
         out = b''
         while True:
             try:
-                current = reader().encode('ascii')
+                current = reader()
             except timeout_exception:
                 return out, constants.StatusCode.error_timeout
 
