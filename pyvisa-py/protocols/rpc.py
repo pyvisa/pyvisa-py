@@ -28,6 +28,7 @@ import sys
 import enum
 import xdrlib
 import socket
+import select
 
 from pyvisa.compat import struct
 
@@ -254,12 +255,12 @@ class Client(object):
 
     def start_call(self, proc):
         # Don't override this
-        self.lastxid = xid = self.lastxid + 1
+        self.lastxid += 1
         cred = self.mkcred()
         verf = self.mkverf()
         p = self.packer
         p.reset()
-        p.pack_callheader(xid, self.prog, self.vers, proc, cred, verf)
+        p.pack_callheader(self.lastxid, self.prog, self.vers, proc, cred, verf)
 
     def do_call(self):
         # This MUST be overridden
@@ -309,8 +310,9 @@ def recvfrag(sock):
         buf = sock.recv(n)
         if not buf:
             raise EOFError
-        n = n - len(buf)
-        frag = frag + buf
+        n -= len(buf)
+        frag += buf
+
     return last, frag
 
 
@@ -332,40 +334,69 @@ class RawTCPClient(Client):
     def __init__(self, host, prog, vers, port):
         Client.__init__(self, host, prog, vers, port)
         self.connect()
-    
+        # self.timeout defaults higher than the default 2 second VISA timeout,
+        # ensuring that VISA timeouts take precedence.
+        self.timeout = 4.0
+
+    def make_call(self, proc, args, pack_func, unpack_func):
+        """Overridden to allow for utilizing io_timeout (passed in args)
+        """
+        if proc == 11:
+            # vxi11.DEVICE_WRITE
+            self.timeout = (args[1] / 1000.0) + 2.0
+        elif proc in (12, 22):
+            # vxi11.DEVICE_READ or vxi11.DEVICE_DOCMD
+            self.timeout = (args[2] / 1000.0) + 2.0
+        elif proc in (13, 14, 15, 16, 17):
+            # vxi11.DEVICE_READSTB, vxi11.DEVICE_TRIGGER, vxi11.DEVICE_CLEAR,
+            # vxi11.DEVICE_REMOTE, or vxi11.DEVICE_LOCAL
+            self.timeout = (args[3] / 1000.0) + 2.0
+        else:
+            self.timeout = 4.0
+
+        return super(RawTCPClient, self).make_call(proc, args, pack_func, unpack_func)
+
     def connect(self):
         logger.debug('RawTCPClient: connecting to socket at (%s, %s)', self.host, self.port)
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.sock.connect((self.host, self.port))
-        
+
     def close(self):
         logger.debug('RawTCPClient: closing socket')
         self.sock.close()
-    
+
     def do_call(self):
         call = self.packer.get_buf()
+        r, w, x = select.select([], [self.sock], [], self.timeout)
+        if self.sock not in w:
+            raise socket.timeout("socket.timeout: The instrument seems to have stopped responding.")
+
         sendrecord(self.sock, call)
+        r, w, x = select.select([self.sock], [], [], self.timeout)
+        if self.sock not in r:
+            raise socket.timeout("socket.timeout: The instrument seems to have stopped responding.")
+
         reply = recvrecord(self.sock)
         u = self.unpacker
         u.reset(reply)
         xid, verf = u.unpack_replyheader()
         if xid != self.lastxid:
             # Can't really happen since this is TCP...
-            raise RPCError('wrong xid in reply %r instead of %r' % (xid, self.lastxid))
+            raise RPCError('wrong xid in reply {0} instead of {1}'.format(xid, self.lastxid))
 
-
-# Client using UDP to a specific port
 
 class RawUDPClient(Client):
+    """Client using UDP to a specific port
+    """
     def __init__(self, host, prog, vers, port):
         Client.__init__(self, host, prog, vers, port)
         self.connect()
-    
+
     def connect(self):
         logger.debug('RawTCPClient: connecting to socket at (%s, %s)', self.host, self.port)
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.sock.connect((self.host, self.port))
-        
+
     def close(self):
         logger.debug('RawTCPClient: closing socket')
         self.sock.close()
@@ -373,18 +404,14 @@ class RawUDPClient(Client):
     def do_call(self):
         call = self.packer.get_buf()
         self.sock.send(call)
-        try:
-            from select import select
-        except ImportError:
-            logger.warn('select not found, RPC may hang')
-            select = None
+
         BUFSIZE = 8192  # Max UDP buffer size
         timeout = 1
         count = 5
         while 1:
             r, w, x = [self.sock], [], []
             if select:
-                r, w, x = select(r, w, x, timeout)
+                r, w, x = select.select(r, w, x, timeout)
             if self.sock not in r:
                 count = count - 1
                 if count < 0:
@@ -410,7 +437,7 @@ class RawBroadcastUDPClient(RawUDPClient):
         RawUDPClient.__init__(self, bcastaddr, prog, vers, port)
         self.reply_handler = None
         self.timeout = 30
-    
+
     def connect(self):
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
@@ -429,11 +456,7 @@ class RawBroadcastUDPClient(RawUDPClient):
             pack_func(args)
         call = self.packer.get_buf()
         self.sock.sendto(call, (self.host, self.port))
-        try:
-            from select import select
-        except ImportError:
-            logger.warn('select not found, broadcast will hang')
-            select = None
+
         BUFSIZE = 8192  # Max UDP buffer size (for reply)
         replies = []
         if unpack_func is None:
@@ -444,9 +467,9 @@ class RawBroadcastUDPClient(RawUDPClient):
             r, w, x = [self.sock], [], []
             if select:
                 if self.timeout is None:
-                    r, w, x = select(r, w, x)
+                    r, w, x = select.select(r, w, x)
                 else:
-                    r, w, x = select(r, w, x, self.timeout)
+                    r, w, x = select.select(r, w, x, self.timeout)
             if self.sock not in r:
                 break
             reply, fromaddr = self.sock.recvfrom(BUFSIZE)
@@ -757,7 +780,7 @@ class TCPServer(Server):
     def __init__(self, host, prog, vers, port):
         Server.__init__(self, host, prog, vers, port)
         self.connect()
-    
+
     def connect(self):
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.prot = IPPROTO_TCP
@@ -816,12 +839,12 @@ class UDPServer(Server):
     def __init__(self, host, prog, vers, port):
         Server.__init__(self, host, prog, vers, port)
         self.connect()
-    
+
     def connect(self):
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.prot = IPPROTO_UDP
         self.sock.bind((self.host, self.port))
-    
+
     def loop(self):
         while 1:
             self.session()
