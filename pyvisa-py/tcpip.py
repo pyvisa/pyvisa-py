@@ -381,8 +381,8 @@ class TCPIPSocketSession(Session):
             return (out + parts[0] + end_byte,
                     constants.StatusCode.success_termination_character_read)
 
-        # initial 'select_timout' is same as timeout, so when no data arrived then max block time
-        select_timout = timeout
+        # initial 'select_timout' is same as timeout or max 2s, so when no data arrived then max block time
+        select_timout = min(timeout, 2.0)
         while now - start <= timeout:
             # use select to wait for read ready, max `select_timout` seconds
             r, w, x = select.select([self.interface], [], [], select_timout)
