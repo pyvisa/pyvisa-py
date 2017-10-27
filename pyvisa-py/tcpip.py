@@ -365,7 +365,7 @@ class TCPIPSocketSession(Session):
         end_char, _ = self.get_attribute(constants.VI_ATTR_TERMCHAR)
         enabled, _ = self.get_attribute(constants.VI_ATTR_TERMCHAR_EN)
         timeout, _ = self.get_attribute(constants.VI_ATTR_TMO_VALUE)
-        timeout /= 1000
+        timeout = float(timeout)/1000.0
 
         end_byte = common.int_to_byte(end_char) if end_char else b''
 
