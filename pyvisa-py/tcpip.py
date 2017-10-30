@@ -385,10 +385,7 @@ class TCPIPSocketSession(Session):
         select_timout = min(timeout, 2.0)
         while now - start <= timeout:
             # use select to wait for read ready, max `select_timout` seconds
-            try:
-                r, w, x = select.select([self.interface], [], [], select_timout)
-            except KeyboardInterrupt as err:
-                raise err
+            r, w, x = select.select([self.interface], [], [], select_timout)
 
             last = b''
             if self.interface in r:
