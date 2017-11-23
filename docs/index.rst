@@ -118,9 +118,9 @@ from higher level applications.
 .. _PyVISA: http://pyvisa.readthedocs.org/
 .. _PyUSB: http://walac.github.io/pyusb/
 .. _PyPI: https://pypi.python.org/pypi/PyVISA-py
-.. _GitHub: https://github.com/hgrecco/pyvisa-py
+.. _GitHub: https://github.com/pyvisa/pyvisa-py
 .. _`National Instruments's VISA`: http://ni.com/visa/
 .. _`LibreVISA`: http://www.librevisa.org/
-.. _`issue tracker`: https://github.com/hgrecco/pyvisa-py/issues
+.. _`issue tracker`: https://github.com/pyvisa/pyvisa-py/issues
 .. _`linux-gpib`: http://linux-gpib.sourceforge.net/
 
