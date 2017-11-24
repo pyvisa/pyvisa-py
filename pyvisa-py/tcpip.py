@@ -394,8 +394,8 @@ class TCPIPSocketSession(Session):
 
             if not last:
                 # can't read chunk or timeout
-                # `select_timout` decreased to 0.01 sec
-                select_timout = 0.01
+                # `select_timout` decreased to 20% of previous, min wait time is 100ms
+                select_timout = max(select_timout/5.0, 0.1)
                 continue
 
             if enabled and end_byte in last:
