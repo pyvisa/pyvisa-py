@@ -23,7 +23,7 @@ try:
     from serial.tools.list_ports import comports
 except ImportError as e:
     Session.register_unavailable(constants.InterfaceType.asrl, 'INSTR',
-                                 'Please install PySerial to use this resource type.\n%s' % e)
+                                 'Please install PySerial (>=3.0) to use this resource type.\n%s' % e)
 
     raise
 
