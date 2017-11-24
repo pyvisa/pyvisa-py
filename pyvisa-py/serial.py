@@ -23,7 +23,7 @@ try:
     from serial.tools.list_ports import comports
 except ImportError as e:
     Session.register_unavailable(constants.InterfaceType.asrl, 'INSTR',
-                                 'Please install PySerial to use this resource type.\n%s' % e)
+                                 'Please install PySerial (>=3.0) to use this resource type.\n%s' % e)
 
     raise
 
@@ -65,7 +65,7 @@ class SerialSession(Session):
         else:
             cls = Serial
 
-        self.interface = cls(port=self.parsed.board, timeout=2000, writeTimeout=2000)
+        self.interface = cls(port=self.parsed.board, timeout=2000, write_timeout=2000)
 
         for name in ('ASRL_END_IN', 'ASRL_END_OUT', 'SEND_END_EN', 'TERMCHAR',
                     'TERMCHAR_EN', 'SUPPRESS_END_EN'):
@@ -93,7 +93,7 @@ class SerialSession(Session):
             value = value / 1000.
 
         self.interface.timeout = value
-        self.interface.writeTimeout = value
+        self.interface.write_timeout = value
 
     def close(self):
         self.interface.close()

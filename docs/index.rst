@@ -50,6 +50,8 @@ It depends on the interface type. For **ASRL** and **USB** we use PySerial_ and 
 respectively. For **TCPIP** we use the :py:mod:`socket` module in the Python Standard Library.
 **GPIB** resources are not currently supported but they are in the plan using `linux-gpib`_.
 
+PySerial_ version 3.0 or newer is required.
+
 
 If I only need **TCPIP**, do I need to install PySerial and PyUSB?
 ------------------------------------------------------------------
