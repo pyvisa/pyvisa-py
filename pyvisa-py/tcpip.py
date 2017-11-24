@@ -394,7 +394,7 @@ class TCPIPSocketSession(Session):
 
             if not last:
                 # can't read chunk or timeout
-                # `select_timout` decreased to 50% of previous, min wait time is 100ms
+                # `select_timout` decreased to 50% of previous
                 select_timout = select_timout/2.0
                 continue
 
