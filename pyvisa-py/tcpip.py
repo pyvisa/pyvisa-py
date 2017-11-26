@@ -365,6 +365,7 @@ class TCPIPSocketSession(Session):
         enabled, _ = self.get_attribute(constants.VI_ATTR_TERMCHAR_EN)
         timeout, _ = self.get_attribute(constants.VI_ATTR_TMO_VALUE)
         timeout /= 1000.0
+        suppress_end_en, _ = self.get_attribute(constants.VI_ATTR_SUPPRESS_END_EN)
 
         end_byte = common.int_to_byte(end_char) if end_char else b''
 
@@ -392,6 +393,10 @@ class TCPIPSocketSession(Session):
 
             if not last:
                 # can't read chunk or timeout
+                if out and not suppress_end_en:
+                    # we have some data without termchar but no further expected
+                    return out, constants.StatusCode.success
+    
                 # `select_timout` decreased to 0.01 sec
                 select_timout = 0.01
                 now = time.time()
