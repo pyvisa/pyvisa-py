@@ -340,6 +340,8 @@ class TCPIPSocketSession(Session):
         for name in ('TERMCHAR', 'TERMCHAR_EN', 'SUPPRESS_END_EN'):
             attribute = getattr(constants, 'VI_ATTR_' + name)
             self.attrs[attribute] = attributes.AttributesByID[attribute].default
+        # to use default as ni visa driver (NI-VISA 15.0)
+        self.attrs[getattr(constants, 'VI_ATTR_SUPPRESS_END_EN')] = True
 
     def close(self):
         self.interface.close()
