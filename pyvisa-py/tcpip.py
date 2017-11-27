@@ -370,17 +370,17 @@ class TCPIPSocketSession(Session):
         timeout /= 1000.0
         suppress_end_en, _ = self.get_attribute(constants.VI_ATTR_SUPPRESS_END_EN)
 
-        end_byte = common.int_to_byte(term_char) if term_char else b''
+        term_byte = common.int_to_byte(term_char) if term_char else b''
 
         read_fun = self.interface.recv
 
 
         out = self._pending_buffer
 
-        if term_char_en and end_byte in out:
-            parts = out.split(end_byte)
+        if term_char_en and term_byte in out:
+            parts = out.split(term_byte)
             self._pending_buffer = b''.join(parts[1:])
-            return (out + parts[0] + end_byte,
+            return (out + parts[0] + term_byte,
                     constants.StatusCode.success_termination_character_read)
 
         # On Windows, select is not interrupted by KeyboardInterrupt, to
@@ -410,10 +410,10 @@ class TCPIPSocketSession(Session):
                 select_timout = max(select_timout/2.0, min_select_timeout)
                 continue
 
-            if term_char_en and end_byte in last:
-                parts = last.split(end_byte)
+            if term_char_en and term_byte in last:
+                parts = last.split(term_byte)
                 self._pending_buffer = b''.join(parts[1:])
-                return (out + parts[0] + end_byte,
+                return (out + parts[0] + term_byte,
                         constants.StatusCode.success_termination_character_read)
 
             out += last
