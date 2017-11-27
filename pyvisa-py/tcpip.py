@@ -364,20 +364,20 @@ class TCPIPSocketSession(Session):
         else:
             chunk_length = self.max_recv_size
 
-        end_char, _ = self.get_attribute(constants.VI_ATTR_TERMCHAR)
-        enabled, _ = self.get_attribute(constants.VI_ATTR_TERMCHAR_EN)
+        term_char, _ = self.get_attribute(constants.VI_ATTR_TERMCHAR)
+        term_char_en, _ = self.get_attribute(constants.VI_ATTR_TERMCHAR_EN)
         timeout, _ = self.get_attribute(constants.VI_ATTR_TMO_VALUE)
         timeout /= 1000.0
         suppress_end_en, _ = self.get_attribute(constants.VI_ATTR_SUPPRESS_END_EN)
 
-        end_byte = common.int_to_byte(end_char) if end_char else b''
+        end_byte = common.int_to_byte(term_char) if term_char else b''
 
         read_fun = self.interface.recv
 
 
         out = self._pending_buffer
 
-        if enabled and end_byte in out:
+        if term_char_en and end_byte in out:
             parts = out.split(end_byte)
             self._pending_buffer = b''.join(parts[1:])
             return (out + parts[0] + end_byte,
@@ -410,7 +410,7 @@ class TCPIPSocketSession(Session):
                 select_timout = max(select_timout/2.0, min_select_timeout)
                 continue
 
-            if enabled and end_byte in last:
+            if term_char_en and end_byte in last:
                 parts = last.split(end_byte)
                 self._pending_buffer = b''.join(parts[1:])
                 return (out + parts[0] + end_byte,
