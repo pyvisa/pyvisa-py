@@ -318,7 +318,7 @@ class TCPIPSocketSession(Session):
     max_recv_size = 4096
 
     # This buffer is used to store the bytes that appeared after termination char
-    _pending_buffer = b''
+    _pending_buffer = bytearray()
 
     @staticmethod
     def list_resources():
@@ -374,8 +374,8 @@ class TCPIPSocketSession(Session):
 
         read_fun = self.interface.recv
 
-
-        out = self._pending_buffer
+        out = bytearray()
+        out.extend(self._pending_buffer)
 
         if term_char_en and term_byte in out:
             term_byte_index = out.index(term_byte) + 1
@@ -409,7 +409,7 @@ class TCPIPSocketSession(Session):
                 select_timout = max(select_timout/2.0, min_select_timeout)
                 continue
 
-            out += last
+            out.extend(last)
 
             if term_char_en and term_byte in last:
                 term_byte_index = out.index(term_byte) + 1
