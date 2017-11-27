@@ -340,9 +340,11 @@ class TCPIPSocketSession(Session):
         self.attrs[constants.VI_ATTR_TCPIP_PORT] = self.parsed.port
         self.attrs[constants.VI_ATTR_INTF_NUM] = self.parsed.board
 
-        for name in ('TERMCHAR', 'TERMCHAR_EN'):
+        for name in ('TERMCHAR', 'TERMCHAR_EN', 'SUPPRESS_END_EN'):
             attribute = getattr(constants, 'VI_ATTR_' + name)
             self.attrs[attribute] = attributes.AttributesByID[attribute].default
+        # to use default as ni visa driver (NI-VISA 15.0)
+        self.attrs[getattr(constants, 'VI_ATTR_SUPPRESS_END_EN')] = True
 
     def close(self):
         self.interface.close()
@@ -366,6 +368,7 @@ class TCPIPSocketSession(Session):
         enabled, _ = self.get_attribute(constants.VI_ATTR_TERMCHAR_EN)
         timeout, _ = self.get_attribute(constants.VI_ATTR_TMO_VALUE)
         timeout /= 1000.0
+        suppress_end_en, _ = self.get_attribute(constants.VI_ATTR_SUPPRESS_END_EN)
 
         end_byte = common.int_to_byte(end_char) if end_char else b''
 
@@ -393,6 +396,10 @@ class TCPIPSocketSession(Session):
 
             if not last:
                 # can't read chunk or timeout
+                if out and not suppress_end_en:
+                    # we have some data without termchar but no further expected
+                    return out, constants.StatusCode.success
+    
                 # `select_timout` decreased to 0.01 sec
                 select_timout = 0.01
                 now = time.time()
