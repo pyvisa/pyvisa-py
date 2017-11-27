@@ -381,12 +381,13 @@ class TCPIPSocketSession(Session):
             self._pending_buffer = out[term_byte_index:]
             return bytes(out[:term_byte_index]), constants.StatusCode.success_termination_character_read
 
-        # On Windows, select is not interrupted by KeyboardInterrupt, to
-        # avoid blocking for very long time, we use a decreasing timeout
-        # in select
-        # minimum select timeout to avoid too short select interval (minimum is in interval 1 - 100ms based on timeout)
+        # On Windows, select is not interrupted by KeyboardInterrupt, to avoid blocking
+        # for very long time, we use a decreasing timeout in select
+        # minimum select timeout to avoid too short select interval
+        # (minimum is in interval 1 - 100ms based on timeout)
         min_select_timeout = max(min(timeout/100.0, 0.1), 0.001)
-        # initial 'select_timout' is half of timeout or max 2 secs (max blocking time). min is from 'min_select_timeout'
+        # initial 'select_timout' is half of timeout or max 2 secs (max blocking time).
+        # min is from 'min_select_timeout'
         select_timout = max(min(timeout/2.0, 2.0), min_select_timeout)
         # time, when loop shall finish
         finish_time = time.time() + timeout
