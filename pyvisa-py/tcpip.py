@@ -365,12 +365,11 @@ class TCPIPSocketSession(Session):
             chunk_length = self.max_recv_size
 
         term_char, _ = self.get_attribute(constants.VI_ATTR_TERMCHAR)
+        term_byte = common.int_to_byte(term_char) if term_char else b''
         term_char_en, _ = self.get_attribute(constants.VI_ATTR_TERMCHAR_EN)
         timeout, _ = self.get_attribute(constants.VI_ATTR_TMO_VALUE)
         timeout /= 1000.0
         suppress_end_en, _ = self.get_attribute(constants.VI_ATTR_SUPPRESS_END_EN)
-
-        term_byte = common.int_to_byte(term_char) if term_char else b''
 
         read_fun = self.interface.recv
 
