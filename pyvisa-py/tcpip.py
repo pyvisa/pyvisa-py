@@ -380,7 +380,7 @@ class TCPIPSocketSession(Session):
         if term_char_en and term_byte in out:
             term_byte_index = out.index(term_byte) + 1
             self._pending_buffer = out[term_byte_index:]
-            return out[:term_byte_index], constants.StatusCode.success_termination_character_read
+            return bytes(out[:term_byte_index]), constants.StatusCode.success_termination_character_read
 
         # On Windows, select is not interrupted by KeyboardInterrupt, to
         # avoid blocking for very long time, we use a decreasing timeout
@@ -414,14 +414,14 @@ class TCPIPSocketSession(Session):
             if term_char_en and term_byte in last:
                 term_byte_index = out.index(term_byte) + 1
                 self._pending_buffer = out[term_byte_index:]
-                return out[:term_byte_index], constants.StatusCode.success_termination_character_read
+                return bytes(out[:term_byte_index]), constants.StatusCode.success_termination_character_read
 
 
             if len(out) >= count:
                 self._pending_buffer = out[count:]
-                return out[:count], constants.StatusCode.success_max_count_read
+                return bytes(out[:count]), constants.StatusCode.success_max_count_read
         else:
-            return out, constants.StatusCode.error_timeout
+            return bytes(out), constants.StatusCode.error_timeout
 
     def write(self, data):
         """Writes data to device or interface synchronously.
