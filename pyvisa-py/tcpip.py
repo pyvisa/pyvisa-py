@@ -394,14 +394,14 @@ class TCPIPSocketSession(Session):
             # use select to wait for read ready, max `select_timout` seconds, min is 'min_select_timeout' seconds
             r, w, x = select.select([self.interface], [], [], select_timout)
 
-            last = b''
+            read_data = b''
             if self.interface in r:
-                last = read_fun(chunk_length)
+                read_data = read_fun(chunk_length)
 
-            if last:
-                out.extend(last)
+            if read_data:
+                out.extend(read_data)
 
-                if term_char_en and term_byte in last:
+                if term_char_en and term_byte in read_data:
                     term_byte_index = out.index(term_byte) + 1
                     self._pending_buffer = out[term_byte_index:]
                     return bytes(out[:term_byte_index]), constants.StatusCode.success_termination_character_read
