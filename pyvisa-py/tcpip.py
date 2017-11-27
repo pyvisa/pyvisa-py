@@ -382,11 +382,13 @@ class TCPIPSocketSession(Session):
 
         # initial 'select_timout' is half of timeout or max 2 secs, so when no data arrived then this is max block time
         select_timout = min(timeout/2.0, 2.0)
+        # minimum select timeout not to have too short select interval (minimum is 1 - 100ms)
+        min_select_timeout = max(min(select_timeout/10.0, 0.01), 0.001)
         # time, when loop shall finish
         finish_time = time.time() + timeout
         while time.time() <= finish_time:
-            # use select to wait for read ready, max `select_timout` seconds, min is 50ms
-            r, w, x = select.select([self.interface], [], [], max(select_timout, 0.05))
+            # use select to wait for read ready, max `select_timout` seconds, min is 'min_select_timeout' seconds
+            r, w, x = select.select([self.interface], [], [], max(select_timout, min_select_timeout))
 
             last = b''
             if self.interface in r:
