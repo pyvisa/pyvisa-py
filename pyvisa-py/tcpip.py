@@ -398,7 +398,19 @@ class TCPIPSocketSession(Session):
             if self.interface in r:
                 last = read_fun(chunk_length)
 
-            if not last:
+            if last:
+                out.extend(last)
+
+                if term_char_en and term_byte in last:
+                    term_byte_index = out.index(term_byte) + 1
+                    self._pending_buffer = out[term_byte_index:]
+                    return bytes(out[:term_byte_index]), constants.StatusCode.success_termination_character_read
+
+                if len(out) >= count:
+                    self._pending_buffer = out[count:]
+                    return bytes(out[:count]), constants.StatusCode.success_max_count_read
+
+            else:
                 # can't read chunk or timeout
                 if out and not suppress_end_en:
                     # we have some data without termchar but no further expected
@@ -406,19 +418,7 @@ class TCPIPSocketSession(Session):
     
                 # `select_timout` decreased to 50% of previous but to be min_select_timeout as minimum
                 select_timout = max(select_timout/2.0, min_select_timeout)
-                continue
 
-            out.extend(last)
-
-            if term_char_en and term_byte in last:
-                term_byte_index = out.index(term_byte) + 1
-                self._pending_buffer = out[term_byte_index:]
-                return bytes(out[:term_byte_index]), constants.StatusCode.success_termination_character_read
-
-
-            if len(out) >= count:
-                self._pending_buffer = out[count:]
-                return bytes(out[:count]), constants.StatusCode.success_max_count_read
         else:
             return bytes(out), constants.StatusCode.error_timeout
 
