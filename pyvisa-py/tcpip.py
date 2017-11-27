@@ -383,7 +383,10 @@ class TCPIPSocketSession(Session):
             return (out + parts[0] + end_byte,
                     constants.StatusCode.success_termination_character_read)
 
-        # minimum select timeout not to have too short select interval (minimum is in interval 1 - 100ms based on timeout)
+        # On Windows, select is not interrupted by KeyboardInterrupt, to
+        # avoid blocking for very long time, we use a decreasing timeout
+        # in select
+        # minimum select timeout to avoid too short select interval (minimum is in interval 1 - 100ms based on timeout)
         min_select_timeout = max(min(timeout/100.0, 0.1), 0.001)
         # initial 'select_timout' is half of timeout or max 2 secs (max blocking time). min is from 'min_select_timeout'
         select_timout = max(min(timeout/2.0, 2.0), min_select_timeout)
