@@ -374,7 +374,6 @@ class TCPIPSocketSession(Session):
 
         read_fun = self.interface.recv
 
-        now = start = time.time()
 
         out = self._pending_buffer
 
@@ -384,10 +383,17 @@ class TCPIPSocketSession(Session):
             return (out + parts[0] + end_byte,
                     constants.StatusCode.success_termination_character_read)
 
-        # initial 'select_timout' is same as timeout or max 2s, so when no data arrived then max block time
-        select_timout = min(timeout, 2.0)
-        while now - start <= timeout:
-            # use select to wait for read ready, max `select_timout` seconds
+        # On Windows, select is not interrupted by KeyboardInterrupt, to
+        # avoid blocking for very long time, we use a decreasing timeout
+        # in select
+        # minimum select timeout to avoid too short select interval (minimum is in interval 1 - 100ms based on timeout)
+        min_select_timeout = max(min(timeout/100.0, 0.1), 0.001)
+        # initial 'select_timout' is half of timeout or max 2 secs (max blocking time). min is from 'min_select_timeout'
+        select_timout = max(min(timeout/2.0, 2.0), min_select_timeout)
+        # time, when loop shall finish
+        finish_time = time.time() + timeout
+        while time.time() <= finish_time:
+            # use select to wait for read ready, max `select_timout` seconds, min is 'min_select_timeout' seconds
             r, w, x = select.select([self.interface], [], [], select_timout)
 
             last = b''
@@ -400,9 +406,8 @@ class TCPIPSocketSession(Session):
                     # we have some data without termchar but no further expected
                     return out, constants.StatusCode.success
     
-                # `select_timout` decreased to 0.01 sec
-                select_timout = 0.01
-                now = time.time()
+                # `select_timout` decreased to 50% of previous but to be min_select_timeout as minimum
+                select_timout = max(select_timout/2.0, min_select_timeout)
                 continue
 
             if enabled and end_byte in last:
