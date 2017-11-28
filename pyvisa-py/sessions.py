@@ -161,7 +161,7 @@ class Session(compat.with_metaclass(abc.ABCMeta)):
 
         cls._session_classes[(interface_type, resource_class)] = _internal
 
-    def __init__(self, resource_manager_session, resource_name, parsed=None):
+    def __init__(self, resource_manager_session, resource_name, parsed=None, open_timeout=None):
         if isinstance(resource_name, common.MockInterface):
             parsed = rname.parse_resource_name(resource_name.resource_name)
             parsed['mock'] = resource_name
@@ -170,6 +170,7 @@ class Session(compat.with_metaclass(abc.ABCMeta)):
             parsed = rname.parse_resource_name(resource_name)
 
         self.parsed = parsed
+        self.open_timeout = open_timeout
 
         #: Used as a place holder for the object doing the lowlevel communication.
         self.interface = None

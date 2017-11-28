@@ -189,7 +189,7 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
 
         cls = sessions.Session.get_session_class(parsed.interface_type_const, parsed.resource_class)
 
-        sess = cls(session, resource_name, parsed)
+        sess = cls(session, resource_name, parsed, open_timeout)
 
         return self._register(sess), constants.StatusCode.success
 

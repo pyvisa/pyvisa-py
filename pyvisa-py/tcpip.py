@@ -311,6 +311,12 @@ class TCPIPInstrSession(Session):
 class TCPIPSocketSession(Session):
     """A TCPIP Session that uses the network standard library to do the low level communication.
     """
+    # Details about implementation:
+    # On Windows, select is not interrupted by KeyboardInterrupt, to avoid blocking
+    # for very long time, we use a decreasing timeout in select
+    # minimum select timeout to avoid too short select interval is also calculated
+    # and select timeout is not lower that that minimum timeout
+    # Tis is valid for connect and read operations
 
     lock_timeout = 1000
     timeout = 1000
@@ -318,7 +324,7 @@ class TCPIPSocketSession(Session):
     max_recv_size = 4096
 
     # This buffer is used to store the bytes that appeared after termination char
-    _pending_buffer = b''
+    _pending_buffer = bytearray()
 
     @staticmethod
     def list_resources():
@@ -328,13 +334,10 @@ class TCPIPSocketSession(Session):
     def after_parsing(self):
         # TODO: board_number not handled
 
-        self.interface = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.interface.setblocking(0)
-
-        try:
-            self.interface.connect_ex((self.parsed.host_address, int(self.parsed.port)))
-        except Exception as e:
-            raise Exception("could not create socket: %s" % e)
+        ret_status = self._connect()
+        if ret_status != constants.StatusCode.success:
+            self.close()
+            raise Exception("could not connect: {0}".format(str(ret_status)))
 
         self.attrs[constants.VI_ATTR_TCPIP_ADDR] = self.parsed.host_address
         self.attrs[constants.VI_ATTR_TCPIP_PORT] = self.parsed.port
@@ -345,6 +348,37 @@ class TCPIPSocketSession(Session):
             self.attrs[attribute] = attributes.AttributesByID[attribute].default
         # to use default as ni visa driver (NI-VISA 15.0)
         self.attrs[getattr(constants, 'VI_ATTR_SUPPRESS_END_EN')] = True
+
+    def _connect(self):
+        timeout = self.open_timeout / 1000.0 if self.open_timeout is not None else None
+        try:
+            self.interface = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self.interface.setblocking(0)
+            self.interface.connect_ex((self.parsed.host_address, int(self.parsed.port)))
+        except Exception as e:
+            raise Exception("could not connect: {0}".format(str(e)))
+        finally:
+            self.interface.setblocking(1)
+
+        # minimum is in interval 100 - 500ms based on timeout
+        min_select_timeout = max(min(timeout/10.0, 0.5), 0.1)
+        # initial 'select_timout' is half of timeout or max 2 secs (max blocking time).
+        # min is from 'min_select_timeout'
+        select_timout = max(min(timeout/2.0, 2.0), min_select_timeout)
+        # time, when loop shall finish
+        finish_time = time.time() + timeout
+        while True:
+            # use select to wait for socket ready, max `select_timout` seconds
+            r, w, x = select.select([self.interface], [self.interface], [], select_timout)
+            if self.interface in r or self.interface in w:
+                return constants.StatusCode.success
+
+            if time.time() >= finish_time:
+                # reached timeout
+                return constants.StatusCode.error_timeout
+
+            # `select_timout` decreased to 50% of previous or min_select_timeout
+            select_timout = max(select_timout/2.0, min_select_timeout)
 
     def close(self):
         self.interface.close()
@@ -364,64 +398,59 @@ class TCPIPSocketSession(Session):
         else:
             chunk_length = self.max_recv_size
 
-        end_char, _ = self.get_attribute(constants.VI_ATTR_TERMCHAR)
-        enabled, _ = self.get_attribute(constants.VI_ATTR_TERMCHAR_EN)
+        term_char, _ = self.get_attribute(constants.VI_ATTR_TERMCHAR)
+        term_byte = common.int_to_byte(term_char) if term_char else b''
+        term_char_en, _ = self.get_attribute(constants.VI_ATTR_TERMCHAR_EN)
         timeout, _ = self.get_attribute(constants.VI_ATTR_TMO_VALUE)
         timeout /= 1000.0
         suppress_end_en, _ = self.get_attribute(constants.VI_ATTR_SUPPRESS_END_EN)
 
-        end_byte = common.int_to_byte(end_char) if end_char else b''
-
         read_fun = self.interface.recv
 
+        out = bytearray()
+        out.extend(self._pending_buffer)
 
-        out = self._pending_buffer
-
-        if enabled and end_byte in out:
-            parts = out.split(end_byte)
-            self._pending_buffer = b''.join(parts[1:])
-            return (out + parts[0] + end_byte,
-                    constants.StatusCode.success_termination_character_read)
-
-        # On Windows, select is not interrupted by KeyboardInterrupt, to
-        # avoid blocking for very long time, we use a decreasing timeout
-        # in select
-        # minimum select timeout to avoid too short select interval (minimum is in interval 1 - 100ms based on timeout)
+        # minimum is in interval 1 - 100ms based on timeout
         min_select_timeout = max(min(timeout/100.0, 0.1), 0.001)
-        # initial 'select_timout' is half of timeout or max 2 secs (max blocking time). min is from 'min_select_timeout'
+        # initial 'select_timout' is half of timeout or max 2 secs (max blocking time).
+        # min is from 'min_select_timeout'
         select_timout = max(min(timeout/2.0, 2.0), min_select_timeout)
         # time, when loop shall finish
         finish_time = time.time() + timeout
-        while time.time() <= finish_time:
-            # use select to wait for read ready, max `select_timout` seconds, min is 'min_select_timeout' seconds
+        while True:
+
+            # check, if we have any data received (from pending buffer or further reading)
+            if term_char_en and term_byte in out:
+                term_byte_index = out.index(term_byte) + 1
+                self._pending_buffer = out[term_byte_index:]
+                return bytes(out[:term_byte_index]), constants.StatusCode.success_termination_character_read
+
+            if len(out) >= count:
+                self._pending_buffer = out[count:]
+                return bytes(out[:count]), constants.StatusCode.success_max_count_read
+
+            # use select to wait for read ready, max `select_timout` seconds
             r, w, x = select.select([self.interface], [], [], select_timout)
 
-            last = b''
+            read_data = b''
             if self.interface in r:
-                last = read_fun(chunk_length)
+                read_data = read_fun(chunk_length)
+                out.extend(read_data)
 
-            if not last:
+            if not read_data:
                 # can't read chunk or timeout
                 if out and not suppress_end_en:
-                    # we have some data without termchar but no further expected
-                    return out, constants.StatusCode.success
+                    # we have some data without termchar but no further data expected
+                    self._pending_buffer = out[count:]
+                    return bytes(out[:count]), constants.StatusCode.success
     
-                # `select_timout` decreased to 50% of previous but to be min_select_timeout as minimum
+                if time.time() >= finish_time:
+                    # reached timeout
+                    self._pending_buffer = out[count:]
+                    return bytes(out[:count]), constants.StatusCode.error_timeout
+
+                # `select_timout` decreased to 50% of previous or min_select_timeout
                 select_timout = max(select_timout/2.0, min_select_timeout)
-                continue
-
-            if enabled and end_byte in last:
-                parts = last.split(end_byte)
-                self._pending_buffer = b''.join(parts[1:])
-                return (out + parts[0] + end_byte,
-                        constants.StatusCode.success_termination_character_read)
-
-            out += last
-
-            if len(out) == count:
-                return out, constants.StatusCode.success_max_count_read
-        else:
-            return out, constants.StatusCode.error_timeout
 
     def write(self, data):
         """Writes data to device or interface synchronously.
