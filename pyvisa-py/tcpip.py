@@ -336,6 +336,7 @@ class TCPIPSocketSession(Session):
 
         ret_status = self._connect()
         if ret_status != constants.StatusCode.success:
+            self.close()
             raise Exception("could not connect: {0}".format(str(ret_status)))
 
         self.attrs[constants.VI_ATTR_TCPIP_ADDR] = self.parsed.host_address
