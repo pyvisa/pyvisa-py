@@ -334,7 +334,9 @@ class TCPIPSocketSession(Session):
     def after_parsing(self):
         # TODO: board_number not handled
 
-        self._connect()
+        ret_status = self._connect()
+        if ret_status != constants.StatusCode.success:
+            raise Exception("could not connect: {0}".format(str(ret_status)))
 
         self.attrs[constants.VI_ATTR_TCPIP_ADDR] = self.parsed.host_address
         self.attrs[constants.VI_ATTR_TCPIP_PORT] = self.parsed.port
