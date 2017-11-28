@@ -353,15 +353,12 @@ class TCPIPSocketSession(Session):
         timeout = self.open_timeout / 1000.0 if self.open_timeout is not None else None
         try:
             self.interface = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            old_timeout = self.interface.gettimeout()
-            self.interface.settimeout(0)
-            self.interface.connect((self.parsed.host_address, int(self.parsed.port)))
-        except BlockingIOError as e:
-            pass
+            self.interface.setblocking(0)
+            self.interface.connect_ex((self.parsed.host_address, int(self.parsed.port)))
         except Exception as e:
             raise Exception("could not connect: {0}".format(str(e)))
         finally:
-            self.interface.settimeout(old_timeout)
+            self.interface.setblocking(1)
 
         # minimum is in interval 100 - 500ms based on timeout
         min_select_timeout = max(min(timeout/10.0, 0.5), 0.1)
