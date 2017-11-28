@@ -311,6 +311,12 @@ class TCPIPInstrSession(Session):
 class TCPIPSocketSession(Session):
     """A TCPIP Session that uses the network standard library to do the low level communication.
     """
+    # Details about implementation:
+    # On Windows, select is not interrupted by KeyboardInterrupt, to avoid blocking
+    # for very long time, we use a decreasing timeout in select
+    # minimum select timeout to avoid too short select interval is also calculated
+    # and select timeout is not lower that that minimum timeout
+    # Tis is valid for connect and read operations
 
     lock_timeout = 1000
     timeout = 1000
@@ -354,7 +360,7 @@ class TCPIPSocketSession(Session):
         finally:
             self.interface.settimeout(old_timeout)
 
-        # (minimum is in interval 100 - 500ms based on timeout)
+        # minimum is in interval 100 - 500ms based on timeout
         min_select_timeout = max(min(timeout/10.0, 0.5), 0.1)
         # initial 'select_timout' is half of timeout or max 2 secs (max blocking time).
         # min is from 'min_select_timeout'
@@ -362,7 +368,7 @@ class TCPIPSocketSession(Session):
         # time, when loop shall finish
         finish_time = time.time() + timeout
         while True:
-            # use select to wait for read ready, max `select_timout` seconds, min is 'min_select_timeout' seconds
+            # use select to wait for socket ready, max `select_timout` seconds
             r, w, x = select.select([self.interface], [self.interface], [], select_timout)
             if self.interface in r or self.interface in w:
                 return constants.StatusCode.success
@@ -371,7 +377,7 @@ class TCPIPSocketSession(Session):
                 # reached timeout
                 return constants.StatusCode.error_timeout
 
-            # `select_timout` decreased to 50% of previous but to be min_select_timeout as minimum
+            # `select_timout` decreased to 50% of previous or min_select_timeout
             select_timout = max(select_timout/2.0, min_select_timeout)
 
     def close(self):
@@ -404,10 +410,7 @@ class TCPIPSocketSession(Session):
         out = bytearray()
         out.extend(self._pending_buffer)
 
-        # On Windows, select is not interrupted by KeyboardInterrupt, to avoid blocking
-        # for very long time, we use a decreasing timeout in select
-        # minimum select timeout to avoid too short select interval
-        # (minimum is in interval 1 - 100ms based on timeout)
+        # minimum is in interval 1 - 100ms based on timeout
         min_select_timeout = max(min(timeout/100.0, 0.1), 0.001)
         # initial 'select_timout' is half of timeout or max 2 secs (max blocking time).
         # min is from 'min_select_timeout'
@@ -426,7 +429,7 @@ class TCPIPSocketSession(Session):
                 self._pending_buffer = out[count:]
                 return bytes(out[:count]), constants.StatusCode.success_max_count_read
 
-            # use select to wait for read ready, max `select_timout` seconds, min is 'min_select_timeout' seconds
+            # use select to wait for read ready, max `select_timout` seconds
             r, w, x = select.select([self.interface], [], [], select_timout)
 
             read_data = b''
@@ -446,7 +449,7 @@ class TCPIPSocketSession(Session):
                     self._pending_buffer = out[count:]
                     return bytes(out[:count]), constants.StatusCode.error_timeout
 
-                # `select_timout` decreased to 50% of previous but to be min_select_timeout as minimum
+                # `select_timout` decreased to 50% of previous or min_select_timeout
                 select_timout = max(select_timout/2.0, min_select_timeout)
 
     def write(self, data):
