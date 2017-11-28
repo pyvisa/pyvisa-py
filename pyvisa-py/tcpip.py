@@ -345,17 +345,34 @@ class TCPIPSocketSession(Session):
         try:
             self.interface = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             old_timeout = self.interface.gettimeout()
-            self.interface.settimeout(timeout)
+            self.interface.settimeout(0)
             self.interface.connect((self.parsed.host_address, int(self.parsed.port)))
         except BlockingIOError as e:
-            if self.open_timeout == 0:
-               pass
-            else:
-                raise Exception("could not connect: {0}".format(str(e)))
+            pass
         except Exception as e:
             raise Exception("could not connect: {0}".format(str(e)))
         finally:
             self.interface.settimeout(old_timeout)
+
+        # (minimum is in interval 100 - 500ms based on timeout)
+        min_select_timeout = max(min(timeout/10.0, 0.5), 0.1)
+        # initial 'select_timout' is half of timeout or max 2 secs (max blocking time).
+        # min is from 'min_select_timeout'
+        select_timout = max(min(timeout/2.0, 2.0), min_select_timeout)
+        # time, when loop shall finish
+        finish_time = time.time() + timeout
+        while True:
+            # use select to wait for read ready, max `select_timout` seconds, min is 'min_select_timeout' seconds
+            r, w, x = select.select([self.interface], [self.interface], [], select_timout)
+            if self.interface in r or self.interface in w:
+                return constants.StatusCode.success
+
+            if time.time() >= finish_time:
+                # reached timeout
+                return constants.StatusCode.error_timeout
+
+            # `select_timout` decreased to 50% of previous but to be min_select_timeout as minimum
+            select_timout = max(select_timout/2.0, min_select_timeout)
 
     def close(self):
         self.interface.close()
