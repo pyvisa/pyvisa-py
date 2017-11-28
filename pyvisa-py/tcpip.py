@@ -328,13 +328,7 @@ class TCPIPSocketSession(Session):
     def after_parsing(self):
         # TODO: board_number not handled
 
-        self.interface = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.interface.setblocking(0)
-
-        try:
-            self.interface.connect_ex((self.parsed.host_address, int(self.parsed.port)))
-        except Exception as e:
-            raise Exception("could not create socket: %s" % e)
+        self._connect()
 
         self.attrs[constants.VI_ATTR_TCPIP_ADDR] = self.parsed.host_address
         self.attrs[constants.VI_ATTR_TCPIP_PORT] = self.parsed.port
@@ -345,6 +339,23 @@ class TCPIPSocketSession(Session):
             self.attrs[attribute] = attributes.AttributesByID[attribute].default
         # to use default as ni visa driver (NI-VISA 15.0)
         self.attrs[getattr(constants, 'VI_ATTR_SUPPRESS_END_EN')] = True
+
+    def _connect(self):
+        timeout = self.open_timeout / 1000.0 if self.open_timeout is not None else None
+        try:
+            self.interface = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            old_timeout = self.interface.gettimeout()
+            self.interface.settimeout(timeout)
+            self.interface.connect((self.parsed.host_address, int(self.parsed.port)))
+        except BlockingIOError as e:
+            if self.open_timeout == 0:
+               pass
+            else:
+                raise Exception("could not connect: {0}".format(str(e)))
+        except Exception as e:
+            raise Exception("could not connect: {0}".format(str(e)))
+        finally:
+            self.interface.settimeout(old_timeout)
 
     def close(self):
         self.interface.close()
