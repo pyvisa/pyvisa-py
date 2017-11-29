@@ -407,10 +407,9 @@ def _connect(sock, host, port, timeout = 0):
 class RawTCPClient(Client):
     """Client using TCP to a specific port.
     """
-    def __init__(self, host, prog, vers, port):
+    def __init__(self, host, prog, vers, port, open_timeout = 5000):
         Client.__init__(self, host, prog, vers, port)
-        self.open_timeout = 5.0
-        self.connect()
+        self.connect((open_timeout / 1000.0) + 1.0)
         # self.timeout defaults higher than the default 2 second VISA timeout,
         # ensuring that VISA timeouts take precedence.
         self.timeout = 4.0
@@ -433,10 +432,10 @@ class RawTCPClient(Client):
 
         return super(RawTCPClient, self).make_call(proc, args, pack_func, unpack_func)
 
-    def connect(self):
+    def connect(self, timeout=5.0):
         logger.debug('RawTCPClient: connecting to socket at (%s, %s)', self.host, self.port)
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        if not _connect( self.sock, self.host, self.port, self.open_timeout):
+        if not _connect( self.sock, self.host, self.port, timeout):
             raise RPCError('can\'t connect to server')
 
 
@@ -665,8 +664,8 @@ class PartialPortMapperClient(object):
 
 class TCPPortMapperClient(PartialPortMapperClient, RawTCPClient):
 
-    def __init__(self, host):
-        RawTCPClient.__init__(self, host, PMAP_PROG, PMAP_VERS, PMAP_PORT)
+    def __init__(self, host, open_timeout = 5000):
+        RawTCPClient.__init__(self, host, PMAP_PROG, PMAP_VERS, PMAP_PORT, open_timeout)
         PartialPortMapperClient.__init__(self)
 
 
@@ -687,13 +686,13 @@ class BroadcastUDPPortMapperClient(PartialPortMapperClient, RawBroadcastUDPClien
 class TCPClient(RawTCPClient):
     """A TCP Client that find their server through the Port mapper
     """
-    def __init__(self, host, prog, vers):
-        pmap = TCPPortMapperClient(host)
+    def __init__(self, host, prog, vers, open_timeout = 5000):
+        pmap = TCPPortMapperClient(host, open_timeout)
         port = pmap.get_port((prog, vers, IPPROTO_TCP, 0))
         pmap.close()
         if port == 0:
             raise RPCError('program not registered')
-        RawTCPClient.__init__(self, host, prog, vers, port)
+        RawTCPClient.__init__(self, host, prog, vers, port, open_timeout)
 
 
 class UDPClient(RawUDPClient):

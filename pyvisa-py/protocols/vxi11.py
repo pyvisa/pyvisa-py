@@ -191,10 +191,10 @@ class Vxi11Unpacker(rpc.Unpacker):
 
 class CoreClient(rpc.TCPClient):
 
-    def __init__(self, host):
+    def __init__(self, host, open_timeout = 5000):
         self.packer = Vxi11Packer()
         self.unpacker = Vxi11Unpacker('')
-        super(CoreClient, self).__init__(host, DEVICE_CORE_PROG, DEVICE_CORE_VERS)
+        super(CoreClient, self).__init__(host, DEVICE_CORE_PROG, DEVICE_CORE_VERS, open_timeout)
 
     def create_link(self, id, lock_device, lock_timeout, name):
         params = (id, lock_device, lock_timeout, name)

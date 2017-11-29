@@ -45,7 +45,7 @@ class TCPIPInstrSession(Session):
     def after_parsing(self):
         # TODO: board_number not handled
         # TODO: lan_device_name not handled
-        self.interface = vxi11.CoreClient(self.parsed.host_address)
+        self.interface = vxi11.CoreClient(self.parsed.host_address, self.open_timeout)
 
         self.lock_timeout = 10000
         self.client_id = random.getrandbits(31)
