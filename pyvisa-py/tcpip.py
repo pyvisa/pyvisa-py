@@ -342,12 +342,15 @@ class TCPIPSocketSession(Session):
         self.attrs[constants.VI_ATTR_TCPIP_ADDR] = self.parsed.host_address
         self.attrs[constants.VI_ATTR_TCPIP_PORT] = self.parsed.port
         self.attrs[constants.VI_ATTR_INTF_NUM] = self.parsed.board
+        self.attrs[constants.VI_ATTR_TCPIP_NODELAY] = (self._get_tcpip_nodelay, self._set_attribute)
+        self.attrs[constants.VI_ATTR_TCPIP_HOSTNAME] = ''
+        self.attrs[constants.VI_ATTR_TCPIP_KEEPALIVE] = (self._get_tcpip_keepalive, self._set_tcpip_keepalive)
+        # to use default as ni visa driver (NI-VISA 15.0)
+        self.attrs[constants.VI_ATTR_SUPPRESS_END_EN] = True
 
-        for name in ('TERMCHAR', 'TERMCHAR_EN', 'SUPPRESS_END_EN'):
+        for name in ('TERMCHAR', 'TERMCHAR_EN'):
             attribute = getattr(constants, 'VI_ATTR_' + name)
             self.attrs[attribute] = attributes.AttributesByID[attribute].default
-        # to use default as ni visa driver (NI-VISA 15.0)
-        self.attrs[getattr(constants, 'VI_ATTR_SUPPRESS_END_EN')] = True
 
     def _connect(self):
         timeout = self.open_timeout / 1000.0 if self.open_timeout is not None else None
@@ -488,6 +491,30 @@ class TCPIPSocketSession(Session):
 
         return offset, SUCCESS
 
+    def _get_tcpip_nodelay(self, attribute):
+        if self.interface:
+           value = self.interface.getsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY)
+           return constants.VI_TRUE if value == 1 else constants.VI_FALSE, constants.StatusCode.success
+        return 0, constants.StatusCode.error_nonsupported_attribute
+
+    def _set_tcpip_nodelay(self, attribute, attribute_state):
+        if self.interface:
+           self.interface.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1 if attribute_state else 0)
+           return constants.StatusCode.success
+        return 0, constants.StatusCode.error_nonsupported_attribute
+
+    def _get_tcpip_keepalive(self, attribute):
+        if self.interface:
+           value = self.interface.getsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE)
+           return constants.VI_TRUE if value == 1 else constants.VI_FALSE, constants.StatusCode.success
+        return 0, constants.StatusCode.error_nonsupported_attribute
+
+    def _set_tcpip_keepalive(self, attribute, attribute_state):
+        if self.interface:
+           self.interface.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1 if attribute_state else 0)
+           return constants.StatusCode.success
+        return 0, constants.StatusCode.error_nonsupported_attribute
+
     def _get_attribute(self, attribute):
         """Get the value for a given VISA attribute for this session.
 
@@ -497,16 +524,6 @@ class TCPIPSocketSession(Session):
         :return: The state of the queried attribute for a specified resource, return value of the library call.
         :rtype: (unicode | str | list | int, VISAStatus)
         """
-
-        if attribute == constants.VI_ATTR_TCPIP_HOSTNAME:
-            raise NotImplementedError
-
-        elif attribute == constants.VI_ATTR_TCPIP_KEEPALIVE:
-            raise NotImplementedError
-
-        elif attribute == constants.VI_ATTR_TCPIP_NODELAY:
-            raise NotImplementedError
-
         raise UnknownAttribute(attribute)
 
     def _set_attribute(self, attribute, attribute_state):
