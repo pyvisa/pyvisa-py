@@ -319,8 +319,6 @@ class TCPIPSocketSession(Session):
     # and select timeout is not lower that that minimum timeout
     # Tis is valid for connect and read operations
 
-    lock_timeout = 1000
-
     max_recv_size = 4096
 
     # This buffer is used to store the bytes that appeared after termination char
@@ -335,7 +333,7 @@ class TCPIPSocketSession(Session):
         # TODO: board_number not handled
 
         ret_status = self._connect()
-        if ret_status != constants.StatusCode.success:
+        if ret_status != SUCCESS:
             self.close()
             raise Exception("could not connect: {0}".format(str(ret_status)))
 
@@ -374,11 +372,11 @@ class TCPIPSocketSession(Session):
             # use select to wait for socket ready, max `select_timout` seconds
             r, w, x = select.select([self.interface], [self.interface], [], select_timout)
             if self.interface in r or self.interface in w:
-                return constants.StatusCode.success
+                return SUCCESS
 
             if time.time() >= finish_time:
                 # reached timeout
-                return constants.StatusCode.error_timeout
+                return StatusCode.error_timeout
 
             # `select_timout` decreased to 50% of previous or min_select_timeout
             select_timout = max(select_timout/2.0, min_select_timeout)
@@ -426,11 +424,11 @@ class TCPIPSocketSession(Session):
             if term_char_en and term_byte in out:
                 term_byte_index = out.index(term_byte) + 1
                 self._pending_buffer = out[term_byte_index:]
-                return bytes(out[:term_byte_index]), constants.StatusCode.success_termination_character_read
+                return bytes(out[:term_byte_index]), StatusCode.success_termination_character_read
 
             if len(out) >= count:
                 self._pending_buffer = out[count:]
-                return bytes(out[:count]), constants.StatusCode.success_max_count_read
+                return bytes(out[:count]), StatusCode.success_max_count_read
 
             # use select to wait for read ready, max `select_timout` seconds
             r, w, x = select.select([self.interface], [], [], select_timout)
@@ -445,12 +443,12 @@ class TCPIPSocketSession(Session):
                 if out and not suppress_end_en:
                     # we have some data without termchar but no further data expected
                     self._pending_buffer = out[count:]
-                    return bytes(out[:count]), constants.StatusCode.success
+                    return bytes(out[:count]), SUCCESS
     
                 if time.time() >= finish_time:
                     # reached timeout
                     self._pending_buffer = out[count:]
-                    return bytes(out[:count]), constants.StatusCode.error_timeout
+                    return bytes(out[:count]), StatusCode.error_timeout
 
                 # `select_timout` decreased to 50% of previous or min_select_timeout
                 select_timout = max(select_timout/2.0, min_select_timeout)
@@ -494,26 +492,26 @@ class TCPIPSocketSession(Session):
     def _get_tcpip_nodelay(self, attribute):
         if self.interface:
            value = self.interface.getsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY)
-           return constants.VI_TRUE if value == 1 else constants.VI_FALSE, constants.StatusCode.success
-        return 0, constants.StatusCode.error_nonsupported_attribute
+           return constants.VI_TRUE if value == 1 else constants.VI_FALSE, SUCCESS
+        return 0, StatusCode.error_nonsupported_attribute
 
     def _set_tcpip_nodelay(self, attribute, attribute_state):
         if self.interface:
            self.interface.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1 if attribute_state else 0)
-           return constants.StatusCode.success
-        return 0, constants.StatusCode.error_nonsupported_attribute
+           return SUCCESS
+        return 0, StatusCode.error_nonsupported_attribute
 
     def _get_tcpip_keepalive(self, attribute):
         if self.interface:
            value = self.interface.getsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE)
-           return constants.VI_TRUE if value == 1 else constants.VI_FALSE, constants.StatusCode.success
-        return 0, constants.StatusCode.error_nonsupported_attribute
+           return constants.VI_TRUE if value == 1 else constants.VI_FALSE, SUCCESS
+        return 0, StatusCode.error_nonsupported_attribute
 
     def _set_tcpip_keepalive(self, attribute, attribute_state):
         if self.interface:
            self.interface.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1 if attribute_state else 0)
-           return constants.StatusCode.success
-        return 0, constants.StatusCode.error_nonsupported_attribute
+           return SUCCESS
+        return 0, StatusCode.error_nonsupported_attribute
 
     def _get_attribute(self, attribute):
         """Get the value for a given VISA attribute for this session.
