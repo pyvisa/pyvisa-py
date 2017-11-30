@@ -420,9 +420,14 @@ class TCPIPSocketSession(Session):
             # check, if we have any data received (from pending buffer or further reading)
             if term_char_en and term_byte in self._pending_buffer:
                 term_byte_index = self._pending_buffer.index(term_byte) + 1
+                if term_byte_index > count:
+                    term_byte_index = count
+                    status = StatusCode.success_max_count_read
+                else:
+                    status = StatusCode.success_termination_character_read
                 out = bytes(self._pending_buffer[:term_byte_index])
                 self._pending_buffer = self._pending_buffer[term_byte_index:]
-                return out, StatusCode.success_termination_character_read
+                return out, status
 
             if len(self._pending_buffer) >= count:
                 out = bytes(self._pending_buffer[:count])
