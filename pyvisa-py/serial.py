@@ -65,7 +65,7 @@ class SerialSession(Session):
         else:
             cls = Serial
 
-        self.interface = cls(port=self.parsed.board, timeout=self.timeout, write_timeout=2000)
+        self.interface = cls(port=self.parsed.board, timeout=self.timeout, write_timeout=self.timeout)
 
         for name in ('ASRL_END_IN', 'ASRL_END_OUT', 'SEND_END_EN', 'TERMCHAR',
                     'TERMCHAR_EN', 'SUPPRESS_END_EN'):
