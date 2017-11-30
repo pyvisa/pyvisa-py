@@ -408,9 +408,6 @@ class TCPIPSocketSession(Session):
 
         read_fun = self.interface.recv
 
-        out = bytearray()
-        out.extend(self._pending_buffer)
-
         # minimum is in interval 1 - 100ms based on timeout
         min_select_timeout = max(min(timeout/100.0, 0.1), 0.001)
         # initial 'select_timout' is half of timeout or max 2 secs (max blocking time).
@@ -421,14 +418,16 @@ class TCPIPSocketSession(Session):
         while True:
 
             # check, if we have any data received (from pending buffer or further reading)
-            if term_char_en and term_byte in out:
-                term_byte_index = out.index(term_byte) + 1
-                self._pending_buffer = out[term_byte_index:]
-                return bytes(out[:term_byte_index]), StatusCode.success_termination_character_read
+            if term_char_en and term_byte in self._pending_buffer:
+                term_byte_index = self._pending_buffer.index(term_byte) + 1
+                out = bytes(self._pending_buffer[:term_byte_index])
+                self._pending_buffer = self._pending_buffer[term_byte_index:]
+                return out, StatusCode.success_termination_character_read
 
-            if len(out) >= count:
-                self._pending_buffer = out[count:]
-                return bytes(out[:count]), StatusCode.success_max_count_read
+            if len(self._pending_buffer) >= count:
+                out = bytes(self._pending_buffer[:count])
+                self._pending_buffer = self._pending_buffer[count:]
+                return out, StatusCode.success_max_count_read
 
             # use select to wait for read ready, max `select_timout` seconds
             r, w, x = select.select([self.interface], [], [], select_timout)
@@ -436,19 +435,21 @@ class TCPIPSocketSession(Session):
             read_data = b''
             if self.interface in r:
                 read_data = read_fun(chunk_length)
-                out.extend(read_data)
+                self._pending_buffer.extend(read_data)
 
             if not read_data:
                 # can't read chunk or timeout
-                if out and not suppress_end_en:
+                if self._pending_buffer and not suppress_end_en:
                     # we have some data without termchar but no further data expected
-                    self._pending_buffer = out[count:]
-                    return bytes(out[:count]), SUCCESS
+                    out = bytes(self._pending_buffer[:count])
+                    self._pending_buffer = self._pending_buffer[count:]
+                    return out, SUCCESS
     
                 if time.time() >= finish_time:
                     # reached timeout
-                    self._pending_buffer = out[count:]
-                    return bytes(out[:count]), StatusCode.error_timeout
+                    out = bytes(self._pending_buffer[:count])
+                    self._pending_buffer = self._pending_buffer[count:]
+                    return out, StatusCode.error_timeout
 
                 # `select_timout` decreased to 50% of previous or min_select_timeout
                 select_timout = max(select_timout/2.0, min_select_timeout)
