@@ -73,16 +73,21 @@ class GPIBSession(Session):
         pad = self.parsed.primary_address
         self.handle = gpib.dev(int(minor), int(pad))
         self.interface = Gpib(self.handle)
+        attribute = getattr(constants, 'VI_ATTR_TMO_VALUE')
+        self.set_attribute(constants.VI_ATTR_TMO_VALUE, attributes.AttributesByID[attribute].default)
 
-    @property
-    def timeout(self):
+    def _get_timeout(self, attribute):
 
         # 0x3 is the hexadecimal reference to the IbaTMO (timeout) configuration
         # option in linux-gpib.
-        return TIMETABLE[self.interface.ask(3)]
+        timeout = self.interface.ask(3)
+        if timeout and timeout < len(TIMETABLE): 
+            timeout = int(TIMETABLE[timeout])
+        else:
+            timeout = constants.VI_TMO_INFINITE
+        return timeout, constants.StatusCode.success
 
-    @timeout.setter
-    def timeout(self, value):
+    def _set_timeout(self, attribute, value):
 
         """
         linux-gpib only supports 18 discrete timeout values. If a timeout
@@ -108,7 +113,14 @@ class GPIBSession(Session):
         16  300 seconds
         17  1000 seconds
         """
-        self.interface.timeout(bisect(TIMETABLE, value))
+        if value == constants.VI_TMO_INFINITE:
+            timeout = 0
+            self.timeout = None
+        else:
+            timeout = min(bisect(TIMETABLE, value - value / 1000.0), 17)
+            self.timeout = TIMETABLE[timeout] / 1000.0
+        self.interface.timeout(timeout)
+        return constants.StatusCode.success
 
     def close(self):
         gpib.close(self.handle)

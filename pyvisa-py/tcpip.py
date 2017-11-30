@@ -33,7 +33,6 @@ class TCPIPInstrSession(Session):
     """
 
     lock_timeout = 1000
-    timeout = 1000
     client_id = None
     link = None
     max_recv_size = 1024
@@ -49,7 +48,6 @@ class TCPIPInstrSession(Session):
         self.interface = vxi11.CoreClient(self.parsed.host_address)
 
         self.lock_timeout = 10000
-        self.timeout = 10000
         self.client_id = random.getrandbits(31)
 
         error, link, abort_port, max_recv_size = self.interface.create_link(
@@ -96,6 +94,8 @@ class TCPIPInstrSession(Session):
         else:
             term_char = flags = 0
 
+        timeout, _ = self.get_attribute(constants.VI_ATTR_TMO_VALUE)
+
         read_data = bytearray()
         reason = 0
         end_reason = vxi11.RX_END | vxi11.RX_CHR
@@ -103,7 +103,7 @@ class TCPIPInstrSession(Session):
         status = SUCCESS
 
         while reason & end_reason == 0:
-            error, reason, data = read_fun(self.link, chunk_length, self.timeout,
+            error, reason, data = read_fun(self.link, chunk_length, timeout,
                                            self.lock_timeout, flags, term_char)
 
             if error == vxi11.ErrorCodes.io_timeout:
@@ -135,6 +135,7 @@ class TCPIPInstrSession(Session):
 
         send_end, _ = self.get_attribute(constants.VI_ATTR_SEND_END_EN)
         chunk_size = 1024
+        timeout, _ = self.get_attribute(constants.VI_ATTR_TMO_VALUE)
 
         try:
             if send_end:
@@ -152,7 +153,7 @@ class TCPIPInstrSession(Session):
                 block = data[offset:offset + self.max_recv_size]
 
                 error, size = self.interface.device_write(
-                    self.link, self.timeout, self.lock_timeout, flags, block)
+                    self.link, timeout, self.lock_timeout, flags, block)
 
                 if error == vxi11.ErrorCodes.io_timeout:
                     return offset, StatusCode.error_timeout
@@ -319,7 +320,6 @@ class TCPIPSocketSession(Session):
     # Tis is valid for connect and read operations
 
     lock_timeout = 1000
-    timeout = 1000
 
     max_recv_size = 4096
 

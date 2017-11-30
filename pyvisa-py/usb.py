@@ -53,8 +53,6 @@ class USBSession(Session):
     via usb port using pyUSB
     """
 
-    timeout = 2000
-
     @staticmethod
     def list_resources():
         """Return list of resources for this type of USB device"""
@@ -75,24 +73,16 @@ class USBSession(Session):
 
         return 'via PyUSB (%s). Backend: %s' % (ver, backend)
 
-    @property
-    def timeout(self):
-        value = self.interface.timeout
+    def _get_timeout(self):
+        if self.interface:
+            self.timeout = self.interface.timeout
+        return super(USBSession, self)._get_timeout()
 
-        if value is None:
-            return constants.VI_TMO_INFINITE
-        elif value == 0:
-            return constants.VI_TMO_IMMEDIATE
-        else:
-            return value
-
-    @timeout.setter
-    def timeout(self, value):
-        if value == constants.VI_TMO_INFINITE:
-            value = None
-        elif value == constants.VI_TMO_IMMEDIATE:
-            value = 0
-        self.interface.timeout = value
+    def _set_timeout(self, attribute, value):
+        status = super(USBSession, self)._set_timeout()
+        if self.interface:
+            self.interface.timeout = self.timeout
+        return status
 
     def read(self, count):
         """Reads data from device or interface synchronously.

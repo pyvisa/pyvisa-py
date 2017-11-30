@@ -171,6 +171,9 @@ class Session(compat.with_metaclass(abc.ABCMeta)):
 
         self.parsed = parsed
         self.open_timeout = open_timeout
+        #: get default timeout from constants
+        attribute = getattr(constants, 'VI_ATTR_TMO_VALUE')
+        self.timeout = attributes.AttributesByID[attribute].default / 1000.0
 
         #: Used as a place holder for the object doing the lowlevel communication.
         self.interface = None
@@ -181,7 +184,8 @@ class Session(compat.with_metaclass(abc.ABCMeta)):
         self.attrs = {constants.VI_ATTR_RM_SESSION: resource_manager_session,
                       constants.VI_ATTR_RSRC_NAME: str(parsed),
                       constants.VI_ATTR_RSRC_CLASS: parsed.resource_class,
-                      constants.VI_ATTR_INTF_TYPE: parsed.interface_type}
+                      constants.VI_ATTR_INTF_TYPE: parsed.interface_type,
+                      constants.VI_ATTR_TMO_VALUE: (self._get_timeout, self._set_timeout)}
         self.after_parsing()
 
     def after_parsing(self):
@@ -222,9 +226,6 @@ class Session(compat.with_metaclass(abc.ABCMeta)):
                 getter = value[0]
                 value, status = getter(attribute) if getter else (0, constants.StatusCode.error_nonsupported_attribute)
             return value, status
-
-        elif attribute == constants.VI_ATTR_TMO_VALUE:
-            return self.timeout, constants.StatusCode.success
 
         # Dispatch to `_get_attribute`, which must be implemented by subclasses.
 
@@ -269,14 +270,6 @@ class Session(compat.with_metaclass(abc.ABCMeta)):
                 status = setter(attribute, attribute_state) if setter else constants.StatusCode.error_nonsupported_attribute
             return status
 
-        elif attribute == constants.VI_ATTR_TMO_VALUE:
-            try:
-                self.timeout = attribute_state
-            except:
-                return constants.StatusCode.error_nonsupported_attribute_state
-
-            return constants.StatusCode.success
-
         # Dispatch to `_set_attribute`, which must be implemented by subclasses.
 
         try:
@@ -318,7 +311,8 @@ class Session(compat.with_metaclass(abc.ABCMeta)):
         # NOTE: Some interfaces return not only a single byte but a complete block for each read
         # therefore we must handle the case that the termination character is in the middle of the  block
         # or that the maximum number of bytes is exceeded
-        timeout = self.get_attribute(constants.VI_ATTR_TMO_VALUE)[0] / 1000.
+        timeout, _ = self.get_attribute(constants.VI_ATTR_TMO_VALUE)
+        timeout /= 1000.0
 
         # Make sure termination_char is a string
         try:
@@ -353,3 +347,25 @@ class Session(compat.with_metaclass(abc.ABCMeta)):
 
             if time.time() - start > timeout:
                 return out, constants.StatusCode.error_timeout
+
+    def _get_timeout(self, attribute_name):
+        """  Returns timeout calculated value from python way to VI_ way
+        """
+        if self.timeout is None:
+            ret_value = constants.VI_TMO_INFINITE
+        elif self.timeout == 0:
+            ret_value = constants.VI_TMO_IMMEDIATE
+        else:
+            ret_value = int(self.timeout * 1000.0)
+        return ret_value, constants.StatusCode.success
+
+    def _set_timeout(self, attribute_name, new_value):
+        """  Sets timeout calculated value from python way to VI_ way
+        """
+        if new_value == constants.VI_TMO_INFINITE:
+            self.timeout = None
+        elif new_value == constants.VI_TMO_IMMEDIATE:
+            self.timeout = 0
+        else:
+            self.timeout = new_value / 1000.0
+        return constants.StatusCode.success;
