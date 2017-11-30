@@ -268,6 +268,8 @@ class Session(compat.with_metaclass(abc.ABCMeta)):
             if isinstance(value, tuple):
                 setter = value[1]
                 status = setter(attribute, attribute_state) if setter else constants.StatusCode.error_nonsupported_attribute
+            else:
+                self.attrs[attribute] = attribute_state
             return status
 
         # Dispatch to `_set_attribute`, which must be implemented by subclasses.
