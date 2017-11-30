@@ -319,10 +319,6 @@ class TCPIPSocketSession(Session):
     # and select timeout is not lower that that minimum timeout
     # Tis is valid for connect and read operations
 
-    max_recv_size = 4096
-
-    # This buffer is used to store the bytes that appeared after termination char
-    _pending_buffer = bytearray()
 
     @staticmethod
     def list_resources():
@@ -336,6 +332,10 @@ class TCPIPSocketSession(Session):
         if ret_status != SUCCESS:
             self.close()
             raise Exception("could not connect: {0}".format(str(ret_status)))
+
+        self.max_recv_size = 4096
+        # This buffer is used to store the bytes that appeared after termination char
+        self._pending_buffer = bytearray()
 
         self.attrs[constants.VI_ATTR_TCPIP_ADDR] = self.parsed.host_address
         self.attrs[constants.VI_ATTR_TCPIP_PORT] = self.parsed.port
