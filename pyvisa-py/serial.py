@@ -19,7 +19,6 @@ from . import common
 
 try:
     import serial
-    from serial import Serial
     from serial.tools.list_ports import comports
 except ImportError as e:
     Session.register_unavailable(constants.InterfaceType.asrl, 'INSTR',
@@ -63,7 +62,7 @@ class SerialSession(Session):
         if 'mock' in self.parsed:
             cls = self.parsed.mock
         else:
-            cls = Serial
+            cls = serial.Serial
 
         self.interface = cls(port=self.parsed.board, timeout=self.timeout, write_timeout=self.timeout)
 
