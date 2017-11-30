@@ -216,7 +216,12 @@ class Session(compat.with_metaclass(abc.ABCMeta)):
         # First try to answer those attributes that are common to all session types
         # or user defined because they are not defined by the interface.
         if attribute in self.attrs:
-            return self.attrs[attribute], constants.StatusCode.success
+            value = self.attrs[attribute]
+            status = constants.StatusCode.success
+            if isinstance(value, tuple):
+                getter = value[0]
+                value, status = getter(attribute) if getter else (0, constants.StatusCode.error_nonsupported_attribute)
+            return value, status
 
         elif attribute == constants.VI_ATTR_TMO_VALUE:
             return self.timeout, constants.StatusCode.success
@@ -257,8 +262,12 @@ class Session(compat.with_metaclass(abc.ABCMeta)):
         # First try to answer those attributes that are common to all session types
         # or user defined because they are not defined by the interface.
         if attribute in self.attrs:
-            self.attrs[attribute] = attribute_state
-            return constants.StatusCode.success
+            value = self.attrs[attribute]
+            status = constants.StatusCode.success
+            if isinstance(value, tuple):
+                setter = value[1]
+                status = setter(attribute, attribute_state) if setter else constants.StatusCode.error_nonsupported_attribute
+            return status
 
         elif attribute == constants.VI_ATTR_TMO_VALUE:
             try:
