@@ -13,7 +13,7 @@
 from __future__ import division, unicode_literals, print_function, absolute_import
 from bisect import bisect
 
-from pyvisa import constants, logger
+from pyvisa import constants, logger, attributes
 
 from .sessions import Session, UnknownAttribute
 
