@@ -73,13 +73,13 @@ class USBSession(Session):
 
         return 'via PyUSB (%s). Backend: %s' % (ver, backend)
 
-    def _get_timeout(self):
+    def _get_timeout(self, attribute):
         if self.interface:
             self.timeout = self.interface.timeout
-        return super(USBSession, self)._get_timeout()
+        return super(USBSession, self)._get_timeout(attribute)
 
     def _set_timeout(self, attribute, value):
-        status = super(USBSession, self)._set_timeout()
+        status = super(USBSession, self)._set_timeout(attribute, value)
         if self.interface:
             self.interface.timeout = self.timeout
         return status

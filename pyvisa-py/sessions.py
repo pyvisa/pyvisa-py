@@ -347,7 +347,7 @@ class Session(compat.with_metaclass(abc.ABCMeta)):
             if finish_time and time.time() > finish_timeout:
                 return out, constants.StatusCode.error_timeout
 
-    def _get_timeout(self, attribute_name):
+    def _get_timeout(self, attribute):
         """  Returns timeout calculated value from python way to VI_ way
         """
         if self.timeout is None:
@@ -358,13 +358,13 @@ class Session(compat.with_metaclass(abc.ABCMeta)):
             ret_value = int(self.timeout * 1000.0)
         return ret_value, constants.StatusCode.success
 
-    def _set_timeout(self, attribute_name, new_value):
+    def _set_timeout(self, attribute, value):
         """  Sets timeout calculated value from python way to VI_ way
         """
-        if new_value == constants.VI_TMO_INFINITE:
+        if value == constants.VI_TMO_INFINITE:
             self.timeout = None
-        elif new_value == constants.VI_TMO_IMMEDIATE:
+        elif value == constants.VI_TMO_IMMEDIATE:
             self.timeout = 0
         else:
-            self.timeout = new_value / 1000.0
+            self.timeout = value / 1000.0
         return constants.StatusCode.success;
