@@ -40,10 +40,9 @@ def _find_listeners():
 StatusCode = constants.StatusCode
 SUCCESS = StatusCode.success
 
-# linux-gpib timeout constants, in milliseconds. See self.timeout.
-TIMETABLE = (0, 1e-2, 3e-2, 1e-1, 3e-1, 1e0, 3e0, 1e1, 3e1, 1e2, 3e2, 1e3, 3e3,
-             1e4, 3e4, 1e5, 3e5, 1e6)
-
+# linux-gpib timeout constants, in milliseconds. See GPIBSession._set_timeout.
+TIMETABLE = (0, 10e-6, 30e-6, 100e-6, 300e-6, 1e-3, 3e-3, 10e-3, 30e-3, 100e-3, 300e-3, 1.0, 3.0,
+             10.0, 30.0, 100.0, 300.0, 1000.0)
 
 # TODO: Check board indices other than 0.
 BOARD = 0
@@ -75,15 +74,16 @@ class GPIBSession(Session):
         self.set_attribute(constants.VI_ATTR_TMO_VALUE, attributes.AttributesByID[constants.VI_ATTR_TMO_VALUE].default)
 
     def _get_timeout(self, attribute):
-
-        # 0x3 is the hexadecimal reference to the IbaTMO (timeout) configuration
-        # option in linux-gpib.
-        timeout = self.interface.ask(3)
-        if timeout and timeout < len(TIMETABLE): 
-            timeout = int(TIMETABLE[timeout])
-        else:
-            timeout = constants.VI_TMO_INFINITE
-        return timeout, constants.StatusCode.success
+        if self.interface:
+            # 0x3 is the hexadecimal reference to the IbaTMO (timeout) configuration
+            # option in linux-gpib.
+            gpib_timeout = self.interface.ask(3)
+            if gpib_timeout and gpib_timeout < len(TIMETABLE): 
+                self.timeout = TIMETABLE[gpib_timeout]
+            else:
+                # value is 0 or out of range -> infinite
+               self.timeout = None
+        return super(GPIBSession, self)._get_timeout(attribute)
 
     def _set_timeout(self, attribute, value):
         """
@@ -110,14 +110,16 @@ class GPIBSession(Session):
         16  300 seconds
         17  1000 seconds
         """
-        if value == constants.VI_TMO_INFINITE:
-            timeout = 0
-            self.timeout = None
-        else:
-            timeout = min(bisect(TIMETABLE, value - value / 1000.0), 17)
-            self.timeout = TIMETABLE[timeout] / 1000.0
-        self.interface.timeout(timeout)
-        return constants.StatusCode.success
+        status = super(GPIBSession, self)._set_timeout(attribute, value)
+        if self.interface:
+            if self.timeout is None:
+                gpib_timeout = 0
+            else:
+                # round up only values that are higher by 0.1% then discrete values
+                gpib_timeout  = min(bisect(TIMETABLE, 0.999 * self.timeout), 17)
+                self.timeout = TIMETABLE[gpib_timeout]
+            self.interface.timeout(gpib_timeout)
+        return status
 
     def close(self):
         gpib.close(self.handle)
