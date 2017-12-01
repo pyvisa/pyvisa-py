@@ -192,7 +192,9 @@ class Session(compat.with_metaclass(abc.ABCMeta)):
         called after the resourcename is properly parsed
 
         ResourceSession can register resource specific attributes handling of them into self.attrs.
-        It is also possible to change handling of already registerd common attributes.
+        It is also possible to change handling of already registerd common attributes. List of attributes is available in pyvisa package:
+        * name is in constants module as: VI_ATTR_<NAME>
+        * validity of attribute for resource is defined module attributes, AttrVI_ATTR_<NAME>.resources
        
         For static (read only) values, simple readonly and also readwrite attributes simplified construction can be used:
         `    self.attrs[constants.VI_ATTR_<NAME>] = 100`
