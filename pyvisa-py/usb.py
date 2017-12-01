@@ -41,7 +41,6 @@ except Exception as e:
 
 
 StatusCode = constants.StatusCode
-SUCCESS = StatusCode.success
 
 class USBSession(Session):
     """Base class for drivers that communicate with usb devices
@@ -120,7 +119,7 @@ class USBSession(Session):
 
         count = self.interface.write(data)
 
-        return count, SUCCESS
+        return count, StatusCode.success
 
     def close(self):
         self.interface.close()

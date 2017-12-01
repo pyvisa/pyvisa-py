@@ -23,7 +23,6 @@ from . import common
 
 
 StatusCode = constants.StatusCode
-SUCCESS = StatusCode.success
 
 
 @Session.register(constants.InterfaceType.tcpip, 'INSTR')
@@ -101,7 +100,7 @@ class TCPIPInstrSession(Session):
         reason = 0
         end_reason = vxi11.RX_END | vxi11.RX_CHR
         read_fun = self.interface.device_read
-        status = SUCCESS
+        status = StatusCode.success
 
         while reason & end_reason == 0:
             error, reason, data = read_fun(self.link, chunk_length, timeout,
@@ -166,7 +165,7 @@ class TCPIPInstrSession(Session):
                 offset += size
                 num -= size
 
-            return offset, SUCCESS
+            return offset, StatusCode.success
 
         except vxi11.Vxi11Error:
             return 0, StatusCode.error_timeout
@@ -182,7 +181,7 @@ class TCPIPInstrSession(Session):
         """
 
         if attribute == constants.VI_ATTR_TCPIP_ADDR:
-            return self.host_address, SUCCESS
+            return self.host_address, StatusCode.success
 
         elif attribute == constants.VI_ATTR_TCPIP_DEVICE_NAME:
             raise NotImplementedError
@@ -234,7 +233,7 @@ class TCPIPInstrSession(Session):
             # TODO: Which status to return
             raise Exception("error triggering: %d" % error)
 
-        return SUCCESS
+        return StatusCode.success
 
     def clear(self):
         """Clears a device.
@@ -252,7 +251,7 @@ class TCPIPInstrSession(Session):
             # TODO: Which status to return
             raise Exception("error clearing: %d" % error)
 
-        return SUCCESS
+        return StatusCode.success
 
     def read_stb(self):
         """Reads a status byte of the service request.
@@ -271,7 +270,7 @@ class TCPIPInstrSession(Session):
             # TODO: Which status to return
             raise Exception("error reading status: %d" % error)
 
-        return stb, SUCCESS
+        return stb, StatusCode.success
 
     def lock(self, lock_type, timeout, requested_key=None):
         """Establishes an access mode to the specified resources.
@@ -331,7 +330,7 @@ class TCPIPSocketSession(Session):
         # TODO: board_number not handled
 
         ret_status = self._connect()
-        if ret_status != SUCCESS:
+        if ret_status != StatusCode.success:
             self.close()
             raise Exception("could not connect: {0}".format(str(ret_status)))
 
@@ -374,7 +373,7 @@ class TCPIPSocketSession(Session):
             # use select to wait for socket ready, max `select_timout` seconds
             r, w, x = select.select([self.interface], [self.interface], [], select_timout)
             if self.interface in r or self.interface in w:
-                return SUCCESS
+                return StatusCode.success
 
             if time.time() >= finish_time:
                 # reached timeout
@@ -448,7 +447,7 @@ class TCPIPSocketSession(Session):
                     # we have some data without termchar but no further data expected
                     out = bytes(self._pending_buffer[:count])
                     self._pending_buffer = self._pending_buffer[count:]
-                    return out, SUCCESS
+                    return out, StatusCode.succes
     
                 if finish_time and time.time() >= finish_time:
                     # reached timeout
@@ -493,30 +492,30 @@ class TCPIPSocketSession(Session):
             offset += size
             num -= size
 
-        return offset, SUCCESS
+        return offset, StatusCode.success
 
     def _get_tcpip_nodelay(self, attribute):
         if self.interface:
            value = self.interface.getsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY)
-           return constants.VI_TRUE if value == 1 else constants.VI_FALSE, SUCCESS
+           return constants.VI_TRUE if value == 1 else constants.VI_FALSE, StatusCode.succes
         return 0, StatusCode.error_nonsupported_attribute
 
     def _set_tcpip_nodelay(self, attribute, attribute_state):
         if self.interface:
            self.interface.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1 if attribute_state else 0)
-           return SUCCESS
+           return StatusCode.succes
         return 0, StatusCode.error_nonsupported_attribute
 
     def _get_tcpip_keepalive(self, attribute):
         if self.interface:
            value = self.interface.getsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE)
-           return constants.VI_TRUE if value == 1 else constants.VI_FALSE, SUCCESS
+           return constants.VI_TRUE if value == 1 else constants.VI_FALSE, StatusCode.succes
         return 0, StatusCode.error_nonsupported_attribute
 
     def _set_tcpip_keepalive(self, attribute, attribute_state):
         if self.interface:
            self.interface.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1 if attribute_state else 0)
-           return SUCCESS
+           return StatusCode.succes
         return 0, StatusCode.error_nonsupported_attribute
 
     def _get_attribute(self, attribute):

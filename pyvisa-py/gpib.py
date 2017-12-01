@@ -38,7 +38,6 @@ def _find_listeners():
 
 
 StatusCode = constants.StatusCode
-SUCCESS = StatusCode.success
 
 # linux-gpib timeout constants, in milliseconds. See GPIBSession._set_timeout.
 TIMETABLE = (0, 10e-6, 30e-6, 100e-6, 300e-6, 1e-3, 3e-3, 10e-3, 30e-3, 100e-3, 300e-3, 1.0, 3.0,
@@ -157,7 +156,7 @@ class GPIBSession(Session):
         try:
             self.interface.write(data)
 
-            return SUCCESS
+            return StatusCode.success
 
         except gpib.GpibError:
             # 0x4000 = 16384 = TIMO
@@ -179,20 +178,20 @@ class GPIBSession(Session):
         if attribute == constants.VI_ATTR_GPIB_READDR_EN:
             # IbaREADDR 0x6
             # Setting has no effect in linux-gpib.
-            return self.interface.ask(6), SUCCESS
+            return self.interface.ask(6), StatusCode.success
 
         elif attribute == constants.VI_ATTR_GPIB_PRIMARY_ADDR:
             # IbaPAD 0x1
-            return self.interface.ask(1), SUCCESS
+            return self.interface.ask(1), StatusCode.success
 
         elif attribute == constants.VI_ATTR_GPIB_SECONDARY_ADDR:
             # IbaSAD 0x2
             # Remove 0x60 because National Instruments.
             sad = self.interface.ask(2)
             if self.interface.ask(2):
-                return self.interface.ask(2) - 96, SUCCESS
+                return self.interface.ask(2) - 96, StatusCode.success
             else:
-                return constants.VI_NO_SEC_ADDR, SUCCESS
+                return constants.VI_NO_SEC_ADDR, StatusCode.success
 
         elif attribute == constants.VI_ATTR_GPIB_REN_STATE:
             # I have no idea how to implement this.
@@ -201,23 +200,23 @@ class GPIBSession(Session):
         elif attribute == constants.VI_ATTR_GPIB_UNADDR_EN:
             # IbaUnAddr 0x1b
             if self.interface.ask(27):
-                return constants.VI_TRUE, SUCCESS
+                return constants.VI_TRUE, StatusCode.success
             else:
-                return constants.VI_FALSE, SUCCESS
+                return constants.VI_FALSE, StatusCode.success
 
         elif attribute == constants.VI_ATTR_SEND_END_EN:
             # IbaEndBitIsNormal 0x1a
             if self.interface.ask(26):
-                return constants.VI_TRUE, SUCCESS
+                return constants.VI_TRUE, StatusCode.success
             else:
-                return constants.VI_FALSE, SUCCESS
+                return constants.VI_FALSE, StatusCode.success
 
         elif attribute == constants.VI_ATTR_INTF_NUM:
             # IbaBNA 0x200
-            return self.interface.ask(512), SUCCESS
+            return self.interface.ask(512), StatusCode.success
 
         elif attribute == constants.VI_ATTR_INTF_TYPE:
-            return constants.InterfaceType.gpib, SUCCESS
+            return constants.InterfaceType.gpib, StatusCode.success
 
         raise UnknownAttribute(attribute)
 
@@ -237,7 +236,7 @@ class GPIBSession(Session):
             # Setting has no effect in linux-gpib.
             if isinstance(attribute_state, int):
                 self.interface.config(6, attribute_state)
-                return SUCCESS
+                return StatusCode.success
             else:
                 return StatusCode.error_nonsupported_attribute_state
 
@@ -245,7 +244,7 @@ class GPIBSession(Session):
             # IbcPAD 0x1
             if isinstance(attribute_state, int) and 0 <= attribute_state <= 30:
                 self.interface.config(1, attribute_state)
-                return SUCCESS
+                return StatusCode.success
             else:
                 return StatusCode.error_nonsupported_attribute_state
 
@@ -255,7 +254,7 @@ class GPIBSession(Session):
             if isinstance(attribute_state, int) and 0 <= attribute_state <= 30:
                 if self.interface.ask(2):
                     self.interface.config(2, attribute_state + 96)
-                    return SUCCESS
+                    return StatusCode.success
                 else:
                     return StatusCode.error_nonsupported_attribute
             else:
@@ -265,7 +264,7 @@ class GPIBSession(Session):
             # IbcUnAddr 0x1b
             try:
                 self.interface.config(27, attribute_state)
-                return SUCCESS
+                return StatusCode.success
             except gpib.GpibError:
                 return StatusCode.error_nonsupported_attribute_state
 
@@ -273,7 +272,7 @@ class GPIBSession(Session):
             # IbcEndBitIsNormal 0x1a
             if isinstance(attribute_state, int):
                 self.interface.config(26, attribute_state)
-                return SUCCESS
+                return StatusCode.success
             else:
                 return StatusCode.error_nonsupported_attribute_state
 
