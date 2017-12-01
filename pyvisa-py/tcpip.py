@@ -23,7 +23,6 @@ from . import common
 
 
 StatusCode = constants.StatusCode
-SUCCESS = StatusCode.success
 
 
 @Session.register(constants.InterfaceType.tcpip, 'INSTR')
@@ -100,7 +99,7 @@ class TCPIPInstrSession(Session):
         reason = 0
         end_reason = vxi11.RX_END | vxi11.RX_CHR
         read_fun = self.interface.device_read
-        status = SUCCESS
+        status = StatusCode.success
 
         while reason & end_reason == 0:
             error, reason, data = read_fun(self.link, chunk_length, self.timeout,
@@ -163,7 +162,7 @@ class TCPIPInstrSession(Session):
                 offset += size
                 num -= size
 
-            return offset, SUCCESS
+            return offset, StatusCode.success
 
         except vxi11.Vxi11Error:
             return 0, StatusCode.error_timeout
@@ -179,7 +178,7 @@ class TCPIPInstrSession(Session):
         """
 
         if attribute == constants.VI_ATTR_TCPIP_ADDR:
-            return self.host_address, SUCCESS
+            return self.host_address, StatusCode.success
 
         elif attribute == constants.VI_ATTR_TCPIP_DEVICE_NAME:
             raise NotImplementedError
@@ -231,7 +230,7 @@ class TCPIPInstrSession(Session):
             # TODO: Which status to return
             raise Exception("error triggering: %d" % error)
 
-        return SUCCESS
+        return StatusCode.success
 
     def clear(self):
         """Clears a device.
@@ -249,7 +248,7 @@ class TCPIPInstrSession(Session):
             # TODO: Which status to return
             raise Exception("error clearing: %d" % error)
 
-        return SUCCESS
+        return StatusCode.success
 
     def read_stb(self):
         """Reads a status byte of the service request.
@@ -268,7 +267,7 @@ class TCPIPInstrSession(Session):
             # TODO: Which status to return
             raise Exception("error reading status: %d" % error)
 
-        return stb, SUCCESS
+        return stb, StatusCode.success
 
     def lock(self, lock_type, timeout, requested_key=None):
         """Establishes an access mode to the specified resources.
@@ -335,7 +334,7 @@ class TCPIPSocketSession(Session):
         # TODO: board_number not handled
 
         ret_status = self._connect()
-        if ret_status != constants.StatusCode.success:
+        if ret_status != StatusCode.success:
             self.close()
             raise Exception("could not connect: {0}".format(str(ret_status)))
 
@@ -371,11 +370,11 @@ class TCPIPSocketSession(Session):
             # use select to wait for socket ready, max `select_timout` seconds
             r, w, x = select.select([self.interface], [self.interface], [], select_timout)
             if self.interface in r or self.interface in w:
-                return constants.StatusCode.success
+                return StatusCode.success
 
             if time.time() >= finish_time:
                 # reached timeout
-                return constants.StatusCode.error_timeout
+                return StatusCode.error_timeout
 
             # `select_timout` decreased to 50% of previous or min_select_timeout
             select_timout = max(select_timout/2.0, min_select_timeout)
@@ -423,11 +422,11 @@ class TCPIPSocketSession(Session):
             if term_char_en and term_byte in out:
                 term_byte_index = out.index(term_byte) + 1
                 self._pending_buffer = out[term_byte_index:]
-                return bytes(out[:term_byte_index]), constants.StatusCode.success_termination_character_read
+                return bytes(out[:term_byte_index]), StatusCode.success_termination_character_read
 
             if len(out) >= count:
                 self._pending_buffer = out[count:]
-                return bytes(out[:count]), constants.StatusCode.success_max_count_read
+                return bytes(out[:count]), StatusCode.success_max_count_read
 
             # use select to wait for read ready, max `select_timout` seconds
             r, w, x = select.select([self.interface], [], [], select_timout)
@@ -442,12 +441,12 @@ class TCPIPSocketSession(Session):
                 if out and not suppress_end_en:
                     # we have some data without termchar but no further data expected
                     self._pending_buffer = out[count:]
-                    return bytes(out[:count]), constants.StatusCode.success
+                    return bytes(out[:count]), StatusCode.success
     
                 if time.time() >= finish_time:
                     # reached timeout
                     self._pending_buffer = out[count:]
-                    return bytes(out[:count]), constants.StatusCode.error_timeout
+                    return bytes(out[:count]), StatusCode.error_timeout
 
                 # `select_timout` decreased to 50% of previous or min_select_timeout
                 select_timout = max(select_timout/2.0, min_select_timeout)
@@ -486,7 +485,7 @@ class TCPIPSocketSession(Session):
             offset += size
             num -= size
 
-        return offset, SUCCESS
+        return offset, StatusCode.success
 
     def _get_attribute(self, attribute):
         """Get the value for a given VISA attribute for this session.

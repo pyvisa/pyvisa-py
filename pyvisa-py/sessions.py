@@ -20,6 +20,8 @@ from pyvisa import logger, constants, attributes, compat, rname
 from . import common
 
 
+StatusCode = constants.StatusCode
+
 class UnknownAttribute(Exception):
 
     def __init__(self, attribute):
@@ -203,11 +205,11 @@ class Session(compat.with_metaclass(abc.ABCMeta)):
         try:
             attr = attributes.AttributesByID[attribute]
         except KeyError:
-            return 0, constants.StatusCode.error_nonsupported_attribute
+            return 0, StatusCode.error_nonsupported_attribute
 
         # Check if the attribute is defined for this session type.
         if not attr.in_resource(self.session_type):
-            return 0, constants.StatusCode.error_nonsupported_attribute
+            return 0, StatusCode.error_nonsupported_attribute
 
         # Check if reading the attribute is allowed.
         if not attr.read:
@@ -216,10 +218,10 @@ class Session(compat.with_metaclass(abc.ABCMeta)):
         # First try to answer those attributes that are common to all session types
         # or user defined because they are not defined by the interface.
         if attribute in self.attrs:
-            return self.attrs[attribute], constants.StatusCode.success
+            return self.attrs[attribute], StatusCode.success
 
         elif attribute == constants.VI_ATTR_TMO_VALUE:
-            return self.timeout, constants.StatusCode.success
+            return self.timeout, StatusCode.success
 
         # Dispatch to `_get_attribute`, which must be implemented by subclasses.
 
@@ -227,7 +229,7 @@ class Session(compat.with_metaclass(abc.ABCMeta)):
             return self._get_attribute(attribute)
         except UnknownAttribute as e:
             logger.exception(str(e))
-            return 0, constants.StatusCode.error_nonsupported_attribute
+            return 0, StatusCode.error_nonsupported_attribute
 
     def set_attribute(self, attribute, attribute_state):
         """Set the attribute_state value for a given VISA attribute for this session.
@@ -244,43 +246,43 @@ class Session(compat.with_metaclass(abc.ABCMeta)):
         try:
             attr = attributes.AttributesByID[attribute]
         except KeyError:
-            return constants.StatusCode.error_nonsupported_attribute
+            return StatusCode.error_nonsupported_attribute
 
         # Check if the attribute is defined for this session type.
         if not attr.in_resource(self.session_type):
-            return constants.StatusCode.error_nonsupported_attribute
+            return StatusCode.error_nonsupported_attribute
 
         # Check if writing the attribute is allowed.
         if not attr.write:
-            return constants.StatusCode.error_attribute_read_only
+            return StatusCode.error_attribute_read_only
 
         # First try to answer those attributes that are common to all session types
         # or user defined because they are not defined by the interface.
         if attribute in self.attrs:
             self.attrs[attribute] = attribute_state
-            return constants.StatusCode.success
+            return StatusCode.success
 
         elif attribute == constants.VI_ATTR_TMO_VALUE:
             try:
                 self.timeout = attribute_state
             except:
-                return constants.StatusCode.error_nonsupported_attribute_state
+                return StatusCode.error_nonsupported_attribute_state
 
-            return constants.StatusCode.success
+            return StatusCode.success
 
         # Dispatch to `_set_attribute`, which must be implemented by subclasses.
 
         try:
             return self._set_attribute(attribute, attribute_state)
         except ValueError:
-            return constants.StatusCode.error_nonsupported_attribute_state
+            return StatusCode.error_nonsupported_attribute_state
         except NotImplementedError:
             e = UnknownAttribute(attribute)
             logger.exception(str(e))
-            return constants.StatusCode.error_nonsupported_attribute
+            return StatusCode.error_nonsupported_attribute
         except UnknownAttribute as e:
             logger.exception(str(e))
-            return constants.StatusCode.error_nonsupported_attribute
+            return StatusCode.error_nonsupported_attribute
 
     def _read(self, reader, count, end_indicator_checker, suppress_end_en,
               termination_char, termination_char_en, timeout_exception):
@@ -323,7 +325,7 @@ class Session(compat.with_metaclass(abc.ABCMeta)):
             try:
                 current = reader().encode('ascii')
             except timeout_exception:
-                return out, constants.StatusCode.error_timeout
+                return out, StatusCode.error_timeout
 
             if current:
                 out += current
@@ -331,16 +333,16 @@ class Session(compat.with_metaclass(abc.ABCMeta)):
                 if end_indicator_received:
                     if not suppress_end_en:
                         # RULE 6.1.1
-                        return out, constants.StatusCode.success
+                        return out, StatusCode.success
                 else:
                     if termination_char_en and termination_char in current:
                         # RULE 6.1.2
                         # Return everything upto and including the termination character
-                        return out[:out.index(termination_char)+1], constants.StatusCode.success_termination_character_read
+                        return out[:out.index(termination_char)+1], StatusCode.success_termination_character_read
                     elif len(out) >= count:
                         # RULE 6.1.3
                         # Return at most the number of bytes requested
-                        return out[:count], constants.StatusCode.success_max_count_read
+                        return out[:count], StatusCode.success_max_count_read
 
             if time.time() - start > timeout:
-                return out, constants.StatusCode.error_timeout
+                return out, StatusCode.error_timeout
