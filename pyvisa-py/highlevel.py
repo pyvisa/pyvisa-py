@@ -22,6 +22,7 @@ from pyvisa.compat import integer_types, OrderedDict
 from . import sessions
 from .common import logger
 
+StatusCode = constants.StatusCode
 
 class PyVisaLibrary(highlevel.VisaLibraryBase):
     """A pure Python backend for PyVISA.
@@ -122,7 +123,7 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
                      extra=self._logging_extra)
 
         try:
-            ret_value = constants.StatusCode(ret_value)
+            ret_value = StatusCode(ret_value)
         except ValueError:
             pass
 
@@ -185,13 +186,13 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
         try:
             parsed = rname.parse_resource_name(resource_name)
         except rname.InvalidResourceName:
-            return 0, constants.StatusCode.error_invalid_resource_name
+            return 0, StatusCode.error_invalid_resource_name
 
         cls = sessions.Session.get_session_class(parsed.interface_type_const, parsed.resource_class)
 
         sess = cls(session, resource_name, parsed, open_timeout)
 
-        return self._register(sess), constants.StatusCode.success
+        return self._register(sess), StatusCode.success
 
     def close(self, session):
         """Closes the specified session, event, or find list.
@@ -207,7 +208,7 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
             if sess is not self:
                 sess.close()
         except KeyError:
-            return constants.StatusCode.error_invalid_object
+            return StatusCode.error_invalid_object
 
     def open_default_resource_manager(self):
         """This function returns a session to the Default Resource Manager resource.
@@ -217,7 +218,7 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
         :return: Unique logical identifier to a Default Resource Manager session, return value of the library call.
         :rtype: session, VISAStatus
         """
-        return self._register(self), constants.StatusCode.success
+        return self._register(self), StatusCode.success
 
     def list_resources(self, session, query='?*::INSTR'):
         """Returns a tuple of all connected devices matching query.
@@ -253,7 +254,7 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
         try:
             ret = self.sessions[session].read(count)
         except KeyError:
-            return 0, constants.StatusCode.error_invalid_object
+            return 0, StatusCode.error_invalid_object
 
         if ret[1] < 0:
             raise errors.VisaIOError(ret[1])
@@ -276,7 +277,7 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
         try:
             ret = self.sessions[session].write(data)
         except KeyError:
-            return 0, constants.StatusCode.error_invalid_object
+            return 0, StatusCode.error_invalid_object
 
         if ret[1] < 0:
             raise errors.VisaIOError(ret[1])
@@ -296,7 +297,7 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
         try:
             sess = self.sessions[session]
         except KeyError:
-            return None, constants.StatusCode.error_invalid_object
+            return None, StatusCode.error_invalid_object
 
         return sess.get_attribute(attribute)
 
@@ -315,7 +316,7 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
         try:
             sess = self.sessions[session]
         except KeyError:
-            return constants.StatusCode.error_invalid_object
+            return StatusCode.error_invalid_object
 
         return sess.set_attribute(attribute, attribute_state)
 
