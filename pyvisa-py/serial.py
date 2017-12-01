@@ -23,7 +23,6 @@ try:
 except ImportError as e:
     Session.register_unavailable(constants.InterfaceType.asrl, 'INSTR',
                                  'Please install PySerial (>=3.0) to use this resource type.\n%s' % e)
-
     raise
 
 

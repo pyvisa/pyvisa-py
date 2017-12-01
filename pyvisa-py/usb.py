@@ -15,6 +15,7 @@ from __future__ import division, unicode_literals, print_function, absolute_impo
 from pyvisa import constants, attributes
 
 from .sessions import Session, UnknownAttribute
+from . import common
 
 try:
     import usb
@@ -22,7 +23,6 @@ try:
 except ImportError as e:
     Session.register_unavailable(constants.InterfaceType.usb, 'INSTR',
                                  'Please install PyUSB to use this resource type.\n%s' % e)
-
     Session.register_unavailable(constants.InterfaceType.usb, 'RAW',
                                  'Please install PyUSB to use this resource type.\n%s' % e)
     raise
@@ -35,15 +35,10 @@ except Exception as e:
           'install a suitable backend like \n' \
           'libusb 0.1, libusb 1.0, libusbx, \n' \
           'libusb-win32 or OpenUSB.\n%s' % e
-
     Session.register_unavailable(constants.InterfaceType.usb, 'INSTR', msg)
-
     Session.register_unavailable(constants.InterfaceType.usb, 'RAW', msg)
-
     raise
 
-
-from . import common
 
 StatusCode = constants.StatusCode
 SUCCESS = StatusCode.success
