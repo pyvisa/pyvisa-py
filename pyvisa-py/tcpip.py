@@ -94,7 +94,7 @@ class TCPIPInstrSession(Session):
         else:
             term_char = flags = 0
 
-        # ToDo self.timeout shall be used as timeout, requires changes in read_fun
+        # TODO: self.timeout shall be used as timeout, requires changes in read_fun
         timeout, _ = self.get_attribute(constants.VI_ATTR_TMO_VALUE)
 
         read_data = bytearray()
@@ -136,7 +136,7 @@ class TCPIPInstrSession(Session):
 
         send_end, _ = self.get_attribute(constants.VI_ATTR_SEND_END_EN)
         chunk_size = 1024
-        # ToDo self.timeout shall be used as timeout, requires changes in read_fun
+        # TODO: self.timeout shall be used as timeout, requires changes in read_fun
         timeout, _ = self.get_attribute(constants.VI_ATTR_TMO_VALUE)
 
         try:

@@ -20,11 +20,9 @@ from .sessions import Session, UnknownAttribute
 try:
     import gpib
     from Gpib import Gpib
-
 except ImportError as e:
     Session.register_unavailable(constants.InterfaceType.gpib, 'INSTR',
                                  'Please install linux-gpib to use this resource type.\n%s' % e)
-
     raise
 
 
@@ -88,7 +86,6 @@ class GPIBSession(Session):
         return timeout, constants.StatusCode.success
 
     def _set_timeout(self, attribute, value):
-
         """
         linux-gpib only supports 18 discrete timeout values. If a timeout
         value other than these is requested, it will be rounded up to the closest
