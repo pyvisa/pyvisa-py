@@ -94,6 +94,7 @@ class TCPIPInstrSession(Session):
         else:
             term_char = flags = 0
 
+        # ToDo self.timeout shall be used as timeout, requires changes in read_fun
         timeout, _ = self.get_attribute(constants.VI_ATTR_TMO_VALUE)
 
         read_data = bytearray()
@@ -135,6 +136,7 @@ class TCPIPInstrSession(Session):
 
         send_end, _ = self.get_attribute(constants.VI_ATTR_SEND_END_EN)
         chunk_size = 1024
+        # ToDo self.timeout shall be used as timeout, requires changes in read_fun
         timeout, _ = self.get_attribute(constants.VI_ATTR_TMO_VALUE)
 
         try:
@@ -351,7 +353,7 @@ class TCPIPSocketSession(Session):
             self.attrs[attribute] = attributes.AttributesByID[attribute].default
 
     def _connect(self):
-        timeout = self.open_timeout / 1000.0 if self.open_timeout is not None else None
+        timeout = self.open_timeout / 1000.0 if self.open_timeout else 10.0
         try:
             self.interface = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.interface.setblocking(0)
@@ -379,7 +381,7 @@ class TCPIPSocketSession(Session):
                 return StatusCode.error_timeout
 
             # `select_timout` decreased to 50% of previous or min_select_timeout
-            select_timout = max(select_timout/2.0, min_select_timeout)
+            select_timout = max(select_timout / 2.0, min_select_timeout)
 
     def close(self):
         self.interface.close()
@@ -402,19 +404,17 @@ class TCPIPSocketSession(Session):
         term_char, _ = self.get_attribute(constants.VI_ATTR_TERMCHAR)
         term_byte = common.int_to_byte(term_char) if term_char else b''
         term_char_en, _ = self.get_attribute(constants.VI_ATTR_TERMCHAR_EN)
-        timeout, _ = self.get_attribute(constants.VI_ATTR_TMO_VALUE)
-        timeout /= 1000.0
         suppress_end_en, _ = self.get_attribute(constants.VI_ATTR_SUPPRESS_END_EN)
 
         read_fun = self.interface.recv
 
-        # minimum is in interval 1 - 100ms based on timeout
-        min_select_timeout = max(min(timeout/100.0, 0.1), 0.001)
+        # minimum is in interval 1 - 100ms based on timeout, 1sec if no timeut defined
+        min_select_timeout = 1 if self.timeout is None else max(min(self.timeout / 100.0, 0.1), 0.001)
         # initial 'select_timout' is half of timeout or max 2 secs (max blocking time).
         # min is from 'min_select_timeout'
-        select_timout = max(min(timeout/2.0, 2.0), min_select_timeout)
-        # time, when loop shall finish
-        finish_time = time.time() + timeout
+        select_timout = 2.0 if self.timeout is None else max(min(self.timeout / 2.0, 2.0), min_select_timeout)
+        # time, when loop shall finish, None means never ending story if no data arrives
+        finish_time = None if self.timeout is None else (time.time() + self.timeout)
         while True:
 
             # check, if we have any data received (from pending buffer or further reading)
@@ -450,14 +450,14 @@ class TCPIPSocketSession(Session):
                     self._pending_buffer = self._pending_buffer[count:]
                     return out, SUCCESS
     
-                if time.time() >= finish_time:
+                if finish_time and time.time() >= finish_time:
                     # reached timeout
                     out = bytes(self._pending_buffer[:count])
                     self._pending_buffer = self._pending_buffer[count:]
                     return out, StatusCode.error_timeout
 
                 # `select_timout` decreased to 50% of previous or min_select_timeout
-                select_timout = max(select_timout/2.0, min_select_timeout)
+                select_timout = max(select_timout / 2.0, min_select_timeout)
 
     def write(self, data):
         """Writes data to device or interface synchronously.

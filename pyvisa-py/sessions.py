@@ -313,8 +313,6 @@ class Session(compat.with_metaclass(abc.ABCMeta)):
         # NOTE: Some interfaces return not only a single byte but a complete block for each read
         # therefore we must handle the case that the termination character is in the middle of the  block
         # or that the maximum number of bytes is exceeded
-        timeout, _ = self.get_attribute(constants.VI_ATTR_TMO_VALUE)
-        timeout /= 1000.0
 
         # Make sure termination_char is a string
         try:
@@ -322,7 +320,7 @@ class Session(compat.with_metaclass(abc.ABCMeta)):
         except TypeError:
             pass
 
-        start = time.time()
+        finish_time = None if self.timeout is None else (time.time() + self.timeout)
         out = b''
         while True:
             try:
@@ -347,7 +345,7 @@ class Session(compat.with_metaclass(abc.ABCMeta)):
                         # Return at most the number of bytes requested
                         return out[:count], constants.StatusCode.success_max_count_read
 
-            if time.time() - start > timeout:
+            if finish_time and time.time() > finish_timeout:
                 return out, constants.StatusCode.error_timeout
 
     def _get_timeout(self, attribute_name):
