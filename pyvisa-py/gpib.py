@@ -73,8 +73,8 @@ class GPIBSession(Session):
         pad = self.parsed.primary_address
         self.handle = gpib.dev(int(minor), int(pad))
         self.interface = Gpib(self.handle)
-        attribute = getattr(constants, 'VI_ATTR_TMO_VALUE')
-        self.set_attribute(constants.VI_ATTR_TMO_VALUE, attributes.AttributesByID[attribute].default)
+        # force timeout setting to interface
+        self.set_attribute(constants.VI_ATTR_TMO_VALUE, attributes.AttributesByID[constants.VI_ATTR_TMO_VALUE].default)
 
     def _get_timeout(self, attribute):
 
