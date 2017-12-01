@@ -190,6 +190,24 @@ class Session(compat.with_metaclass(abc.ABCMeta)):
     def after_parsing(self):
         """Override this method to provide custom initialization code, to be
         called after the resourcename is properly parsed
+
+        ResourceSession can register resource specific attributes handling of them into self.attrs.
+        It is also possible to change handling of already registerd common attributes.
+       
+        For static (read only) values, simple readonly and also readwrite attributes simplified construction can be used:
+        `    self.attrs[constants.VI_ATTR_<NAME>] = 100`
+        or
+        `    self.attrs[constants.VI_ATTR_<NAME>] = <self.variable_name>`
+        
+        For more complex handling of attributes, it is possible to register getter and/or setter. When Null is used, NotSupported error is returned.
+        Getter has same signature as see Session._get_attribute and setter has same signature as see Session._set_attribute. (It is possible to register also 
+        see Session._get_attribute and see Session._set_attribute as getter/setter). Getter and Setter are registered as tupple.
+        For readwrite attribute:
+        `    self.attrs[constants.VI_ATTR_<NAME>] = (<getter_name>, <setter_name>)`
+        For readonly attribute:
+        `    self.attrs[constants.VI_ATTR_<NAME>] = (<getter_name>, None)`
+        For reusing of see Session._get_attribute and see Session._set_attribute
+        `    self.attrs[constants.VI_ATTR_<NAME>] = (self._get_attribute, self._set_attribute)`
         """
 
     def get_attribute(self, attribute):
@@ -216,8 +234,7 @@ class Session(compat.with_metaclass(abc.ABCMeta)):
         if not attr.read:
             raise Exception('Do not now how to handle write only attributes.')
 
-        # First try to answer those attributes that are common to all session types
-        # or user defined because they are not defined by the interface.
+        # First try to answer those attributes that are registered in self.attrs, see Session.after_parsing
         if attribute in self.attrs:
             value = self.attrs[attribute]
             status = constants.StatusCode.success
@@ -259,8 +276,7 @@ class Session(compat.with_metaclass(abc.ABCMeta)):
         if not attr.write:
             return constants.StatusCode.error_attribute_read_only
 
-        # First try to answer those attributes that are common to all session types
-        # or user defined because they are not defined by the interface.
+        # First try to answer those attributes that are registered in self.attrs, see Session.after_parsing
         if attribute in self.attrs:
             value = self.attrs[attribute]
             status = constants.StatusCode.success
