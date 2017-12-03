@@ -39,7 +39,7 @@ def _find_listeners():
 
 StatusCode = constants.StatusCode
 
-# linux-gpib timeout constants, in milliseconds. See GPIBSession._set_timeout.
+# linux-gpib timeout constants, in seconds. See GPIBSession._set_timeout.
 TIMETABLE = (0, 10e-6, 30e-6, 100e-6, 300e-6, 1e-3, 3e-3, 10e-3, 30e-3, 100e-3, 300e-3, 1.0, 3.0,
              10.0, 30.0, 100.0, 300.0, 1000.0)
 
