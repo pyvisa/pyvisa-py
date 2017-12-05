@@ -19,12 +19,10 @@ from . import common
 
 try:
     import serial
-    from serial import Serial
     from serial.tools.list_ports import comports
 except ImportError as e:
     Session.register_unavailable(constants.InterfaceType.asrl, 'INSTR',
                                  'Please install PySerial (>=3.0) to use this resource type.\n%s' % e)
-
     raise
 
 
@@ -62,37 +60,26 @@ class SerialSession(Session):
         if 'mock' in self.parsed:
             cls = self.parsed.mock
         else:
-            cls = Serial
+            cls = serial.Serial
 
-        self.interface = cls(port=self.parsed.board, timeout=2000, write_timeout=2000)
+        self.interface = cls(port=self.parsed.board, timeout=self.timeout, write_timeout=self.timeout)
 
         for name in ('ASRL_END_IN', 'ASRL_END_OUT', 'SEND_END_EN', 'TERMCHAR',
                     'TERMCHAR_EN', 'SUPPRESS_END_EN'):
             attribute = getattr(constants, 'VI_ATTR_' + name)
             self.attrs[attribute] = attributes.AttributesByID[attribute].default
 
-    @property
-    def timeout(self):
-        value = self.interface.timeout
+    def _get_timeout(self, attribute):
+        if self.interface:
+            self.timeout = self.interface.timeout
+        return super(SerialSession, self)._get_timeout(attribute)
 
-        if value is None:
-            return constants.VI_TMO_INFINITE
-        elif value == 0:
-            return constants.VI_TMO_IMMEDIATE
-        else:
-            return int(value * 1000)
-
-    @timeout.setter
-    def timeout(self, value):
-        if value == constants.VI_TMO_INFINITE:
-            value = None
-        elif value == constants.VI_TMO_IMMEDIATE:
-            value = 0
-        else:
-            value = value / 1000.
-
-        self.interface.timeout = value
-        self.interface.write_timeout = value
+    def _set_timeout(self, attribute, value):
+        status = super(SerialSession, self)._set_timeout(attribute, value)
+        if self.interface:
+            self.interface.timeout = self.timeout
+            self.interface.write_timeout = self.timeout
+        return status
 
     def close(self):
         self.interface.close()

@@ -15,6 +15,7 @@ from __future__ import division, unicode_literals, print_function, absolute_impo
 from pyvisa import constants, attributes
 
 from .sessions import Session, UnknownAttribute
+from . import common
 
 try:
     import usb
@@ -22,7 +23,6 @@ try:
 except ImportError as e:
     Session.register_unavailable(constants.InterfaceType.usb, 'INSTR',
                                  'Please install PyUSB to use this resource type.\n%s' % e)
-
     Session.register_unavailable(constants.InterfaceType.usb, 'RAW',
                                  'Please install PyUSB to use this resource type.\n%s' % e)
     raise
@@ -35,15 +35,10 @@ except Exception as e:
           'install a suitable backend like \n' \
           'libusb 0.1, libusb 1.0, libusbx, \n' \
           'libusb-win32 or OpenUSB.\n%s' % e
-
     Session.register_unavailable(constants.InterfaceType.usb, 'INSTR', msg)
-
     Session.register_unavailable(constants.InterfaceType.usb, 'RAW', msg)
-
     raise
 
-
-from . import common
 
 StatusCode = constants.StatusCode
 
@@ -51,8 +46,6 @@ class USBSession(Session):
     """Base class for drivers that communicate with usb devices
     via usb port using pyUSB
     """
-
-    timeout = 2000
 
     @staticmethod
     def list_resources():
@@ -74,24 +67,16 @@ class USBSession(Session):
 
         return 'via PyUSB (%s). Backend: %s' % (ver, backend)
 
-    @property
-    def timeout(self):
-        value = self.interface.timeout
+    def _get_timeout(self, attribute):
+        if self.interface:
+            self.timeout = self.interface.timeout
+        return super(USBSession, self)._get_timeout(attribute)
 
-        if value is None:
-            return constants.VI_TMO_INFINITE
-        elif value == 0:
-            return constants.VI_TMO_IMMEDIATE
-        else:
-            return value
-
-    @timeout.setter
-    def timeout(self, value):
-        if value == constants.VI_TMO_INFINITE:
-            value = None
-        elif value == constants.VI_TMO_IMMEDIATE:
-            value = 0
-        self.interface.timeout = value
+    def _set_timeout(self, attribute, value):
+        status = super(USBSession, self)._set_timeout(attribute, value)
+        if self.interface:
+            self.interface.timeout = self.timeout
+        return status
 
     def read(self, count):
         """Reads data from device or interface synchronously.

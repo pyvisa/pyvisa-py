@@ -173,6 +173,8 @@ class Session(compat.with_metaclass(abc.ABCMeta)):
 
         self.parsed = parsed
         self.open_timeout = open_timeout
+        #: get default timeout from constants
+        self.timeout = attributes.AttributesByID[constants.VI_ATTR_TMO_VALUE].default / 1000.0
 
         #: Used as a place holder for the object doing the lowlevel communication.
         self.interface = None
@@ -183,12 +185,33 @@ class Session(compat.with_metaclass(abc.ABCMeta)):
         self.attrs = {constants.VI_ATTR_RM_SESSION: resource_manager_session,
                       constants.VI_ATTR_RSRC_NAME: str(parsed),
                       constants.VI_ATTR_RSRC_CLASS: parsed.resource_class,
-                      constants.VI_ATTR_INTF_TYPE: parsed.interface_type}
+                      constants.VI_ATTR_INTF_TYPE: parsed.interface_type,
+                      constants.VI_ATTR_TMO_VALUE: (self._get_timeout, self._set_timeout)}
         self.after_parsing()
 
     def after_parsing(self):
         """Override this method to provide custom initialization code, to be
         called after the resourcename is properly parsed
+
+        ResourceSession can register resource specific attributes handling of them into self.attrs.
+        It is also possible to change handling of already registerd common attributes. List of attributes is available in pyvisa package:
+        * name is in constants module as: VI_ATTR_<NAME>
+        * validity of attribute for resource is defined module attributes, AttrVI_ATTR_<NAME>.resources
+       
+        For static (read only) values, simple readonly and also readwrite attributes simplified construction can be used:
+        `    self.attrs[constants.VI_ATTR_<NAME>] = 100`
+        or
+        `    self.attrs[constants.VI_ATTR_<NAME>] = <self.variable_name>`
+        
+        For more complex handling of attributes, it is possible to register getter and/or setter. When Null is used, NotSupported error is returned.
+        Getter has same signature as see Session._get_attribute and setter has same signature as see Session._set_attribute. (It is possible to register also 
+        see Session._get_attribute and see Session._set_attribute as getter/setter). Getter and Setter are registered as tupple.
+        For readwrite attribute:
+        `    self.attrs[constants.VI_ATTR_<NAME>] = (<getter_name>, <setter_name>)`
+        For readonly attribute:
+        `    self.attrs[constants.VI_ATTR_<NAME>] = (<getter_name>, None)`
+        For reusing of see Session._get_attribute and see Session._set_attribute
+        `    self.attrs[constants.VI_ATTR_<NAME>] = (self._get_attribute, self._set_attribute)`
         """
 
     def get_attribute(self, attribute):
@@ -215,13 +238,14 @@ class Session(compat.with_metaclass(abc.ABCMeta)):
         if not attr.read:
             raise Exception('Do not now how to handle write only attributes.')
 
-        # First try to answer those attributes that are common to all session types
-        # or user defined because they are not defined by the interface.
+        # First try to answer those attributes that are registered in self.attrs, see Session.after_parsing
         if attribute in self.attrs:
-            return self.attrs[attribute], StatusCode.success
-
-        elif attribute == constants.VI_ATTR_TMO_VALUE:
-            return self.timeout, StatusCode.success
+            value = self.attrs[attribute]
+            status = StatusCode.success
+            if isinstance(value, tuple):
+                getter = value[0]
+                value, status = getter(attribute) if getter else (0, StatusCode.error_nonsupported_attribute)
+            return value, status
 
         # Dispatch to `_get_attribute`, which must be implemented by subclasses.
 
@@ -256,19 +280,16 @@ class Session(compat.with_metaclass(abc.ABCMeta)):
         if not attr.write:
             return StatusCode.error_attribute_read_only
 
-        # First try to answer those attributes that are common to all session types
-        # or user defined because they are not defined by the interface.
+        # First try to answer those attributes that are registered in self.attrs, see Session.after_parsing
         if attribute in self.attrs:
-            self.attrs[attribute] = attribute_state
-            return StatusCode.success
-
-        elif attribute == constants.VI_ATTR_TMO_VALUE:
-            try:
-                self.timeout = attribute_state
-            except:
-                return StatusCode.error_nonsupported_attribute_state
-
-            return StatusCode.success
+            value = self.attrs[attribute]
+            status = StatusCode.success
+            if isinstance(value, tuple):
+                setter = value[1]
+                status = setter(attribute, attribute_state) if setter else StatusCode.error_nonsupported_attribute
+            else:
+                self.attrs[attribute] = attribute_state
+            return status
 
         # Dispatch to `_set_attribute`, which must be implemented by subclasses.
 
@@ -311,7 +332,6 @@ class Session(compat.with_metaclass(abc.ABCMeta)):
         # NOTE: Some interfaces return not only a single byte but a complete block for each read
         # therefore we must handle the case that the termination character is in the middle of the  block
         # or that the maximum number of bytes is exceeded
-        timeout = self.get_attribute(constants.VI_ATTR_TMO_VALUE)[0] / 1000.
 
         # Make sure termination_char is a string
         try:
@@ -319,7 +339,7 @@ class Session(compat.with_metaclass(abc.ABCMeta)):
         except TypeError:
             pass
 
-        start = time.time()
+        finish_time = None if self.timeout is None else (time.time() + self.timeout)
         out = b''
         while True:
             try:
@@ -344,5 +364,27 @@ class Session(compat.with_metaclass(abc.ABCMeta)):
                         # Return at most the number of bytes requested
                         return out[:count], StatusCode.success_max_count_read
 
-            if time.time() - start > timeout:
+            if finish_time and time.time() > finish_timeout:
                 return out, StatusCode.error_timeout
+
+    def _get_timeout(self, attribute):
+        """  Returns timeout calculated value from python way to VI_ way
+        """
+        if self.timeout is None:
+            ret_value = constants.VI_TMO_INFINITE
+        elif self.timeout == 0:
+            ret_value = constants.VI_TMO_IMMEDIATE
+        else:
+            ret_value = int(self.timeout * 1000.0)
+        return ret_value, StatusCode.success
+
+    def _set_timeout(self, attribute, value):
+        """  Sets timeout calculated value from python way to VI_ way
+        """
+        if value == constants.VI_TMO_INFINITE:
+            self.timeout = None
+        elif value == constants.VI_TMO_IMMEDIATE:
+            self.timeout = 0
+        else:
+            self.timeout = value / 1000.0
+        return StatusCode.success;
