@@ -291,11 +291,11 @@ class Session(compat.with_metaclass(abc.ABCMeta)):
         Corresponds to viRead function of the VISA library.
 
         :param reader: Function to read one or more bytes.
-        :type reader: () -> str
+        :type reader: () -> bytes
         :param count: Number of bytes to be read.
         :type count: int
         :param end_indicator_checker: Function to check if the message is complete.
-        :type end_indicator_checker: (str) -> boolean
+        :type end_indicator_checker: (bytes) -> boolean
         :param suppress_end_en: suppress end.
         :type suppress_end_en: bool
         :param termination_char: Stop reading if this character is received.
@@ -323,7 +323,7 @@ class Session(compat.with_metaclass(abc.ABCMeta)):
         out = b''
         while True:
             try:
-                current = reader().encode('ascii')
+                current = reader()
             except timeout_exception:
                 return out, StatusCode.error_timeout
 
