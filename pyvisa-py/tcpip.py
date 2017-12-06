@@ -32,11 +32,6 @@ class TCPIPInstrSession(Session):
 
     """
 
-    lock_timeout = 1000
-    client_id = None
-    link = None
-    max_recv_size = 1024
-
     @staticmethod
     def list_resources():
         # TODO: is there a way to get this?
@@ -47,6 +42,7 @@ class TCPIPInstrSession(Session):
         # TODO: lan_device_name not handled
         self.interface = vxi11.CoreClient(self.parsed.host_address, self.open_timeout)
 
+        self.max_recv_size = 1024
         self.lock_timeout = 10000
         self.client_id = random.getrandbits(31)
 
