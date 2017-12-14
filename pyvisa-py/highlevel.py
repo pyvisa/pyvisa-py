@@ -234,10 +234,8 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
 
         resources = rname.filter(resources, query)
 
-        if resources:
-            return resources
+        return resources
 
-        raise errors.VisaIOError(errors.StatusCode.error_resource_not_found.value)
 
     def read(self, session, count):
         """Reads data from device or interface synchronously.
