@@ -446,7 +446,7 @@ class RawTCPClient(Client):
     def do_call(self):
         call = self.packer.get_buf()
 
-        _sendrecord(self.sock, call, timeout = self.timeout)
+        _sendrecord(self.sock, call, timeout=self.timeout)
 
         reply = _recvrecord(self.sock, self.timeout)
         u = self.unpacker
