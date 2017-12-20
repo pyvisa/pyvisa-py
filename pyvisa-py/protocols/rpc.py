@@ -294,7 +294,7 @@ def sendfrag(sock, last, frag):
     sock.send(header + frag)
 
 
-def _sendrecord(sock, record, fragsize = None, timeout = None):
+def _sendrecord(sock, record, fragsize=None, timeout=None):
     logger.debug('Sending record through %s: %r', sock, record)
     if timeout is not None:
         r, w, x = select.select([], [sock], [], timeout)
@@ -316,7 +316,7 @@ def _sendrecord(sock, record, fragsize = None, timeout = None):
         record = record[fragsize:]
 
 
-def _recvrecord(sock, timeout, read_fun = None):
+def _recvrecord(sock, timeout, read_fun=None):
 
     record = bytearray()
     buffer = bytearray()
@@ -373,7 +373,7 @@ def _recvrecord(sock, timeout, read_fun = None):
                     wait_header = True
                     exp_length = 4
 
-def _connect(sock, host, port, timeout = 0):
+def _connect(sock, host, port, timeout=0):
         try:
             sock.setblocking(0)
             sock.connect_ex((host, port))
@@ -407,7 +407,7 @@ def _connect(sock, host, port, timeout = 0):
 class RawTCPClient(Client):
     """Client using TCP to a specific port.
     """
-    def __init__(self, host, prog, vers, port, open_timeout = 5000):
+    def __init__(self, host, prog, vers, port, open_timeout=5000):
         Client.__init__(self, host, prog, vers, port)
         self.connect((open_timeout / 1000.0) + 1.0)
         # self.timeout defaults higher than the default 2 second VISA timeout,
@@ -664,7 +664,7 @@ class PartialPortMapperClient(object):
 
 class TCPPortMapperClient(PartialPortMapperClient, RawTCPClient):
 
-    def __init__(self, host, open_timeout = 5000):
+    def __init__(self, host, open_timeout=5000):
         RawTCPClient.__init__(self, host, PMAP_PROG, PMAP_VERS, PMAP_PORT, open_timeout)
         PartialPortMapperClient.__init__(self)
 
@@ -686,7 +686,7 @@ class BroadcastUDPPortMapperClient(PartialPortMapperClient, RawBroadcastUDPClien
 class TCPClient(RawTCPClient):
     """A TCP Client that find their server through the Port mapper
     """
-    def __init__(self, host, prog, vers, open_timeout = 5000):
+    def __init__(self, host, prog, vers, open_timeout=5000):
         pmap = TCPPortMapperClient(host, open_timeout)
         port = pmap.get_port((prog, vers, IPPROTO_TCP, 0))
         pmap.close()
