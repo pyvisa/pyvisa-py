@@ -40,7 +40,8 @@ class TCPIPInstrSession(Session):
     def after_parsing(self):
         # TODO: board_number not handled
         # TODO: lan_device_name not handled
-        self.interface = vxi11.CoreClient(self.parsed.host_address, self.open_timeout)
+        self.interface = vxi11.CoreClient(self.parsed.host_address,
+                                          self.open_timeout)
 
         self.max_recv_size = 1024
         self.lock_timeout = 10000
@@ -57,7 +58,8 @@ class TCPIPInstrSession(Session):
 
         for name in ('SEND_END_EN', 'TERMCHAR', 'TERMCHAR_EN'):
             attribute = getattr(constants, 'VI_ATTR_' + name)
-            self.attrs[attribute] = attributes.AttributesByID[attribute].default
+            self.attrs[attribute] =\
+                attributes.AttributesByID[attribute].default
 
     def close(self):
         try:
@@ -127,7 +129,8 @@ class TCPIPInstrSession(Session):
 
         :param data: data to be written.
         :type data: str
-        :return: Number of bytes actually transferred, return value of the library call.
+        :return: Number of bytes actually transferred, return value of the
+            library call.
         :rtype: int, VISAStatus
         """
 
@@ -174,7 +177,8 @@ class TCPIPInstrSession(Session):
         Use to implement custom logic for attributes.
 
         :param attribute: Resource attribute for which the state query is made
-        :return: The state of the queried attribute for a specified resource, return value of the library call.
+        :return: The state of the queried attribute for a specified resource,
+            return value of the library call.
         :rtype: (unicode | str | list | int, VISAStatus)
         """
 
@@ -206,8 +210,10 @@ class TCPIPInstrSession(Session):
 
         Corresponds to viSetAttribute function of the VISA library.
 
-        :param attribute: Attribute for which the state is to be modified. (Attributes.*)
-        :param attribute_state: The state of the attribute to be set for the specified object.
+        :param attribute: Attribute for which the state is to be modified.
+            (Attributes.*)
+        :param attribute_state: The state of the attribute to be set for the
+            specified object.
         :return: return value of the library call.
         :rtype: VISAStatus
         """
@@ -219,7 +225,8 @@ class TCPIPInstrSession(Session):
 
         Corresponds to viAssertTrigger function of the VISA library.
 
-        :param protocol: Trigger protocol to use during assertion. (Constants.PROT*)
+        :param protocol: Trigger protocol to use during assertion.
+            (Constants.PROT*)
         :return: return value of the library call.
         :rtype: VISAStatus
         """
@@ -275,11 +282,15 @@ class TCPIPInstrSession(Session):
 
         Corresponds to viLock function of the VISA library.
 
-        :param lock_type: Specifies the type of lock requested, either Constants.EXCLUSIVE_LOCK or Constants.SHARED_LOCK.
-        :param timeout: Absolute time period (in milliseconds) that a resource waits to get unlocked by the
-                        locking session before returning an error.
-        :param requested_key: This parameter is not used and should be set to VI_NULL when lockType is VI_EXCLUSIVE_LOCK.
-        :return: access_key that can then be passed to other sessions to share the lock, return value of the library call.
+        :param lock_type: Specifies the type of lock requested, either
+            Constants.EXCLUSIVE_LOCK or Constants.SHARED_LOCK.
+        :param timeout: Absolute time period (in milliseconds) that a resource
+            waits to get unlocked by the locking session before returning an
+            error.
+        :param requested_key: This parameter is not used and should be set to
+            VI_NULL when lockType is VI_EXCLUSIVE_LOCK.
+        :return: access_key that can then be passed to other sessions to share
+            the lock, return value of the library call.
         :rtype: str, VISAStatus
         """
 
@@ -309,15 +320,16 @@ class TCPIPInstrSession(Session):
 
 @Session.register(constants.InterfaceType.tcpip, 'SOCKET')
 class TCPIPSocketSession(Session):
-    """A TCPIP Session that uses the network standard library to do the low level communication.
+    """A TCPIP Session that uses the network standard library to do the low
+    level communication.
+
     """
     # Details about implementation:
-    # On Windows, select is not interrupted by KeyboardInterrupt, to avoid blocking
-    # for very long time, we use a decreasing timeout in select
-    # minimum select timeout to avoid too short select interval is also calculated
-    # and select timeout is not lower that that minimum timeout
+    # On Windows, select is not interrupted by KeyboardInterrupt, to avoid
+    # blocking for very long time, we use a decreasing timeout in select
+    # minimum select timeout to avoid too short select interval is also
+    # calculated and select timeout is not lower that that minimum timeout
     # Tis is valid for connect and read operations
-
 
     @staticmethod
     def list_resources():
@@ -333,28 +345,33 @@ class TCPIPSocketSession(Session):
             raise Exception("could not connect: {0}".format(str(ret_status)))
 
         self.max_recv_size = 4096
-        # This buffer is used to store the bytes that appeared after termination char
+        # This buffer is used to store the bytes that appeared after
+        # termination char
         self._pending_buffer = bytearray()
 
         self.attrs[constants.VI_ATTR_TCPIP_ADDR] = self.parsed.host_address
         self.attrs[constants.VI_ATTR_TCPIP_PORT] = self.parsed.port
         self.attrs[constants.VI_ATTR_INTF_NUM] = self.parsed.board
-        self.attrs[constants.VI_ATTR_TCPIP_NODELAY] = (self._get_tcpip_nodelay, self._set_attribute)
+        self.attrs[constants.VI_ATTR_TCPIP_NODELAY] = (self._get_tcpip_nodelay,
+                                                       self._set_attribute)
         self.attrs[constants.VI_ATTR_TCPIP_HOSTNAME] = ''
-        self.attrs[constants.VI_ATTR_TCPIP_KEEPALIVE] = (self._get_tcpip_keepalive, self._set_tcpip_keepalive)
+        self.attrs[constants.VI_ATTR_TCPIP_KEEPALIVE] = \
+            (self._get_tcpip_keepalive, self._set_tcpip_keepalive)
         # to use default as ni visa driver (NI-VISA 15.0)
         self.attrs[constants.VI_ATTR_SUPPRESS_END_EN] = True
 
         for name in ('TERMCHAR', 'TERMCHAR_EN'):
             attribute = getattr(constants, 'VI_ATTR_' + name)
-            self.attrs[attribute] = attributes.AttributesByID[attribute].default
+            self.attrs[attribute] =\
+                attributes.AttributesByID[attribute].default
 
     def _connect(self):
         timeout = self.open_timeout / 1000.0 if self.open_timeout else 10.0
         try:
             self.interface = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.interface.setblocking(0)
-            self.interface.connect_ex((self.parsed.host_address, int(self.parsed.port)))
+            self.interface.connect_ex((self.parsed.host_address,
+                                       int(self.parsed.port)))
         except Exception as e:
             raise Exception("could not connect: {0}".format(str(e)))
         finally:
@@ -362,14 +379,15 @@ class TCPIPSocketSession(Session):
 
         # minimum is in interval 100 - 500ms based on timeout
         min_select_timeout = max(min(timeout/10.0, 0.5), 0.1)
-        # initial 'select_timout' is half of timeout or max 2 secs (max blocking time).
-        # min is from 'min_select_timeout'
+        # initial 'select_timout' is half of timeout or max 2 secs
+        # (max blocking time). min is from 'min_select_timeout'
         select_timout = max(min(timeout/2.0, 2.0), min_select_timeout)
         # time, when loop shall finish
         finish_time = time.time() + timeout
         while True:
             # use select to wait for socket ready, max `select_timout` seconds
-            r, w, x = select.select([self.interface], [self.interface], [], select_timout)
+            r, w, x = select.select([self.interface], [self.interface], [],
+                                    select_timout)
             if self.interface in r or self.interface in w:
                 return StatusCode.success
 
@@ -377,7 +395,8 @@ class TCPIPSocketSession(Session):
                 # reached timeout
                 return StatusCode.error_timeout
 
-            # `select_timout` decreased to 50% of previous or min_select_timeout
+            # `select_timout` decreased to 50% of previous or
+            # min_select_timeout
             select_timout = max(select_timout / 2.0, min_select_timeout)
 
     def close(self):
@@ -401,20 +420,27 @@ class TCPIPSocketSession(Session):
         term_char, _ = self.get_attribute(constants.VI_ATTR_TERMCHAR)
         term_byte = common.int_to_byte(term_char) if term_char else b''
         term_char_en, _ = self.get_attribute(constants.VI_ATTR_TERMCHAR_EN)
-        suppress_end_en, _ = self.get_attribute(constants.VI_ATTR_SUPPRESS_END_EN)
+        suppress_end_en, _ =\
+            self.get_attribute(constants.VI_ATTR_SUPPRESS_END_EN)
 
         read_fun = self.interface.recv
 
-        # minimum is in interval 1 - 100ms based on timeout, 1sec if no timeut defined
-        min_select_timeout = 1 if self.timeout is None else max(min(self.timeout / 100.0, 0.1), 0.001)
-        # initial 'select_timout' is half of timeout or max 2 secs (max blocking time).
-        # min is from 'min_select_timeout'
-        select_timout = 2.0 if self.timeout is None else max(min(self.timeout / 2.0, 2.0), min_select_timeout)
-        # time, when loop shall finish, None means never ending story if no data arrives
-        finish_time = None if self.timeout is None else (time.time() + self.timeout)
+        # minimum is in interval 1 - 100ms based on timeout, 1sec if no timeout
+        # defined
+        min_select_timeout = (1 if self.timeout is None else
+                              max(min(self.timeout / 100.0, 0.1), 0.001))
+        # initial 'select_timout' is half of timeout or max 2 secs
+        # (max blocking time). min is from 'min_select_timeout'
+        select_timout = (2.0 if self.timeout is None else
+                         max(min(self.timeout / 2.0, 2.0), min_select_timeout))
+        # time, when loop shall finish, None means never ending story if no
+        # data arrives
+        finish_time = (None if self.timeout is None else
+                       (time.time() + self.timeout))
         while True:
 
-            # check, if we have any data received (from pending buffer or further reading)
+            # check, if we have any data received (from pending buffer or
+            # further reading)
             if term_char_en and term_byte in self._pending_buffer:
                 term_byte_index = self._pending_buffer.index(term_byte) + 1
                 if term_byte_index > count:
@@ -442,7 +468,8 @@ class TCPIPSocketSession(Session):
             if not read_data:
                 # can't read chunk or timeout
                 if self._pending_buffer and not suppress_end_en:
-                    # we have some data without termchar but no further data expected
+                    # we have some data without termchar but no further data
+                    # expected
                     out = bytes(self._pending_buffer[:count])
                     self._pending_buffer = self._pending_buffer[count:]
                     return out, StatusCode.succes
@@ -453,7 +480,8 @@ class TCPIPSocketSession(Session):
                     self._pending_buffer = self._pending_buffer[count:]
                     return out, StatusCode.error_timeout
 
-                # `select_timout` decreased to 50% of previous or min_select_timeout
+                # `select_timout` decreased to 50% of previous or
+                # min_select_timeout
                 select_timout = max(select_timout / 2.0, min_select_timeout)
 
     def write(self, data):
@@ -463,7 +491,8 @@ class TCPIPSocketSession(Session):
 
         :param data: data to be written.
         :type data: str
-        :return: Number of bytes actually transferred, return value of the library call.
+        :return: Number of bytes actually transferred, return value of the
+            library call.
         :rtype: int, VISAStatus
         """
 
@@ -494,26 +523,32 @@ class TCPIPSocketSession(Session):
 
     def _get_tcpip_nodelay(self, attribute):
         if self.interface:
-           value = self.interface.getsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY)
-           return constants.VI_TRUE if value == 1 else constants.VI_FALSE, StatusCode.succes
+            value = self.interface.getsockopt(socket.IPPROTO_TCP,
+                                              socket.TCP_NODELAY)
+            return (constants.VI_TRUE if value == 1 else
+                    constants.VI_FALSE, StatusCode.succes)
         return 0, StatusCode.error_nonsupported_attribute
 
     def _set_tcpip_nodelay(self, attribute, attribute_state):
         if self.interface:
-           self.interface.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1 if attribute_state else 0)
-           return StatusCode.succes
+            self.interface.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY,
+                                      1 if attribute_state else 0)
+            return StatusCode.succes
         return 0, StatusCode.error_nonsupported_attribute
 
     def _get_tcpip_keepalive(self, attribute):
         if self.interface:
-           value = self.interface.getsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE)
-           return constants.VI_TRUE if value == 1 else constants.VI_FALSE, StatusCode.succes
+            value = self.interface.getsockopt(socket.SOL_SOCKET,
+                                              socket.SO_KEEPALIVE)
+            return (constants.VI_TRUE if value == 1 else
+                    constants.VI_FALSE, StatusCode.succes)
         return 0, StatusCode.error_nonsupported_attribute
 
     def _set_tcpip_keepalive(self, attribute, attribute_state):
         if self.interface:
-           self.interface.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1 if attribute_state else 0)
-           return StatusCode.succes
+            self.interface.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE,
+                                      1 if attribute_state else 0)
+            return StatusCode.succes
         return 0, StatusCode.error_nonsupported_attribute
 
     def _get_attribute(self, attribute):
@@ -522,7 +557,8 @@ class TCPIPSocketSession(Session):
         Use to implement custom logic for attributes.
 
         :param attribute: Resource attribute for which the state query is made
-        :return: The state of the queried attribute for a specified resource, return value of the library call.
+        :return: The state of the queried attribute for a specified resource,
+            return value of the library call.
         :rtype: (unicode | str | list | int, VISAStatus)
         """
         raise UnknownAttribute(attribute)
@@ -532,8 +568,10 @@ class TCPIPSocketSession(Session):
 
         Corresponds to viSetAttribute function of the VISA library.
 
-        :param attribute: Attribute for which the state is to be modified. (Attributes.*)
-        :param attribute_state: The state of the attribute to be set for the specified object.
+        :param attribute: Attribute for which the state is to be modified.
+            (Attributes.*)
+        :param attribute_state: The state of the attribute to be set for the
+            specified object.
         :return: return value of the library call.
         :rtype: VISAStatus
         """
