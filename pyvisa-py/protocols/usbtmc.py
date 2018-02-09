@@ -58,13 +58,16 @@ class Request(enum.IntEnum):
     indicator_pulse = 64
 
 
-def find_tmc_devices(vendor=None, product=None, serial_number=None, custom_match=None, **kwargs):
+def find_tmc_devices(vendor=None, product=None, serial_number=None,
+                     custom_match=None, **kwargs):
     """Find connected USBTMC devices. See usbutil.find_devices for more info.
+
     """
     def is_usbtmc(dev):
         if custom_match and not custom_match(dev):
             return False
-        return bool(find_interfaces(dev, bInterfaceClass=0xfe, bInterfaceSubClass=3))
+        return bool(find_interfaces(dev, bInterfaceClass=0xfe,
+                                    bInterfaceSubClass=3))
 
     return find_devices(vendor, product, serial_number, is_usbtmc, **kwargs)
 

@@ -86,8 +86,9 @@ Now:
 Are all VISA attributes and methods implemented?
 ------------------------------------------------
 
-No. We have implemented those attributes and methods that are most commonly needed.
-We would like to reach feature parity. If there is something that you need, let us know.
+No. We have implemented those attributes and methods that are most commonly
+needed. We would like to reach feature parity. If there is something that you
+need, let us know.
 
 
 Why are you developing this?
@@ -100,9 +101,9 @@ We wanted to provide a compatible alternative.
 Why not using LibreVISA?
 ------------------------
 
-LibreVISA_ is still young. However, you can already use it with the NI backend as it
-has the same API. We think that PyVISA-py is easier to hack and we can quickly
-reach feature parity with NI-VISA for message-based instruments.
+LibreVISA_ is still young. However, you can already use it with the NI backend
+as it has the same API. We think that PyVISA-py is easier to hack and we can
+quickly reach feature parity with NI-VISA for message-based instruments.
 
 
 Why putting PyVISA in the middle?
