@@ -77,11 +77,11 @@ class USBRawDevice(USBRaw):
 
         raw_read = super(USBRawDevice, self).read
 
-        received = b''
+        received = bytearray()
 
         while not len(received) >= size:
             resp = raw_read(self.RECV_CHUNK)
 
-            received += resp
+            received.extend(resp)
 
-        return received
+        return bytes(received)

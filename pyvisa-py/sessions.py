@@ -344,7 +344,7 @@ class Session(compat.with_metaclass(abc.ABCMeta)):
 
         finish_time = (None if self.timeout is None else
                        (time.time() + self.timeout))
-        out = b''
+        out = bytearray()
         while True:
             try:
                 current = reader()
@@ -352,26 +352,27 @@ class Session(compat.with_metaclass(abc.ABCMeta)):
                 return out, StatusCode.error_timeout
 
             if current:
-                out += current
+                out.extend(current)
                 end_indicator_received = end_indicator_checker(current)
                 if end_indicator_received:
                     if not suppress_end_en:
                         # RULE 6.1.1
-                        return out, StatusCode.success
+                        return bytes(out), StatusCode.success
                 else:
                     if termination_char_en and termination_char in current:
                         # RULE 6.1.2
                         # Return everything upto and including the termination
                         # character
-                        return (out[:out.index(termination_char)+1],
+                        return (bytes(out[:out.index(termination_char)+1]),
                                 StatusCode.success_termination_character_read)
                     elif len(out) >= count:
                         # RULE 6.1.3
                         # Return at most the number of bytes requested
-                        return out[:count], StatusCode.success_max_count_read
+                        return (bytes(out[:count]),
+                                StatusCode.success_max_count_read)
 
             if finish_time and time.time() > finish_time:
-                return out, StatusCode.error_timeout
+                return bytes(out), StatusCode.error_timeout
 
     def _get_timeout(self, attribute):
         """  Returns timeout calculated value from python way to VI_ way
