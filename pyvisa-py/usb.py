@@ -12,19 +12,20 @@
 
 from __future__ import division, unicode_literals, print_function, absolute_import
 
+import logging
 from pyvisa import constants, attributes
 
 from .sessions import Session, UnknownAttribute
-from . import common
 
 try:
     import usb
     from .protocols import usbtmc, usbutil, usbraw
 except ImportError as e:
-    Session.register_unavailable(constants.InterfaceType.usb, 'INSTR',
-                                 'Please install PyUSB to use this resource type.\n%s' % e)
-    Session.register_unavailable(constants.InterfaceType.usb, 'RAW',
-                                 'Please install PyUSB to use this resource type.\n%s' % e)
+    msg = 'Please install PyUSB to use this resource type.\n%s'
+    Session.register_unavailable(constants.InterfaceType.usb,
+                                 'INSTR', msg % e)
+    Session.register_unavailable(constants.InterfaceType.usb,
+                                 'RAW', msg % e)
     raise
 
 try:
@@ -41,6 +42,7 @@ except Exception as e:
 
 
 StatusCode = constants.StatusCode
+
 
 class USBSession(Session):
     """Base class for drivers that communicate with usb devices
@@ -149,6 +151,7 @@ class USBSession(Session):
 
         raise UnknownAttribute(attribute)
 
+
 @Session.register(constants.InterfaceType.usb, 'INSTR')
 class USBInstrSession(USBSession):
     """Base class for drivers that communicate with instruments
@@ -161,15 +164,30 @@ class USBInstrSession(USBSession):
         fmt = 'USB%(board)s::%(manufacturer_id)s::%(model_code)s::' \
               '%(serial_number)s::%(usb_interface_number)s::INSTR'
         for dev in usbtmc.find_tmc_devices():
-            intfc = usbutil.find_interfaces(dev, bInterfaceClass=0xfe, bInterfaceSubClass=3)
+            intfc = usbutil.find_interfaces(dev, bInterfaceClass=0xfe,
+                                            bInterfaceSubClass=3)
             try:
                 intfc = intfc[0].index
             except (IndexError, AttributeError):
                 intfc = 0
+
+            try:
+                serial = dev.serial_number
+            except NotImplementedError:
+                logger = logging.getLogger(__name__)
+                msg = ('Found a device whose serial number cannot be read.'
+                       ' The partial VISA resource name is: ' + fmt)
+                logger.warning(msg, dict(board=0,
+                                         manufacturer_id=dev.idVendor,
+                                         model_code=dev.idProduct,
+                                         serial_number='???',
+                                         usb_interface_number=intfc))
+                continue
+
             out.append(fmt % dict(board=0,
                                   manufacturer_id=dev.idVendor,
                                   model_code=dev.idProduct,
-                                  serial_number=dev.serial_number,
+                                  serial_number=serial,
                                   usb_interface_number=intfc))
         return out
 
@@ -200,10 +218,24 @@ class USBRawSession(USBSession):
                 intfc = intfc[0].index
             except (IndexError, AttributeError):
                 intfc = 0
+
+            try:
+                serial = dev.serial_number
+            except NotImplementedError:
+                logger = logging.getLogger(__name__)
+                msg = ('Found a device whose serial number cannot be read.'
+                       ' The partial VISA resource name is: ' + fmt)
+                logger.warning(msg, dict(board=0,
+                                         manufacturer_id=dev.idVendor,
+                                         model_code=dev.idProduct,
+                                         serial_number='???',
+                                         usb_interface_number=intfc))
+                continue
+
             out.append(fmt % dict(board=0,
                                   manufacturer_id=dev.idVendor,
                                   model_code=dev.idProduct,
-                                  serial_number=dev.serial_number,
+                                  serial_number=serial,
                                   usb_interface_number=intfc))
         return out
 
