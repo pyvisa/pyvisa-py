@@ -18,18 +18,18 @@ from __future__ import division, unicode_literals, print_function, absolute_impo
 
 from .usbtmc import USBRaw as USBRaw
 
-import usb
-
-from .usbutil import find_devices, find_interfaces, find_endpoint, usb_find_desc
+from .usbutil import find_devices, find_interfaces
 
 
-def find_raw_devices(vendor=None, product=None, serial_number=None, custom_match=None, **kwargs):
+def find_raw_devices(vendor=None, product=None, serial_number=None,
+                     custom_match=None, **kwargs):
     """Find connected USB RAW devices. See usbutil.find_devices for more info.
     """
     def is_usbraw(dev):
         if custom_match and not custom_match(dev):
             return False
-        return bool(find_interfaces(dev, bInterfaceClass=0xFF, bInterfaceSubClass=0xFF))
+        return bool(find_interfaces(dev, bInterfaceClass=0xFF,
+                                    bInterfaceSubClass=0xFF))
 
     return find_devices(vendor, product, serial_number, is_usbraw, **kwargs)
 
@@ -66,7 +66,6 @@ class USBRawDevice(USBRaw):
 
         return bytes_sent
 
-
     def read(self, size):
         """Read raw bytes from the instrument.
 
@@ -77,13 +76,12 @@ class USBRawDevice(USBRaw):
         """
 
         raw_read = super(USBRawDevice, self).read
-        raw_write = super(USBRawDevice, self).write
 
-        received = b''
+        received = bytearray()
 
         while not len(received) >= size:
             resp = raw_read(self.RECV_CHUNK)
 
-            received += resp
+            received.extend(resp)
 
-        return received
+        return bytes(received)

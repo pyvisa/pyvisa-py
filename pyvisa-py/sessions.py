@@ -10,7 +10,8 @@
     :license: MIT, see LICENSE for more details.
 """
 
-from __future__ import division, unicode_literals, print_function, absolute_import
+from __future__ import (division, unicode_literals, print_function,
+                        absolute_import)
 
 import abc
 import time
@@ -21,6 +22,7 @@ from . import common
 
 
 StatusCode = constants.StatusCode
+
 
 class UnknownAttribute(Exception):
 
@@ -197,14 +199,14 @@ class Session(compat.with_metaclass(abc.ABCMeta)):
         It is also possible to change handling of already registerd common attributes. List of attributes is available in pyvisa package:
         * name is in constants module as: VI_ATTR_<NAME>
         * validity of attribute for resource is defined module attributes, AttrVI_ATTR_<NAME>.resources
-       
+
         For static (read only) values, simple readonly and also readwrite attributes simplified construction can be used:
         `    self.attrs[constants.VI_ATTR_<NAME>] = 100`
         or
         `    self.attrs[constants.VI_ATTR_<NAME>] = <self.variable_name>`
-        
+
         For more complex handling of attributes, it is possible to register getter and/or setter. When Null is used, NotSupported error is returned.
-        Getter has same signature as see Session._get_attribute and setter has same signature as see Session._set_attribute. (It is possible to register also 
+        Getter has same signature as see Session._get_attribute and setter has same signature as see Session._set_attribute. (It is possible to register also
         see Session._get_attribute and see Session._set_attribute as getter/setter). Getter and Setter are registered as tupple.
         For readwrite attribute:
         `    self.attrs[constants.VI_ATTR_<NAME>] = (<getter_name>, <setter_name>)`
@@ -329,18 +331,20 @@ class Session(compat.with_metaclass(abc.ABCMeta)):
         :rtype: bytes, constants.StatusCode
         """
 
-        # NOTE: Some interfaces return not only a single byte but a complete block for each read
-        # therefore we must handle the case that the termination character is in the middle of the  block
-        # or that the maximum number of bytes is exceeded
+        # NOTE: Some interfaces return not only a single byte but a complete
+        # block for each read therefore we must handle the case that the
+        # termination character is in the middle of the  block or that the
+        # maximum number of bytes is exceeded
 
         # Make sure termination_char is a string
         try:
-             termination_char = chr(termination_char)
+            termination_char = chr(termination_char)
         except TypeError:
             pass
 
-        finish_time = None if self.timeout is None else (time.time() + self.timeout)
-        out = b''
+        finish_time = (None if self.timeout is None else
+                       (time.time() + self.timeout))
+        out = bytearray()
         while True:
             try:
                 current = reader()
@@ -348,27 +352,31 @@ class Session(compat.with_metaclass(abc.ABCMeta)):
                 return out, StatusCode.error_timeout
 
             if current:
-                out += current
+                out.extend(current)
                 end_indicator_received = end_indicator_checker(current)
                 if end_indicator_received:
                     if not suppress_end_en:
                         # RULE 6.1.1
-                        return out, StatusCode.success
+                        return bytes(out), StatusCode.success
                 else:
                     if termination_char_en and termination_char in current:
                         # RULE 6.1.2
-                        # Return everything upto and including the termination character
-                        return out[:out.index(termination_char)+1], StatusCode.success_termination_character_read
+                        # Return everything upto and including the termination
+                        # character
+                        return (bytes(out[:out.index(termination_char)+1]),
+                                StatusCode.success_termination_character_read)
                     elif len(out) >= count:
                         # RULE 6.1.3
                         # Return at most the number of bytes requested
-                        return out[:count], StatusCode.success_max_count_read
+                        return (bytes(out[:count]),
+                                StatusCode.success_max_count_read)
 
-            if finish_time and time.time() > finish_timeout:
-                return out, StatusCode.error_timeout
+            if finish_time and time.time() > finish_time:
+                return bytes(out), StatusCode.error_timeout
 
     def _get_timeout(self, attribute):
         """  Returns timeout calculated value from python way to VI_ way
+
         """
         if self.timeout is None:
             ret_value = constants.VI_TMO_INFINITE

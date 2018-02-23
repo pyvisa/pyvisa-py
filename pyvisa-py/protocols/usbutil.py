@@ -120,10 +120,6 @@ AllCodes = {
 }
 
 
-class LantzUSBTimeoutError(usb.core.USBError):
-    pass
-
-
 def ep_attributes(ep):
     c = ep.bmAttributes
     attrs = []
@@ -136,7 +132,7 @@ def ep_attributes(ep):
         attrs.append('Bulk')
     elif tp == usb.ENDPOINT_TYPE_INTERRUPT:
         attrs.append('Interrupt')
-        
+
     sync = (c & 12) >> 2
     if sync == 0:
         attrs.append('No sync')
@@ -159,7 +155,8 @@ def ep_attributes(ep):
     return ', '.join(attrs)
 
 
-def find_devices(vendor=None, product=None, serial_number=None, custom_match=None, **kwargs):
+def find_devices(vendor=None, product=None, serial_number=None,
+                 custom_match=None, **kwargs):
     """Find connected USB devices matching certain keywords.
 
     Wildcards can be used for vendor, product and serial_number.

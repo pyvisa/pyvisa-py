@@ -27,8 +27,9 @@ StatusCode = constants.StatusCode
 
 @Session.register(constants.InterfaceType.tcpip, 'INSTR')
 class TCPIPInstrSession(Session):
-    """A TCPIP Session that uses the network standard library to do the low level communication
-    using VXI-11
+    """A TCPIP Session that uses the network standard library to do the low
+    level communication using VXI-11
+
     """
 
     lock_timeout = 1000
@@ -88,7 +89,6 @@ class TCPIPInstrSession(Session):
 
         if self.get_attribute(constants.VI_ATTR_TERMCHAR_EN)[0]:
             term_char, _ = self.get_attribute(constants.VI_ATTR_TERMCHAR)
-            term_char = str(term_char).encode('utf-8')[0]
             flags = vxi11.OP_FLAG_TERMCHAR_SET
         else:
             term_char = flags = 0
@@ -98,6 +98,8 @@ class TCPIPInstrSession(Session):
 
         read_data = bytearray()
         reason = 0
+        # Stop on end of message or when a termination character has been
+        # encountered.
         end_reason = vxi11.RX_END | vxi11.RX_CHR
         read_fun = self.interface.device_read
         status = StatusCode.success
@@ -448,7 +450,7 @@ class TCPIPSocketSession(Session):
                     out = bytes(self._pending_buffer[:count])
                     self._pending_buffer = self._pending_buffer[count:]
                     return out, StatusCode.succes
-    
+
                 if finish_time and time.time() >= finish_time:
                     # reached timeout
                     out = bytes(self._pending_buffer[:count])
