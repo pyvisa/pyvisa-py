@@ -40,6 +40,7 @@ class TCPIPInstrSession(Session):
     def after_parsing(self):
         # TODO: board_number not handled
         # TODO: lan_device_name not handled
+        # vx11 expect all timeouts to be expressed in ms and should be integers
         self.interface = vxi11.CoreClient(self.parsed.host_address,
                                           self.open_timeout)
 
@@ -47,8 +48,9 @@ class TCPIPInstrSession(Session):
         self.lock_timeout = 10000
         self.client_id = random.getrandbits(31)
 
-        error, link, abort_port, max_recv_size = self.interface.create_link(
-            self.client_id, 0, self.lock_timeout, self.parsed.lan_device_name)
+        error, link, abort_port, max_recv_size =\
+            self.interface.create_link(self.client_id, 0, self.lock_timeout,
+                                       self.parsed.lan_device_name)
 
         if error:
             raise Exception("error creating link: %d" % error)
@@ -91,9 +93,6 @@ class TCPIPInstrSession(Session):
         else:
             term_char = flags = 0
 
-        # TODO: self.timeout shall be used as timeout, requires changes in read_fun
-        timeout, _ = self.get_attribute(constants.VI_ATTR_TMO_VALUE)
-
         read_data = bytearray()
         reason = 0
         # Stop on end of message or when a termination character has been
@@ -102,8 +101,10 @@ class TCPIPInstrSession(Session):
         read_fun = self.interface.device_read
         status = StatusCode.success
 
+        timeout = int(self.timeout*1000) if self.timeout else 2**32-1
         while reason & end_reason == 0:
-            error, reason, data = read_fun(self.link, chunk_length, timeout,
+            error, reason, data = read_fun(self.link, chunk_length,
+                                           timeout,
                                            self.lock_timeout, flags, term_char)
 
             if error == vxi11.ErrorCodes.io_timeout:
@@ -136,8 +137,6 @@ class TCPIPInstrSession(Session):
 
         send_end, _ = self.get_attribute(constants.VI_ATTR_SEND_END_EN)
         chunk_size = 1024
-        # TODO: self.timeout shall be used as timeout, requires changes in read_fun
-        timeout, _ = self.get_attribute(constants.VI_ATTR_TMO_VALUE)
 
         try:
             if send_end:
@@ -148,6 +147,7 @@ class TCPIPInstrSession(Session):
             num = len(data)
             offset = 0
 
+            timeout = int(self.timeout*1000) if self.timeout else 2**32-1
             while num > 0:
                 if num <= chunk_size:
                     flags |= vxi11.OP_FLAG_END
@@ -155,7 +155,8 @@ class TCPIPInstrSession(Session):
                 block = data[offset:offset + self.max_recv_size]
 
                 error, size = self.interface.device_write(
-                    self.link, timeout, self.lock_timeout, flags, block)
+                    self.link, timeout, self.lock_timeout,
+                    flags, block)
 
                 if error == vxi11.ErrorCodes.io_timeout:
                     return offset, StatusCode.error_timeout
@@ -326,10 +327,11 @@ class TCPIPSocketSession(Session):
     """
     # Details about implementation:
     # On Windows, select is not interrupted by KeyboardInterrupt, to avoid
-    # blocking for very long time, we use a decreasing timeout in select
-    # minimum select timeout to avoid too short select interval is also
-    # calculated and select timeout is not lower that that minimum timeout
-    # Tis is valid for connect and read operations
+    # blocking for very long time, we use a decreasing timeout in select.
+    # A minimum select timeout which prevents using too short select interval
+    # is also calculated and select timeout is not lower that that minimum
+    # timeout. The absolute minimum is 1 ms as a consequence.
+    # This is valid for connect and read operations
 
     @staticmethod
     def list_resources():
