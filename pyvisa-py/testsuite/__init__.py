@@ -1,10 +1,11 @@
 # -*- coding: utf-8 -*-
 
-from __future__ import division, unicode_literals, print_function, absolute_import
+from __future__ import (division, unicode_literals, print_function,
+                        absolute_import)
 
 import os
 
-from pyvisa.compat import unittest
+import unittest
 
 
 def testsuite():
@@ -29,4 +30,3 @@ def run():
     """
     test_runner = unittest.TextTestRunner()
     return test_runner.run(testsuite())
-
