@@ -242,6 +242,7 @@ class Session(compat.with_metaclass(abc.ABCMeta)):
         `    self.attrs[constants.VI_ATTR_<NAME>] = (self._get_attribute,
                                                      self._set_attribute)`
         """
+        pass
 
     def get_attribute(self, attribute):
         """Get the value for a given VISA attribute for this session.
@@ -412,7 +413,7 @@ class Session(compat.with_metaclass(abc.ABCMeta)):
                 return bytes(out), StatusCode.error_timeout
 
     def _get_timeout(self, attribute):
-        """  Returns timeout calculated value from python way to VI_ way
+        """ Returns timeout calculated value from python way to VI_ way
 
         """
         if self.timeout is None:
@@ -424,7 +425,8 @@ class Session(compat.with_metaclass(abc.ABCMeta)):
         return ret_value, StatusCode.success
 
     def _set_timeout(self, attribute, value):
-        """  Sets timeout calculated value from python way to VI_ way
+        """ Sets timeout calculated value from python way to VI_ way
+
         """
         if value == constants.VI_TMO_INFINITE:
             self.timeout = None

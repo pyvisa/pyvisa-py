@@ -13,7 +13,8 @@
     :license: MIT, see LICENSE for more details.
 """
 
-from __future__ import division, unicode_literals, print_function, absolute_import
+from __future__ import (division, unicode_literals, print_function,
+                        absolute_import)
 
 import enum
 
@@ -68,6 +69,7 @@ class ErrorCodes(enum.IntEnum):
     io_error = 17
     abort = 23
     channel_already_established = 29
+
 
 # Flags
 OP_FLAG_WAIT_BLOCK = 1
@@ -142,7 +144,8 @@ class Vxi11Packer(rpc.Packer):
         self.pack_uint(lock_timeout)
 
     def pack_device_docmd_parms(self, params):
-        link, flags, io_timeout, lock_timeout, cmd, network_order, datasize, data_in = params
+        (link, flags, io_timeout, lock_timeout,
+         cmd, network_order, datasize, data_in) = params
         self.pack_int(link)
         self.pack_int(flags)
         self.pack_uint(io_timeout)
@@ -194,7 +197,8 @@ class CoreClient(rpc.TCPClient):
     def __init__(self, host, open_timeout=5000):
         self.packer = Vxi11Packer()
         self.unpacker = Vxi11Unpacker('')
-        super(CoreClient, self).__init__(host, DEVICE_CORE_PROG, DEVICE_CORE_VERS, open_timeout)
+        super(CoreClient, self).__init__(host, DEVICE_CORE_PROG,
+                                         DEVICE_CORE_VERS, open_timeout)
 
     def create_link(self, id, lock_device, lock_timeout, name):
         params = (id, lock_device, lock_timeout, name)
@@ -208,8 +212,10 @@ class CoreClient(rpc.TCPClient):
                               self.packer.pack_device_write_parms,
                               self.unpacker.unpack_device_write_resp)
 
-    def device_read(self, link, request_size, io_timeout, lock_timeout, flags, term_char):
-        params = (link, request_size, io_timeout, lock_timeout, flags, term_char)
+    def device_read(self, link, request_size, io_timeout, lock_timeout, flags,
+                    term_char):
+        params = (link, request_size, io_timeout, lock_timeout, flags,
+                  term_char)
         return self.make_call(DEVICE_READ, params,
                               self.packer.pack_device_read_parms,
                               self.unpacker.unpack_device_read_resp)
@@ -261,8 +267,10 @@ class CoreClient(rpc.TCPClient):
                               self.packer.pack_device_enable_srq_parms,
                               self.unpacker.unpack_device_error)
 
-    def device_docmd(self, link, flags, io_timeout, lock_timeout, cmd, network_order, datasize, data_in):
-        params = (link, flags, io_timeout, lock_timeout, cmd, network_order, datasize, data_in)
+    def device_docmd(self, link, flags, io_timeout, lock_timeout, cmd,
+                     network_order, datasize, data_in):
+        params = (link, flags, io_timeout, lock_timeout, cmd, network_order,
+                  datasize, data_in)
         return self.make_call(DEVICE_DOCMD, params,
                               self.packer.pack_device_docmd_parms,
                               self.unpacker.unpack_device_docmd_resp)
@@ -272,7 +280,8 @@ class CoreClient(rpc.TCPClient):
                               self.packer.pack_device_link,
                               self.unpacker.unpack_device_error)
 
-    def create_intr_chan(self, host_addr, host_port, prog_num, prog_vers, prog_family):
+    def create_intr_chan(self, host_addr, host_port, prog_num, prog_vers,
+                         prog_family):
         params = (host_addr, host_port, prog_num, prog_vers, prog_family)
         return self.make_call(CREATE_INTR_CHAN, params,
                               self.packer.pack_device_docmd_parms,
