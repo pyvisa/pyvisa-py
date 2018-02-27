@@ -30,8 +30,6 @@ __doc__ = long_description
 
 requirements = ['pyvisa>=1.8']
 
-if sys.version_info < (2, 7):
-    requirements.append('importlib')
 
 setup(name='PyVISA-py',
       description='Python VISA bindings for GPIB, RS232, and USB instruments',
@@ -57,10 +55,7 @@ setup(name='PyVISA-py',
         'Programming Language :: Python',
         'Topic :: Scientific/Engineering :: Interface Engine/Protocol Translator',
         'Topic :: Software Development :: Libraries :: Python Modules',
-        'Programming Language :: Python :: 2.6',
         'Programming Language :: Python :: 2.7',
-        'Programming Language :: Python :: 3.2',
-        'Programming Language :: Python :: 3.3',
         'Programming Language :: Python :: 3.4',
         'Programming Language :: Python :: 3.5',
         'Programming Language :: Python :: 3.6',

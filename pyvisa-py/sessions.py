@@ -49,7 +49,8 @@ class Session(compat.with_metaclass(abc.ABCMeta)):
 
     Just makes sure that common methods are defined and information is stored.
 
-    :param resource_manager_session: The session handle of the parent Resource Manager
+    :param resource_manager_session: The session handle of the parent Resource
+        Manager
     :param resource_name: The resource name.
     :param parsed: the parsed resource name (optional).
                    If not provided, the resource_name will be parsed.
@@ -62,7 +63,8 @@ class Session(compat.with_metaclass(abc.ABCMeta)):
         Use to implement custom logic for attributes.
 
         :param attribute: Resource attribute for which the state query is made
-        :return: The state of the queried attribute for a specified resource, return value of the library call.
+        :return: The state of the queried attribute for a specified resource,
+            return value of the library call.
         :rtype: (unicode | str | list | int, VISAStatus)
         """
 
@@ -83,7 +85,8 @@ class Session(compat.with_metaclass(abc.ABCMeta)):
         """Close the session. Use it to do final clean ups.
         """
 
-    #: Maps (Interface Type, Resource Class) to Python class encapsulating that resource.
+    #: Maps (Interface Type, Resource Class) to Python class encapsulating that
+    #: resource.
     #: dict[(Interface Type, Resource Class) , Session]
     _session_classes = dict()
 
@@ -126,7 +129,8 @@ class Session(compat.with_metaclass(abc.ABCMeta)):
         try:
             return cls._session_classes[(interface_type, resource_class)]
         except KeyError:
-            raise ValueError('No class registered for %s, %s' % (interface_type, resource_class))
+            raise ValueError('No class registered for %s, %s' %
+                             (interface_type, resource_class))
 
     @classmethod
     def register(cls, interface_type, resource_class):
@@ -137,17 +141,22 @@ class Session(compat.with_metaclass(abc.ABCMeta)):
         """
         def _internal(python_class):
             if (interface_type, resource_class) in cls._session_classes:
-                logger.warning('%s is already registered in the ResourceManager. '
-                               'Overwriting with %s' % ((interface_type, resource_class), python_class))
+                logger.warning('%s is already registered in the '
+                               'ResourceManager. Overwriting with %s',
+                               ((interface_type, resource_class), python_class)
+                               )
 
             python_class.session_type = (interface_type, resource_class)
-            cls._session_classes[(interface_type, resource_class)] = python_class
+            cls._session_classes[(interface_type,
+                                  resource_class)] = python_class
             return python_class
         return _internal
 
     @classmethod
     def register_unavailable(cls, interface_type, resource_class, msg):
-        """Register an unavailable session class for a given interface type and resource class.
+        """Register an unavailable session class for a given interface type and
+        resource class.
+
         raising a ValueError if called.
 
         :type interface_type: constants.InterfaceType
@@ -161,11 +170,13 @@ class Session(compat.with_metaclass(abc.ABCMeta)):
 
         if (interface_type, resource_class) in cls._session_classes:
             logger.warning('%s is already registered in the ResourceManager. '
-                           'Overwriting with unavailable %s' % ((interface_type, resource_class), msg))
+                           'Overwriting with unavailable %s',
+                           ((interface_type, resource_class), msg))
 
         cls._session_classes[(interface_type, resource_class)] = _internal
 
-    def __init__(self, resource_manager_session, resource_name, parsed=None, open_timeout=None):
+    def __init__(self, resource_manager_session, resource_name, parsed=None,
+                 open_timeout=None):
         if isinstance(resource_name, common.MockInterface):
             parsed = rname.parse_resource_name(resource_name.resource_name)
             parsed['mock'] = resource_name
@@ -176,53 +187,72 @@ class Session(compat.with_metaclass(abc.ABCMeta)):
         self.parsed = parsed
         self.open_timeout = open_timeout
         #: get default timeout from constants
-        self.timeout = attributes.AttributesByID[constants.VI_ATTR_TMO_VALUE].default / 1000.0
+        self.timeout =\
+            (attributes.AttributesByID[constants.VI_ATTR_TMO_VALUE].default /
+             1000.0)
 
-        #: Used as a place holder for the object doing the lowlevel communication.
+        #: Used as a place holder for the object doing the lowlevel
+        #: communication.
         self.interface = None
 
         #: Used for attributes not handled by the underlying interface.
-        #: Values are get or set automatically by get_attribute and set_attribute
+        #: Values are get or set automatically by get_attribute and
+        #: set_attribute
         #: Add your own by overriding after_parsing.
         self.attrs = {constants.VI_ATTR_RM_SESSION: resource_manager_session,
                       constants.VI_ATTR_RSRC_NAME: str(parsed),
                       constants.VI_ATTR_RSRC_CLASS: parsed.resource_class,
                       constants.VI_ATTR_INTF_TYPE: parsed.interface_type,
-                      constants.VI_ATTR_TMO_VALUE: (self._get_timeout, self._set_timeout)}
+                      constants.VI_ATTR_TMO_VALUE: (self._get_timeout,
+                                                    self._set_timeout)}
         self.after_parsing()
 
     def after_parsing(self):
         """Override this method to provide custom initialization code, to be
         called after the resourcename is properly parsed
 
-        ResourceSession can register resource specific attributes handling of them into self.attrs.
-        It is also possible to change handling of already registerd common attributes. List of attributes is available in pyvisa package:
+        ResourceSession can register resource specific attributes handling of
+        them into self.attrs.
+        It is also possible to change handling of already registerd common
+        attributes. List of attributes is available in pyvisa package:
         * name is in constants module as: VI_ATTR_<NAME>
-        * validity of attribute for resource is defined module attributes, AttrVI_ATTR_<NAME>.resources
+        * validity of attribute for resource is defined module attributes,
+        AttrVI_ATTR_<NAME>.resources
 
-        For static (read only) values, simple readonly and also readwrite attributes simplified construction can be used:
+        For static (read only) values, simple readonly and also readwrite
+        attributes simplified construction can be used:
         `    self.attrs[constants.VI_ATTR_<NAME>] = 100`
         or
         `    self.attrs[constants.VI_ATTR_<NAME>] = <self.variable_name>`
 
-        For more complex handling of attributes, it is possible to register getter and/or setter. When Null is used, NotSupported error is returned.
-        Getter has same signature as see Session._get_attribute and setter has same signature as see Session._set_attribute. (It is possible to register also
-        see Session._get_attribute and see Session._set_attribute as getter/setter). Getter and Setter are registered as tupple.
+        For more complex handling of attributes, it is possible to register
+        getter and/or setter. When Null is used, NotSupported error is
+        returned.
+        Getter has same signature as see Session._get_attribute and setter has
+        same signature as see Session._set_attribute. (It is possible to
+        register also see Session._get_attribute and see Session._set_attribute
+        as getter/setter). Getter and Setter are registered as tupple.
         For readwrite attribute:
-        `    self.attrs[constants.VI_ATTR_<NAME>] = (<getter_name>, <setter_name>)`
+        `    self.attrs[constants.VI_ATTR_<NAME>] = (<getter_name>,
+                                                     <setter_name>)`
         For readonly attribute:
         `    self.attrs[constants.VI_ATTR_<NAME>] = (<getter_name>, None)`
-        For reusing of see Session._get_attribute and see Session._set_attribute
-        `    self.attrs[constants.VI_ATTR_<NAME>] = (self._get_attribute, self._set_attribute)`
+        For reusing of see Session._get_attribute and see
+        Session._set_attribute
+        `    self.attrs[constants.VI_ATTR_<NAME>] = (self._get_attribute,
+                                                     self._set_attribute)`
         """
+        pass
 
     def get_attribute(self, attribute):
         """Get the value for a given VISA attribute for this session.
 
-        Does a few checks before and calls before dispatching to `_get_attribute`.
+        Does a few checks before and calls before dispatching to
+        `_get_attribute`.
 
         :param attribute: Resource attribute for which the state query is made
-        :return: The state of the queried attribute for a specified resource, return value of the library call.
+        :return: The state of the queried attribute for a specified resource,
+            return value of the library call.
         :rtype: (unicode | str | list | int, VISAStatus)
         """
 
@@ -240,16 +270,18 @@ class Session(compat.with_metaclass(abc.ABCMeta)):
         if not attr.read:
             raise Exception('Do not now how to handle write only attributes.')
 
-        # First try to answer those attributes that are registered in self.attrs, see Session.after_parsing
+        # First try to answer those attributes that are registered in
+        # self.attrs, see Session.after_parsing
         if attribute in self.attrs:
             value = self.attrs[attribute]
             status = StatusCode.success
             if isinstance(value, tuple):
                 getter = value[0]
-                value, status = getter(attribute) if getter else (0, StatusCode.error_nonsupported_attribute)
+                value, status = (getter(attribute) if getter else
+                                 (0, StatusCode.error_nonsupported_attribute))
             return value, status
 
-        # Dispatch to `_get_attribute`, which must be implemented by subclasses.
+        # Dispatch to `_get_attribute`, which must be implemented by subclasses
 
         try:
             return self._get_attribute(attribute)
@@ -258,9 +290,11 @@ class Session(compat.with_metaclass(abc.ABCMeta)):
             return 0, StatusCode.error_nonsupported_attribute
 
     def set_attribute(self, attribute, attribute_state):
-        """Set the attribute_state value for a given VISA attribute for this session.
+        """Set the attribute_state value for a given VISA attribute for this
+        session.
 
-        Does a few checks before and calls before dispatching to `_gst_attribute`.
+        Does a few checks before and calls before dispatching to
+        `_gst_attribute`.
 
         :param attribute: Resource attribute for which the state query is made.
         :param attribute_state: value.
@@ -282,18 +316,20 @@ class Session(compat.with_metaclass(abc.ABCMeta)):
         if not attr.write:
             return StatusCode.error_attribute_read_only
 
-        # First try to answer those attributes that are registered in self.attrs, see Session.after_parsing
+        # First try to answer those attributes that are registered in
+        # self.attrs, see Session.after_parsing
         if attribute in self.attrs:
             value = self.attrs[attribute]
             status = StatusCode.success
             if isinstance(value, tuple):
                 setter = value[1]
-                status = setter(attribute, attribute_state) if setter else StatusCode.error_nonsupported_attribute
+                status = (setter(attribute, attribute_state) if setter else
+                          StatusCode.error_nonsupported_attribute)
             else:
                 self.attrs[attribute] = attribute_state
             return status
 
-        # Dispatch to `_set_attribute`, which must be implemented by subclasses.
+        # Dispatch to `_set_attribute`, which must be implemented by subclasses
 
         try:
             return self._set_attribute(attribute, attribute_state)
@@ -317,7 +353,8 @@ class Session(compat.with_metaclass(abc.ABCMeta)):
         :type reader: () -> bytes
         :param count: Number of bytes to be read.
         :type count: int
-        :param end_indicator_checker: Function to check if the message is complete.
+        :param end_indicator_checker: Function to check if the message is
+            complete.
         :type end_indicator_checker: (bytes) -> boolean
         :param suppress_end_en: suppress end.
         :type suppress_end_en: bool
@@ -325,7 +362,8 @@ class Session(compat.with_metaclass(abc.ABCMeta)):
         :type suppress_end_en: int or str
         :param termination_char_en: termination char enabled.
         :type termination_char_en: boolean
-        :param: timeout_exception: Exception to capture time out for the given interface.
+        :param: timeout_exception: Exception to capture time out for the given
+            interface.
         :type: Exception
         :return: data read, return value of the library call.
         :rtype: bytes, constants.StatusCode
@@ -375,7 +413,7 @@ class Session(compat.with_metaclass(abc.ABCMeta)):
                 return bytes(out), StatusCode.error_timeout
 
     def _get_timeout(self, attribute):
-        """  Returns timeout calculated value from python way to VI_ way
+        """ Returns timeout calculated value from python way to VI_ way
 
         """
         if self.timeout is None:
@@ -387,7 +425,8 @@ class Session(compat.with_metaclass(abc.ABCMeta)):
         return ret_value, StatusCode.success
 
     def _set_timeout(self, attribute, value):
-        """  Sets timeout calculated value from python way to VI_ way
+        """ Sets timeout calculated value from python way to VI_ way
+
         """
         if value == constants.VI_TMO_INFINITE:
             self.timeout = None
@@ -395,4 +434,4 @@ class Session(compat.with_metaclass(abc.ABCMeta)):
             self.timeout = 0
         else:
             self.timeout = value / 1000.0
-        return StatusCode.success;
+        return StatusCode.success

@@ -38,7 +38,7 @@ Python has a couple of features that make it very interesting for measurement co
 Requirements
 ------------
 
-- Python (tested with 2.6 and 2.7, 3.2+)
+- Python (tested with 2.7, 3.4+)
 - PyVISA 1.6+
 
 Optionally
