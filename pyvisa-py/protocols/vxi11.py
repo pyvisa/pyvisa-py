@@ -17,6 +17,7 @@ from __future__ import (division, unicode_literals, print_function,
                         absolute_import)
 
 import enum
+import socket
 
 from . import rpc
 
@@ -208,17 +209,23 @@ class CoreClient(rpc.TCPClient):
 
     def device_write(self, link, io_timeout, lock_timeout, flags, data):
         params = (link, io_timeout, lock_timeout, flags, data)
-        return self.make_call(DEVICE_WRITE, params,
-                              self.packer.pack_device_write_parms,
-                              self.unpacker.unpack_device_write_resp)
+        try:
+            return self.make_call(DEVICE_WRITE, params,
+                                  self.packer.pack_device_write_parms,
+                                  self.unpacker.unpack_device_write_resp)
+        except socket.timeout as e:
+            return ErrorCodes.io_timeout, e.args[0], ''
 
     def device_read(self, link, request_size, io_timeout, lock_timeout, flags,
                     term_char):
         params = (link, request_size, io_timeout, lock_timeout, flags,
                   term_char)
-        return self.make_call(DEVICE_READ, params,
-                              self.packer.pack_device_read_parms,
-                              self.unpacker.unpack_device_read_resp)
+        try:
+            return self.make_call(DEVICE_READ, params,
+                                  self.packer.pack_device_read_parms,
+                                  self.unpacker.unpack_device_read_resp)
+        except socket.timeout as e:
+            return ErrorCodes.io_timeout, e.args[0], ''
 
     def device_read_stb(self, link, flags, lock_timeout, io_timeout):
         params = (link, flags, lock_timeout, io_timeout)

@@ -477,7 +477,8 @@ class RawTCPClient(Client):
 
 
 class RawUDPClient(Client):
-    """Client using UDP to a specific port
+    """Client using UDP to a specific port.
+
     """
     def __init__(self, host, prog, vers, port):
         Client.__init__(self, host, prog, vers, port)
