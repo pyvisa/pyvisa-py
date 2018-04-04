@@ -353,6 +353,9 @@ def _recvrecord(sock, timeout, read_fun=None):
             buffer.extend(read_data)
         elif timeout is not None and time.time() >= finish_time:
             # reached timeout
+            logger.debug(('Time out encountered in %s.'
+                          'Buffer %r, partial record %r'),
+                         sock, buffer, record)
             msg = ("socket.timeout: The instrument seems to have stopped "
                    "responding.")
             raise socket.timeout(msg)
@@ -363,7 +366,7 @@ def _recvrecord(sock, timeout, read_fun=None):
             continue
 
         if wait_header:
-            # need tofind header
+            # need to find header
             if len(buffer) >= exp_length:
                 header = buffer[:exp_length]
                 buffer = buffer[exp_length:]
