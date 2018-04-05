@@ -244,6 +244,27 @@ class Session(compat.with_metaclass(abc.ABCMeta)):
         """
         pass
 
+    def gpib_send_ifc(self):
+        """Pulse the interface clear line (IFC) for at least 100 microseconds.
+
+        Corresponds to viGpibSendIFC function of the VISA library.
+
+        :param session: Unique logical identifier to a session.
+        :return: return value of the library call.
+        :rtype: :class:`pyvisa.constants.StatusCode`
+        """
+
+    def clear(self):
+        """Clears a device.
+
+        Corresponds to viClear function of the VISA library.
+
+        :param session: Unique logical identifier to a session.
+        :return: return value of the library call.
+        :rtype: :class:`pyvisa.constants.StatusCode`
+        """
+
+
     def get_attribute(self, attribute):
         """Get the value for a given VISA attribute for this session.
 

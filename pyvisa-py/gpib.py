@@ -65,10 +65,15 @@ class GPIBSession(Session):
         return 'via Linux GPIB (%s)' % ver
 
     def after_parsing(self):
-        minor = self.parsed.board
-        pad = self.parsed.primary_address
-        self.handle = gpib.dev(int(minor), int(pad))
-        self.interface = Gpib(self.handle)
+        minor = int(self.parsed.board)
+        pad = int(self.parsed.primary_address)
+        sad = 0
+        timeout = 13
+        send_eoi = 1
+        eos_mode = 0
+        self.interface = Gpib(name = minor, pad = pad, sad = sad, timeout = timeout, send_eoi = send_eoi, eos_mode = eos_mode)
+        self.controller = Gpib(name = minor) # this is the bus controller device
+        self.handle = self.interface.id
         # force timeout setting to interface
         self.set_attribute(constants.VI_ATTR_TMO_VALUE, attributes.AttributesByID[constants.VI_ATTR_TMO_VALUE].default)
 
@@ -77,11 +82,11 @@ class GPIBSession(Session):
             # 0x3 is the hexadecimal reference to the IbaTMO (timeout) configuration
             # option in linux-gpib.
             gpib_timeout = self.interface.ask(3)
-            if gpib_timeout and gpib_timeout < len(TIMETABLE): 
+            if gpib_timeout and gpib_timeout < len(TIMETABLE):
                 self.timeout = TIMETABLE[gpib_timeout]
             else:
                 # value is 0 or out of range -> infinite
-               self.timeout = None
+                self.timeout = None
         return super(GPIBSession, self)._get_timeout(attribute)
 
     def _set_timeout(self, attribute, value):
@@ -136,7 +141,7 @@ class GPIBSession(Session):
         # 0x2000 = 8192 = END
         checker = lambda current: self.interface.ibsta() & 8192
 
-        reader = lambda: self.interface.read(count).encode('ascii')
+        reader = lambda: self.interface.read(count)
 
         return self._read(reader, count, checker, False, None, False, gpib.GpibError)
 
@@ -155,8 +160,9 @@ class GPIBSession(Session):
 
         try:
             self.interface.write(data)
+            count = self.interface.ibcnt() # number of bytes transmitted
 
-            return StatusCode.success
+            return count, StatusCode.success
 
         except gpib.GpibError:
             # 0x4000 = 16384 = TIMO
@@ -164,6 +170,42 @@ class GPIBSession(Session):
                 return 0, StatusCode.error_timeout
             else:
                 return 0, StatusCode.error_system_error
+
+    def clear(self):
+        """Clears a device.
+
+        Corresponds to viClear function of the VISA library.
+
+        :param session: Unique logical identifier to a session.
+        :return: return value of the library call.
+        :rtype: :class:`pyvisa.constants.StatusCode`
+        """
+
+        logger.debug('GPIB.device clear')
+
+        try:
+            self.interface.clear()
+            return SUCCESS
+        except:
+            return 0, StatusCode.error_system_error
+
+    def gpib_send_ifc(self):
+        """Pulse the interface clear line (IFC) for at least 100 microseconds.
+
+        Corresponds to viGpibSendIFC function of the VISA library.
+
+        :param session: Unique logical identifier to a session.
+        :return: return value of the library call.
+        :rtype: :class:`pyvisa.constants.StatusCode`
+        """
+
+        logger.debug('GPIB.interface clear')
+
+        try:
+            self.controller.interface_clear()
+            return SUCCESS
+        except:
+            return 0, StatusCode.error_system_error
 
     def _get_attribute(self, attribute):
         """Get the value for a given VISA attribute for this session.
