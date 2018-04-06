@@ -185,7 +185,7 @@ class GPIBSession(Session):
 
         try:
             self.interface.clear()
-            return SUCCESS
+            return 0, StatusCode.success
         except:
             return 0, StatusCode.error_system_error
 
@@ -203,7 +203,7 @@ class GPIBSession(Session):
 
         try:
             self.controller.interface_clear()
-            return SUCCESS
+            return 0, StatusCode.success
         except:
             return 0, StatusCode.error_system_error
 
