@@ -312,7 +312,7 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
         if ret[1] < 0:
             raise errors.VisaIOError(ret[1])
 
-        return ret[0] # return number of bytes written
+        return ret
 
     def get_attribute(self, session, attribute):
         """Retrieves the state of an attribute.
