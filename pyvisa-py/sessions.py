@@ -253,6 +253,7 @@ class Session(compat.with_metaclass(abc.ABCMeta)):
         :return: return value of the library call.
         :rtype: :class:`pyvisa.constants.StatusCode`
         """
+        return StatusCode.error_nonsupported_operation
 
     def clear(self):
         """Clears a device.
@@ -263,7 +264,7 @@ class Session(compat.with_metaclass(abc.ABCMeta)):
         :return: return value of the library call.
         :rtype: :class:`pyvisa.constants.StatusCode`
         """
-
+        return StatusCode.error_nonsupported_operation
 
     def get_attribute(self, attribute):
         """Get the value for a given VISA attribute for this session.

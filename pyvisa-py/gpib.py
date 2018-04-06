@@ -71,8 +71,8 @@ class GPIBSession(Session):
         timeout = 13
         send_eoi = 1
         eos_mode = 0
-        self.interface = Gpib(name = minor, pad = pad, sad = sad, timeout = timeout, send_eoi = send_eoi, eos_mode = eos_mode)
-        self.controller = Gpib(name = minor) # this is the bus controller device
+        self.interface = Gpib(name=minor, pad=pad, sad=sad, timeout=timeout, send_eoi=send_eoi, eos_mode=eos_mode)
+        self.controller = Gpib(name=minor) # this is the bus controller device
         self.handle = self.interface.id
         # force timeout setting to interface
         self.set_attribute(constants.VI_ATTR_TMO_VALUE, attributes.AttributesByID[constants.VI_ATTR_TMO_VALUE].default)
