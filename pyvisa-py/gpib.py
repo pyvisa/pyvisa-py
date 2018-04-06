@@ -10,7 +10,6 @@
     :license: MIT, see LICENSE for more details.
 """
 
-import sys
 from __future__ import division, unicode_literals, print_function, absolute_import
 from bisect import bisect
 
@@ -142,10 +141,7 @@ class GPIBSession(Session):
         # 0x2000 = 8192 = END
         checker = lambda current: self.interface.ibsta() & 8192
 
-        if sys.version_info >= (3, 0):
-            reader = lambda: self.interface.read(count)
-        else:
-            reader = lambda: self.interface.read(count).encode('ascii')
+        reader = lambda: self.interface.read(count)
 
         return self._read(reader, count, checker, False, None, False, gpib.GpibError)
 
