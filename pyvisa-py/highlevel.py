@@ -194,6 +194,38 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
 
         return self._register(sess), StatusCode.success
 
+    def clear(self, session):
+        """Clears a device.
+
+        Corresponds to viClear function of the VISA library.
+
+        :param session: Unique logical identifier to a session.
+        :return: return value of the library call.
+        :rtype: :class:`pyvisa.constants.StatusCode`
+        """
+        try:
+            self.sessions[session].clear()
+            return constants.StatusCode.success
+
+        except KeyError:
+            return constants.StatusCode.error_invalid_object
+
+    def gpib_send_ifc(self, session):
+        """Pulse the interface clear line (IFC) for at least 100 microseconds.
+
+        Corresponds to viGpibSendIFC function of the VISA library.
+
+        :param session: Unique logical identifier to a session.
+        :return: return value of the library call.
+        :rtype: :class:`pyvisa.constants.StatusCode`
+        """
+        try:
+            self.sessions[session].gpib_send_ifc()
+            return constants.StatusCode.success
+
+        except KeyError:
+            return constants.StatusCode.error_invalid_object
+
     def close(self, session):
         """Closes the specified session, event, or find list.
 
