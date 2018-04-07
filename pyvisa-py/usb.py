@@ -173,7 +173,7 @@ class USBInstrSession(USBSession):
 
             try:
                 serial = dev.serial_number
-            except NotImplementedError:
+            except (NotImplementedError, ValueError):
                 logger = logging.getLogger(__name__)
                 msg = ('Found a device whose serial number cannot be read.'
                        ' The partial VISA resource name is: ' + fmt)
@@ -221,7 +221,7 @@ class USBRawSession(USBSession):
 
             try:
                 serial = dev.serial_number
-            except NotImplementedError:
+            except (NotImplementedError, ValueError):
                 logger = logging.getLogger(__name__)
                 msg = ('Found a device whose serial number cannot be read.'
                        ' The partial VISA resource name is: ' + fmt)
