@@ -244,12 +244,39 @@ class Session(compat.with_metaclass(abc.ABCMeta)):
         """
         pass
 
+    def gpib_command(self, data):
+        """Write GPIB command byte on the bus.
+
+        Corresponds to viGpibCommand function of the VISA library.
+        See: https://linux-gpib.sourceforge.io/doc_html/gpib-protocol.html#REFERENCE-COMMAND-BYTES
+
+        :param commandByte: command byte to send
+        :type commandByte: int, must be [0 255]
+        :return: return value of the library call
+        :rtype: :class:`pyvisa.constants.StatusCode`
+        """
+        try:
+            return self.sessions[session].gpib_command(data)
+
+        except KeyError:
+            return constants.StatusCode.error_invalid_object
+
+    def assert_trigger(self, protocol):
+        """Asserts software or hardware trigger.
+
+        Corresponds to viAssertTrigger function of the VISA library.
+
+        :param protocol: Trigger protocol to use during assertion. (Constants.PROT*)
+        :return: return value of the library call.
+        :rtype: :class:`pyvisa.constants.StatusCode`
+        """
+        raise NotImplementedError
+
     def gpib_send_ifc(self):
         """Pulse the interface clear line (IFC) for at least 100 microseconds.
 
         Corresponds to viGpibSendIFC function of the VISA library.
 
-        :param session: Unique logical identifier to a session.
         :return: return value of the library call.
         :rtype: :class:`pyvisa.constants.StatusCode`
         """
@@ -260,7 +287,6 @@ class Session(compat.with_metaclass(abc.ABCMeta)):
 
         Corresponds to viClear function of the VISA library.
 
-        :param session: Unique logical identifier to a session.
         :return: return value of the library call.
         :rtype: :class:`pyvisa.constants.StatusCode`
         """

@@ -189,6 +189,49 @@ class GPIBSession(Session):
         except:
             return 0, StatusCode.error_system_error
 
+    def gpib_command(self, commandByte):
+        """Write GPIB command byte on the bus.
+
+        Corresponds to viGpibCommand function of the VISA library.
+        See: https://linux-gpib.sourceforge.io/doc_html/gpib-protocol.html#REFERENCE-COMMAND-BYTES
+
+        :param commandByte: command byte to send
+        :type commandByte: int, must be [0 255]
+        :return: return value of the library call
+        :rtype: :class:`pyvisa.constants.StatusCode`
+        """
+
+        if 0 <= commandByte <= 255:
+            data = bytes([commandByte])
+        else:
+            return StatusCode.error_nonsupported_operation
+
+        try:
+            self.controller.command(data)
+            return StatusCode.success
+
+        except KeyError:
+            return constants.StatusCode.error_invalid_object
+
+    def trigger(self, protocol):
+        """Asserts hardware trigger.
+        Only supports protocol = constants.VI_TRIG_PROT_DEFAULT
+
+        :return: return value of the library call.
+        :rtype: :class:`pyvisa.constants.StatusCode`
+        """
+
+        logger.debug('GPIB.device assert hardware trigger')
+
+        try:
+            if protocol == constants.VI_TRIG_PROT_DEFAULT:
+                self.interface.trigger()
+                return StatusCode.success
+            else:
+                return StatusCode.error_nonsupported_operation
+        except:
+            return StatusCode.error_system_error
+
     def gpib_send_ifc(self):
         """Pulse the interface clear line (IFC) for at least 100 microseconds.
 
