@@ -314,6 +314,19 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
 
         return ret
 
+    def read_stb(self, session):
+        """Reads a status byte of the service request.
+        Corresponds to viReadSTB function of the VISA library.
+        :param session: Unique logical identifier to a session.
+        :return: Service request status byte, return value of the library call.
+        :rtype: int, :class:`pyvisa.constants.StatusCode`
+        """
+        try:
+            sess = self.sessions[session]
+        except KeyError:
+            return None, constants.StatusCode.error_invalid_object
+        return sess.read_stb()
+
     def get_attribute(self, session, attribute):
         """Retrieves the state of an attribute.
 
