@@ -354,8 +354,9 @@ def _recvrecord(sock, timeout, read_fun=None):
         elif timeout is not None and time.time() >= finish_time:
             # reached timeout
             logger.debug(('Time out encountered in %s.'
-                          'Buffer %r, partial record %r'),
-                         sock, buffer, record)
+                          'Already receieved %d bytes. Last fragment is %d '
+                          'bytes long and we were expecting %d'),
+                         sock, len(record), len(buffer), exp_length)
             msg = ("socket.timeout: The instrument seems to have stopped "
                    "responding.")
             raise socket.timeout(msg)
@@ -373,6 +374,9 @@ def _recvrecord(sock, timeout, read_fun=None):
                 x = struct.unpack(">I", header)[0]
                 last = ((x & 0x80000000) != 0)
                 exp_length = int(x & 0x7fffffff)
+                # XXX remove this in final version of the patch
+                logger.debug('Found header. Expecting %d bytes. Last fragment '
+                             'of the record: %s', exp_length, bool(last))
                 wait_header = False
         else:
             if len(buffer) >= exp_length:
