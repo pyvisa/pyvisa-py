@@ -189,20 +189,20 @@ class GPIBSession(Session):
         except:
             return 0, StatusCode.error_system_error
 
-    def gpib_command(self, commandByte):
+    def gpib_command(self, command_byte):
         """Write GPIB command byte on the bus.
 
         Corresponds to viGpibCommand function of the VISA library.
         See: https://linux-gpib.sourceforge.io/doc_html/gpib-protocol.html#REFERENCE-COMMAND-BYTES
 
-        :param commandByte: command byte to send
-        :type commandByte: int, must be [0 255]
+        :param command_byte: command byte to send
+        :type command_byte: int, must be [0 255]
         :return: return value of the library call
         :rtype: :class:`pyvisa.constants.StatusCode`
         """
 
-        if 0 <= commandByte <= 255:
-            data = bytes([commandByte])
+        if 0 <= command_byte <= 255:
+            data = chr(command_byte)
         else:
             return StatusCode.error_nonsupported_operation
 
@@ -210,8 +210,9 @@ class GPIBSession(Session):
             self.controller.command(data)
             return StatusCode.success
 
-        except KeyError:
-            return constants.StatusCode.error_invalid_object
+        except gpib.GpibError:
+            # err = self.interface.ibsta()
+            return StatusCode.error_system_error
 
     def trigger(self, protocol):
         """Asserts hardware trigger.
@@ -229,7 +230,7 @@ class GPIBSession(Session):
                 return StatusCode.success
             else:
                 return StatusCode.error_nonsupported_operation
-        except:
+        except gpib.GpibError:
             return StatusCode.error_system_error
 
     def gpib_send_ifc(self):

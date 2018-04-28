@@ -210,19 +210,19 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
         except KeyError:
             return constants.StatusCode.error_invalid_object
 
-    def gpib_command(self, session, data):
+    def gpib_command(self, session, command_byte):
         """Write GPIB command byte on the bus.
 
         Corresponds to viGpibCommand function of the VISA library.
         See: https://linux-gpib.sourceforge.io/doc_html/gpib-protocol.html#REFERENCE-COMMAND-BYTES
 
-        :param commandByte: command byte to send
-        :type commandByte: int, must be [0 255]
+        :param command_byte: command byte to send
+        :type command_byte: int, must be [0 255]
         :return: return value of the library call
         :rtype: :class:`pyvisa.constants.StatusCode`
         """
         try:
-            return self.sessions[session].gpib_command(data)
+            return self.sessions[session].gpib_command(command_byte)
 
         except KeyError:
             return constants.StatusCode.error_invalid_object
