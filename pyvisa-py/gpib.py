@@ -211,7 +211,6 @@ class GPIBSession(Session):
             return StatusCode.success
 
         except gpib.GpibError:
-            # err = self.interface.ibsta()
             return StatusCode.error_system_error
 
     def trigger(self, protocol):
