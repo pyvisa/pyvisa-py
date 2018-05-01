@@ -210,6 +210,39 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
         except KeyError:
             return constants.StatusCode.error_invalid_object
 
+    def gpib_command(self, session, command_byte):
+        """Write GPIB command byte on the bus.
+
+        Corresponds to viGpibCommand function of the VISA library.
+        See: https://linux-gpib.sourceforge.io/doc_html/gpib-protocol.html#REFERENCE-COMMAND-BYTES
+
+        :param command_byte: command byte to send
+        :type command_byte: int, must be [0 255]
+        :return: return value of the library call
+        :rtype: :class:`pyvisa.constants.StatusCode`
+        """
+        try:
+            return self.sessions[session].gpib_command(command_byte)
+
+        except KeyError:
+            return constants.StatusCode.error_invalid_object
+
+    def assert_trigger(self, session, protocol):
+        """Asserts software or hardware trigger.
+
+        Corresponds to viAssertTrigger function of the VISA library.
+
+        :param session: Unique logical identifier to a session.
+        :param protocol: Trigger protocol to use during assertion. (Constants.PROT*)
+        :return: return value of the library call.
+        :rtype: :class:`pyvisa.constants.StatusCode`
+        """
+        try:
+            return self.sessions[session].trigger(protocol)
+
+        except KeyError:
+            return constants.StatusCode.error_invalid_object
+
     def gpib_send_ifc(self, session):
         """Pulse the interface clear line (IFC) for at least 100 microseconds.
 
