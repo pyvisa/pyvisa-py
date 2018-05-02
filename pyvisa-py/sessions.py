@@ -186,7 +186,8 @@ class Session(compat.with_metaclass(abc.ABCMeta)):
 
         self.parsed = parsed
         self.open_timeout = open_timeout
-        #: get default timeout from constants
+
+        #: Get default timeout from constants
         self.timeout =\
             (attributes.AttributesByID[constants.VI_ATTR_TMO_VALUE].default /
              1000.0)
@@ -463,6 +464,12 @@ class Session(compat.with_metaclass(abc.ABCMeta)):
     def _get_timeout(self, attribute):
         """ Returns timeout calculated value from python way to VI_ way
 
+        In VISA, the timeout is expressed in milliseconds or using the
+        constants VI_TMO_INFINITE or VI_TMO_IMMEDIATE.
+
+        In Python we store it as either None (VI_TMO_INFINITE), 0
+        (VI_TMO_IMMEDIATE) or as a floating point number in seconds.
+
         """
         if self.timeout is None:
             ret_value = constants.VI_TMO_INFINITE
@@ -474,6 +481,12 @@ class Session(compat.with_metaclass(abc.ABCMeta)):
 
     def _set_timeout(self, attribute, value):
         """ Sets timeout calculated value from python way to VI_ way
+
+        In VISA, the timeout is expressed in milliseconds or using the
+        constants VI_TMO_INFINITE or VI_TMO_IMMEDIATE.
+
+        In Python we store it as either None (VI_TMO_INFINITE), 0
+        (VI_TMO_IMMEDIATE) or as a floating point number in seconds.
 
         """
         if value == constants.VI_TMO_INFINITE:
