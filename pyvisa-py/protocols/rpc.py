@@ -374,9 +374,6 @@ def _recvrecord(sock, timeout, read_fun=None):
                 x = struct.unpack(">I", header)[0]
                 last = ((x & 0x80000000) != 0)
                 exp_length = int(x & 0x7fffffff)
-                # XXX remove this in final version of the patch
-                logger.debug('Found header. Expecting %d bytes. Last fragment '
-                             'of the record: %s', exp_length, bool(last))
                 wait_header = False
         else:
             if len(buffer) >= exp_length:
