@@ -24,6 +24,25 @@ from . import common
 
 StatusCode = constants.StatusCode
 
+# Conversion between VXI11 error codes and VISA status
+# TODO this is so far a best guess, in particular 6 and 29 are likely wrong
+VXI11_ERRORS_TO_VISA =\
+    {0: StatusCode.success,  # no_error
+     1: StatusCode.error_invalid_format,  # syntax_error
+     3: StatusCode.error_connection_lost,  # device_no_accessible
+     4: StatusCode.error_invalid_access_key,  # invalid_link_identifier
+     5: StatusCode.error_invalid_parameter,  # parameter_error
+     6: StatusCode.error_handler_not_installed,  # channel_not_established
+     8: StatusCode.error_nonsupported_operation,  # operation_not_supported
+     9: StatusCode.error_allocation,  # out_of_resources
+     11: StatusCode.error_resource_locked,  # device_locked_by_another_link
+     12: StatusCode.error_session_not_locked,  # no_lock_held_by_this_link
+     15: StatusCode.error_timeout,  # io_timeout
+     17: StatusCode.error_io,  # io_error
+     23: StatusCode.error_abort,  # abort
+     29: StatusCode.error_window_already_mapped,  # channel_already_established
+     }
+
 
 @Session.register(constants.InterfaceType.tcpip, 'INSTR')
 class TCPIPInstrSession(Session):
@@ -235,11 +254,7 @@ class TCPIPInstrSession(Session):
         error = self.interface.device_trigger(self.link, 0, self.lock_timeout,
                                               self.io_timeout)
 
-        if error:
-            # TODO: Which status to return
-            raise Exception("error triggering: %d" % error)
-
-        return StatusCode.success
+        return VXI11_ERRORS_TO_VISA[error]
 
     def clear(self):
         """Clears a device.
@@ -253,11 +268,7 @@ class TCPIPInstrSession(Session):
         error = self.interface.device_clear(self.link, 0, self.lock_timeout,
                                             self.io_timeout)
 
-        if error:
-            # TODO: Which status to return
-            raise Exception("error clearing: %d" % error)
-
-        return StatusCode.success
+        return VXI11_ERRORS_TO_VISA[error]
 
     def read_stb(self):
         """Reads a status byte of the service request.
@@ -265,18 +276,14 @@ class TCPIPInstrSession(Session):
         Corresponds to viReadSTB function of the VISA library.
 
         :return: Service request status byte, return value of the library call.
-        :rtype: int, VISAStatus
+        :rtype: int, :class:`pyvisa.constants.StatusCode`
         """
 
         error, stb = self.interface.device_read_stb(self.link, 0,
                                                     self.lock_timeout,
                                                     self.io_timeout)
 
-        if error:
-            # TODO: Which status to return
-            raise Exception("error reading status: %d" % error)
-
-        return stb, StatusCode.success
+        return stb, VXI11_ERRORS_TO_VISA[error]
 
     def lock(self, lock_type, timeout, requested_key=None):
         """Establishes an access mode to the specified resources.
@@ -300,9 +307,7 @@ class TCPIPInstrSession(Session):
 
         error = self.interface.device_lock(self.link, flags, self.lock_timeout)
 
-        if error:
-            # TODO: Which status to return
-            raise Exception("error locking: %d" % error)
+        return VXI11_ERRORS_TO_VISA[error]
 
     def unlock(self):
         """Relinquishes a lock for the specified resource.
@@ -314,9 +319,7 @@ class TCPIPInstrSession(Session):
         """
         error = self.interface.device_unlock(self.link)
 
-        if error:
-            # TODO: Which message to return
-            raise Exception("error unlocking: %d" % error)
+        return VXI11_ERRORS_TO_VISA[error]
 
 
 @Session.register(constants.InterfaceType.tcpip, 'SOCKET')

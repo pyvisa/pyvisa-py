@@ -186,7 +186,7 @@ class GPIBSession(Session):
         try:
             self.interface.clear()
             return 0, StatusCode.success
-        except:
+        except Exception:
             return 0, StatusCode.error_system_error
 
     def gpib_send_ifc(self):
