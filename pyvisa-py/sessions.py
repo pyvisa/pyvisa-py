@@ -266,6 +266,42 @@ class Session(compat.with_metaclass(abc.ABCMeta)):
         """
         return StatusCode.error_nonsupported_operation
 
+    def read_stb(self):
+        """Reads a status byte of the service request.
+
+        Corresponds to viReadSTB function of the VISA library.
+
+        :return: Service request status byte, return value of the library call.
+        :rtype: int, :class:`pyvisa.constants.StatusCode`
+        """
+        return 0, StatusCode.error_nonsupported_operation
+
+    def lock(self, session, lock_type, timeout, requested_key=None):
+        """Establishes an access mode to the specified resources.
+
+        Corresponds to viLock function of the VISA library.
+
+        :param session: Unique logical identifier to a session.
+        :param lock_type: Specifies the type of lock requested, either Constants.EXCLUSIVE_LOCK or Constants.SHARED_LOCK.
+        :param timeout: Absolute time period (in milliseconds) that a resource waits to get unlocked by the
+                        locking session before returning an error.
+        :param requested_key: This parameter is not used and should be set to VI_NULL when lockType is VI_EXCLUSIVE_LOCK.
+        :return: access_key that can then be passed to other sessions to share the lock, return value of the library call.
+        :rtype: str, :class:`pyvisa.constants.StatusCode`
+        """
+        return '', StatusCode.error_nonsupported_operation
+
+    def unlock(self, session):
+        """Relinquishes a lock for the specified resource.
+
+        Corresponds to viUnlock function of the VISA library.
+
+        :param session: Unique logical identifier to a session.
+        :return: return value of the library call.
+        :rtype: :class:`pyvisa.constants.StatusCode`
+        """
+        return StatusCode.error_nonsupported_operation
+
     def get_attribute(self, attribute):
         """Get the value for a given VISA attribute for this session.
 
