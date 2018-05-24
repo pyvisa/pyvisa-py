@@ -64,20 +64,24 @@ class USBSession(Session):
         try:
             # noinspection PyProtectedMember
             backend = usb.core.find()._ctx.backend.__class__.__module__.split('.')[-1]
-        except:
+        except Exception:
             backend = 'N/A'
 
         return 'via PyUSB (%s). Backend: %s' % (ver, backend)
 
     def _get_timeout(self, attribute):
         if self.interface:
-            self.timeout = self.interface.timeout
+            if self.interface.timeout == 2**32-1:
+                self.timeout = None
+            else:
+                self.timeout = self.interface.timeout / 1000
         return super(USBSession, self)._get_timeout(attribute)
 
     def _set_timeout(self, attribute, value):
         status = super(USBSession, self)._set_timeout(attribute, value)
+        timeout = int(self.timeout*1000) if self.timeout else 2**32-1
         if self.interface:
-            self.interface.timeout = self.timeout
+            self.interface.timeout = timeout
         return status
 
     def read(self, count):

@@ -119,8 +119,8 @@ class GPIBSession(Session):
             if self.timeout is None:
                 gpib_timeout = 0
             else:
-                # round up only values that are higher by 0.1% then discrete values
-                gpib_timeout  = min(bisect(TIMETABLE, 0.999 * self.timeout), 17)
+                # round up only values that are higher by 0.1% than discrete values
+                gpib_timeout = min(bisect(TIMETABLE, 0.999 * self.timeout), 17)
                 self.timeout = TIMETABLE[gpib_timeout]
             self.interface.timeout(gpib_timeout)
         return status

@@ -351,22 +351,23 @@ def _recvrecord(sock, timeout, read_fun=None):
         if sock in r:
             read_data = read_fun(exp_length)
             buffer.extend(read_data)
-
-        if not read_data:
-            if timeout is not None and time.time() >= finish_time:
-                # reached timeout
-                msg = ("socket.timeout: The instrument seems to have stopped "
-                       "responding.")
-                raise socket.timeout(msg)
-            if record or not wait_header:
-                # received some data or header
-                raise EOFError
+        elif timeout is not None and time.time() >= finish_time:
+            # reached timeout
+            logger.debug(('Time out encountered in %s.'
+                          'Already receieved %d bytes. Last fragment is %d '
+                          'bytes long and we were expecting %d'),
+                         sock, len(record), len(buffer), exp_length)
+            msg = ("socket.timeout: The instrument seems to have stopped "
+                   "responding.")
+            raise socket.timeout(msg)
+        else:
             # `select_timout` decreased to 50% of previous or
             # min_select_timeout
             select_timout = max(select_timout/2.0, min_select_timeout)
+            continue
 
         if wait_header:
-            # need tofind header
+            # need to find header
             if len(buffer) >= exp_length:
                 header = buffer[:exp_length]
                 buffer = buffer[exp_length:]
