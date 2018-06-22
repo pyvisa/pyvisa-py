@@ -120,10 +120,9 @@ class TCPIPInstrSession(Session):
         read_fun = self.interface.device_read
         status = StatusCode.success
 
-        timeout = int(self.timeout*1000) if self.timeout else 2**32-1
         while reason & end_reason == 0:
             error, reason, data = read_fun(self.link, chunk_length,
-                                           timeout,
+                                           self._io_timeout,
                                            self.lock_timeout, flags, term_char)
 
             if error == vxi11.ErrorCodes.io_timeout:
@@ -166,7 +165,6 @@ class TCPIPInstrSession(Session):
             num = len(data)
             offset = 0
 
-            timeout = int(self.timeout*1000) if self.timeout else 2**32-1
             while num > 0:
                 if num <= chunk_size:
                     flags |= vxi11.OP_FLAG_END
@@ -174,7 +172,7 @@ class TCPIPInstrSession(Session):
                 block = data[offset:offset + self.max_recv_size]
 
                 error, size = self.interface.device_write(
-                    self.link, timeout, self.lock_timeout,
+                    self.link, self._io_timeout, self.lock_timeout,
                     flags, block)
 
                 if error == vxi11.ErrorCodes.io_timeout:
@@ -252,7 +250,7 @@ class TCPIPInstrSession(Session):
         """
 
         error = self.interface.device_trigger(self.link, 0, self.lock_timeout,
-                                              self.io_timeout)
+                                              self._io_timeout)
 
         return VXI11_ERRORS_TO_VISA[error]
 
@@ -266,7 +264,7 @@ class TCPIPInstrSession(Session):
         """
 
         error = self.interface.device_clear(self.link, 0, self.lock_timeout,
-                                            self.io_timeout)
+                                            self._io_timeout)
 
         return VXI11_ERRORS_TO_VISA[error]
 
@@ -281,7 +279,7 @@ class TCPIPInstrSession(Session):
 
         error, stb = self.interface.device_read_stb(self.link, 0,
                                                     self.lock_timeout,
-                                                    self.io_timeout)
+                                                    self._io_timeout)
 
         return stb, VXI11_ERRORS_TO_VISA[error]
 
@@ -320,6 +318,21 @@ class TCPIPInstrSession(Session):
         error = self.interface.device_unlock(self.link)
 
         return VXI11_ERRORS_TO_VISA[error]
+
+    def _set_timeout(self, attribute, value):
+        """ Sets timeout calculated value from python way to VI_ way
+
+        """
+        if value == constants.VI_TMO_INFINITE:
+            self.timeout = None
+            self._io_timeout = 2**32-1
+        elif value == constants.VI_TMO_IMMEDIATE:
+            self.timeout = 0
+            self._io_timeout = 0
+        else:
+            self.timeout = value / 1000.0
+            self._io_timeout = int(self.timeout*1000)
+        return StatusCode.success
 
 
 @Session.register(constants.InterfaceType.tcpip, 'SOCKET')
