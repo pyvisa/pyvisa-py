@@ -102,12 +102,12 @@ class TCPIPInstrSession(Session):
         status = StatusCode.success
 
         timeout = int(self.timeout*1000) if self.timeout else 2**32-1
-        start_time = time.monotonic()
+        start_time = time.time()
         while reason & end_reason == 0:
             # Decrease timeout so that the total timeout does not get larger
             # than the specified timeout.
             timeout = max(0,
-                          timeout - int((time.monotonic() - start_time)*1000))
+                          timeout - int((time.time() - start_time)*1000))
             error, reason, data = read_fun(self.link, chunk_length,
                                            timeout,
                                            self.lock_timeout, flags, term_char)
