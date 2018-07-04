@@ -24,6 +24,25 @@ from . import common
 
 StatusCode = constants.StatusCode
 
+# Conversion between VXI11 error codes and VISA status
+# TODO this is so far a best guess, in particular 6 and 29 are likely wrong
+VXI11_ERRORS_TO_VISA =\
+    {0: StatusCode.success,  # no_error
+     1: StatusCode.error_invalid_format,  # syntax_error
+     3: StatusCode.error_connection_lost,  # device_no_accessible
+     4: StatusCode.error_invalid_access_key,  # invalid_link_identifier
+     5: StatusCode.error_invalid_parameter,  # parameter_error
+     6: StatusCode.error_handler_not_installed,  # channel_not_established
+     8: StatusCode.error_nonsupported_operation,  # operation_not_supported
+     9: StatusCode.error_allocation,  # out_of_resources
+     11: StatusCode.error_resource_locked,  # device_locked_by_another_link
+     12: StatusCode.error_session_not_locked,  # no_lock_held_by_this_link
+     15: StatusCode.error_timeout,  # io_timeout
+     17: StatusCode.error_io,  # io_error
+     23: StatusCode.error_abort,  # abort
+     29: StatusCode.error_window_already_mapped,  # channel_already_established
+     }
+
 
 @Session.register(constants.InterfaceType.tcpip, 'INSTR')
 class TCPIPInstrSession(Session):
@@ -101,7 +120,7 @@ class TCPIPInstrSession(Session):
         read_fun = self.interface.device_read
         status = StatusCode.success
 
-        timeout = int(self.timeout*1000) if self.timeout else 2**32-1
+        timeout = self._io_timeout
         start_time = time.time()
         while reason & end_reason == 0:
             # Decrease timeout so that the total timeout does not get larger
@@ -152,7 +171,6 @@ class TCPIPInstrSession(Session):
             num = len(data)
             offset = 0
 
-            timeout = int(self.timeout*1000) if self.timeout else 2**32-1
             while num > 0:
                 if num <= chunk_size:
                     flags |= vxi11.OP_FLAG_END
@@ -160,7 +178,7 @@ class TCPIPInstrSession(Session):
                 block = data[offset:offset + self.max_recv_size]
 
                 error, size = self.interface.device_write(
-                    self.link, timeout, self.lock_timeout,
+                    self.link, self._io_timeout, self.lock_timeout,
                     flags, block)
 
                 if error == vxi11.ErrorCodes.io_timeout:
@@ -238,13 +256,9 @@ class TCPIPInstrSession(Session):
         """
 
         error = self.interface.device_trigger(self.link, 0, self.lock_timeout,
-                                              self.io_timeout)
+                                              self._io_timeout)
 
-        if error:
-            # TODO: Which status to return
-            raise Exception("error triggering: %d" % error)
-
-        return StatusCode.success
+        return VXI11_ERRORS_TO_VISA[error]
 
     def clear(self):
         """Clears a device.
@@ -256,13 +270,9 @@ class TCPIPInstrSession(Session):
         """
 
         error = self.interface.device_clear(self.link, 0, self.lock_timeout,
-                                            self.io_timeout)
+                                            self._io_timeout)
 
-        if error:
-            # TODO: Which status to return
-            raise Exception("error clearing: %d" % error)
-
-        return StatusCode.success
+        return VXI11_ERRORS_TO_VISA[error]
 
     def read_stb(self):
         """Reads a status byte of the service request.
@@ -270,18 +280,14 @@ class TCPIPInstrSession(Session):
         Corresponds to viReadSTB function of the VISA library.
 
         :return: Service request status byte, return value of the library call.
-        :rtype: int, VISAStatus
+        :rtype: int, :class:`pyvisa.constants.StatusCode`
         """
 
         error, stb = self.interface.device_read_stb(self.link, 0,
                                                     self.lock_timeout,
-                                                    self.io_timeout)
+                                                    self._io_timeout)
 
-        if error:
-            # TODO: Which status to return
-            raise Exception("error reading status: %d" % error)
-
-        return stb, StatusCode.success
+        return stb, VXI11_ERRORS_TO_VISA[error]
 
     def lock(self, lock_type, timeout, requested_key=None):
         """Establishes an access mode to the specified resources.
@@ -305,9 +311,7 @@ class TCPIPInstrSession(Session):
 
         error = self.interface.device_lock(self.link, flags, self.lock_timeout)
 
-        if error:
-            # TODO: Which status to return
-            raise Exception("error locking: %d" % error)
+        return VXI11_ERRORS_TO_VISA[error]
 
     def unlock(self):
         """Relinquishes a lock for the specified resource.
@@ -319,9 +323,22 @@ class TCPIPInstrSession(Session):
         """
         error = self.interface.device_unlock(self.link)
 
-        if error:
-            # TODO: Which message to return
-            raise Exception("error unlocking: %d" % error)
+        return VXI11_ERRORS_TO_VISA[error]
+
+    def _set_timeout(self, attribute, value):
+        """ Sets timeout calculated value from python way to VI_ way
+
+        """
+        if value == constants.VI_TMO_INFINITE:
+            self.timeout = None
+            self._io_timeout = 2**32-1
+        elif value == constants.VI_TMO_IMMEDIATE:
+            self.timeout = 0
+            self._io_timeout = 0
+        else:
+            self.timeout = value / 1000.0
+            self._io_timeout = int(self.timeout*1000)
+        return StatusCode.success
 
 
 @Session.register(constants.InterfaceType.tcpip, 'SOCKET')

@@ -24,6 +24,7 @@ from .common import logger
 
 StatusCode = constants.StatusCode
 
+
 class PyVisaLibrary(highlevel.VisaLibraryBase):
     """A pure Python backend for PyVISA.
 
@@ -194,6 +195,22 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
 
         return self._register(sess), StatusCode.success
 
+    def assert_trigger(self, session, protocol):
+        """Asserts software or hardware trigger.
+
+        Corresponds to viAssertTrigger function of the VISA library.
+
+        :param session: Unique logical identifier to a session.
+        :param protocol: Trigger protocol to use during assertion. (Constants.PROT*)
+        :return: return value of the library call.
+        :rtype: :class:`pyvisa.constants.StatusCode`
+        """
+        try:
+            sess = self.sessions[session]
+        except KeyError:
+            return 0, constants.StatusCode.error_invalid_object
+        return sess.assert_trigger(protocol)
+
     def clear(self, session):
         """Clears a device.
 
@@ -204,11 +221,10 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
         :rtype: :class:`pyvisa.constants.StatusCode`
         """
         try:
-            self.sessions[session].clear()
-            return constants.StatusCode.success
-
+            sess = self.sessions[session]
         except KeyError:
-            return constants.StatusCode.error_invalid_object
+            return 0, constants.StatusCode.error_invalid_object
+        return sess.clear()
 
     def gpib_command(self, session, command_byte):
         """Write GPIB command byte on the bus.
@@ -253,11 +269,23 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
         :rtype: :class:`pyvisa.constants.StatusCode`
         """
         try:
-            self.sessions[session].gpib_send_ifc()
-            return constants.StatusCode.success
-
+            sess = self.sessions[session]
         except KeyError:
-            return constants.StatusCode.error_invalid_object
+            return 0, constants.StatusCode.error_invalid_object
+        return sess.gpib_send_ifc()
+
+    def read_stb(self, session):
+        """Reads a status byte of the service request.
+        Corresponds to viReadSTB function of the VISA library.
+        :param session: Unique logical identifier to a session.
+        :return: Service request status byte, return value of the library call.
+        :rtype: int, :class:`pyvisa.constants.StatusCode`
+        """
+        try:
+            sess = self.sessions[session]
+        except KeyError:
+            return 0, constants.StatusCode.error_invalid_object
+        return sess.read_stb()
 
     def close(self, session):
         """Closes the specified session, event, or find list.
@@ -300,7 +328,6 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
         resources = rname.filter(resources, query)
 
         return resources
-
 
     def read(self, session, count):
         """Reads data from device or interface synchronously.
@@ -382,6 +409,42 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
             return StatusCode.error_invalid_object
 
         return sess.set_attribute(attribute, attribute_state)
+
+    def lock(self, session, lock_type, timeout, requested_key=None):
+        """Establishes an access mode to the specified resources.
+
+        Corresponds to viLock function of the VISA library.
+
+        :param session: Unique logical identifier to a session.
+        :param lock_type: Specifies the type of lock requested, either Constants.EXCLUSIVE_LOCK or Constants.SHARED_LOCK.
+        :param timeout: Absolute time period (in milliseconds) that a resource waits to get unlocked by the
+                        locking session before returning an error.
+        :param requested_key: This parameter is not used and should be set to VI_NULL when lockType is VI_EXCLUSIVE_LOCK.
+        :return: access_key that can then be passed to other sessions to share the lock, return value of the library call.
+        :rtype: str, :class:`pyvisa.constants.StatusCode`
+        """
+        try:
+            sess = self.sessions[session]
+        except KeyError:
+            return StatusCode.error_invalid_object
+
+        return sess.lock(lock_type, timeout, requested_key)
+
+    def unlock(self, session):
+        """Relinquishes a lock for the specified resource.
+
+        Corresponds to viUnlock function of the VISA library.
+
+        :param session: Unique logical identifier to a session.
+        :return: return value of the library call.
+        :rtype: :class:`pyvisa.constants.StatusCode`
+        """
+        try:
+            sess = self.sessions[session]
+        except KeyError:
+            return StatusCode.error_invalid_object
+
+        return sess.unlock()
 
     def disable_event(self, session, event_type, mechanism):
         # TODO: implement this for GPIB finalization
