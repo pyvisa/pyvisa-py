@@ -119,8 +119,8 @@ class GPIBSession(Session):
             if self.timeout is None:
                 gpib_timeout = 0
             else:
-                # round up only values that are higher by 0.1% then discrete values
-                gpib_timeout  = min(bisect(TIMETABLE, 0.999 * self.timeout), 17)
+                # round up only values that are higher by 0.1% than discrete values
+                gpib_timeout = min(bisect(TIMETABLE, 0.999 * self.timeout), 17)
                 self.timeout = TIMETABLE[gpib_timeout]
             self.interface.timeout(gpib_timeout)
         return status
@@ -188,6 +188,49 @@ class GPIBSession(Session):
             return 0, StatusCode.success
         except Exception:
             return 0, StatusCode.error_system_error
+
+    def gpib_command(self, command_byte):
+        """Write GPIB command byte on the bus.
+
+        Corresponds to viGpibCommand function of the VISA library.
+        See: https://linux-gpib.sourceforge.io/doc_html/gpib-protocol.html#REFERENCE-COMMAND-BYTES
+
+        :param command_byte: command byte to send
+        :type command_byte: int, must be [0 255]
+        :return: return value of the library call
+        :rtype: :class:`pyvisa.constants.StatusCode`
+        """
+
+        if 0 <= command_byte <= 255:
+            data = chr(command_byte)
+        else:
+            return StatusCode.error_nonsupported_operation
+
+        try:
+            self.controller.command(data)
+            return StatusCode.success
+
+        except gpib.GpibError:
+            return StatusCode.error_system_error
+
+    def trigger(self, protocol):
+        """Asserts hardware trigger.
+        Only supports protocol = constants.VI_TRIG_PROT_DEFAULT
+
+        :return: return value of the library call.
+        :rtype: :class:`pyvisa.constants.StatusCode`
+        """
+
+        logger.debug('GPIB.device assert hardware trigger')
+
+        try:
+            if protocol == constants.VI_TRIG_PROT_DEFAULT:
+                self.interface.trigger()
+                return StatusCode.success
+            else:
+                return StatusCode.error_nonsupported_operation
+        except gpib.GpibError:
+            return StatusCode.error_system_error
 
     def gpib_send_ifc(self):
         """Pulse the interface clear line (IFC) for at least 100 microseconds.
