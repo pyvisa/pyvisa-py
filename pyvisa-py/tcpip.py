@@ -120,9 +120,15 @@ class TCPIPInstrSession(Session):
         read_fun = self.interface.device_read
         status = StatusCode.success
 
+        timeout = self._io_timeout
+        start_time = time.time()
         while reason & end_reason == 0:
+            # Decrease timeout so that the total timeout does not get larger
+            # than the specified timeout.
+            timeout = max(0,
+                          timeout - int((time.time() - start_time)*1000))
             error, reason, data = read_fun(self.link, chunk_length,
-                                           self._io_timeout,
+                                           timeout,
                                            self.lock_timeout, flags, term_char)
 
             if error == vxi11.ErrorCodes.io_timeout:
