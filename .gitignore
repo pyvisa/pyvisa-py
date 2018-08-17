@@ -13,3 +13,7 @@ MANIFEST
 # WebDAV file system cache files
 .DAV/
 _test/
+.spyproject/
+.mypy_cache/
+.pytest_cache/
+.cache/

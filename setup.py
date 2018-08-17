@@ -1,12 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-
-try:
-    import sys
-    reload(sys).setdefaultencoding("UTF-8")
-except:
-    pass
-
+import sys
 
 try:
     from setuptools import setup
@@ -15,11 +9,9 @@ except ImportError:
     sys.exit(1)
 
 
-import codecs
-
-
 def read(filename):
-    return codecs.open(filename, encoding='utf-8').read()
+    with open(filename, 'rb') as f:
+        return f.read().decode('utf8')
 
 
 long_description = '\n\n'.join([read('README'),
@@ -33,7 +25,7 @@ requirements = ['pyvisa>=1.8']
 
 setup(name='PyVISA-py',
       description='Python VISA bindings for GPIB, RS232, and USB instruments',
-      version='0.3.dev0',
+      version='0.3.0',
       long_description=long_description,
       author='Hernan E. Grecco',
       author_email='hernan.grecco@gmail.com',

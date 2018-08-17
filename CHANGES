@@ -5,7 +5,31 @@ PyVISA-py Changelog
 0.3 (unreleased)
 ----------------
 
-- Nothing changed yet.
+- Add read_stb, assert_trigger, lock, unlock to highlevel PR #139
+- Fix timeout handling in usb PR #144
+- Add gpib_command and assert_trigger to GPIB PR # 136
+- Handle ValueError in usb list fix #131 PR #132
+- Fix reading on GPIB and implement clear and gpib_send_ifc PR #132
+- Do not error when listing USB devices PR #126
+- Fix an error in the handling of the termchar for TCPIP INSTR PR #126
+- Make list_resources return an empty tuple instead of erroring PR #121
+- Proper support for timeout in TCPIP INSTR sessions PR #120 #127 #130 #144
+- Proper encoding of data before transfer for all backends PR #119
+- Unify use of StatusCode PR #118
+- Improve handling of sessions attrs PR #116
+- TCPIP SOCKET timeout handling improvement PR #115
+- Fix compatibility with pyserial 3.0 PR #112
+- TCPIP SOCKET handler read should not block PR #107
+- TCPIP error handling fixes PR #100
+- Use repr() instead of str() to log RPC record PR #97
+- Speed up large transfer over GPIB 2beb52a5bcea2dae32d4a9908dc19f7874bfc0b7
+- Catch GPIB errors while enumerating devices 9fea9d5c40cc6c33ce1244c209e5e576a33abfc2
+- Add a serial poll function to GPIB backend PR #67
+- Handle timeout in USB TMC backend PR #64
+- Make USB TMC backend faster by transferring multiple bytes PR #63
+- Fix issue with encoding before data transfer PR #59 #
+- Get Linux GPIB version PR #55
+- Fix broken import in TCPIP sessions PR #51
 
 
 0.2 (2015-08-25)
