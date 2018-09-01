@@ -163,8 +163,11 @@ class Session(compat.with_metaclass(abc.ABCMeta)):
         :type resource_class: str
         """
         # noinspection PyUnusedLocal
-        def _internal(*args, **kwargs):
-            raise ValueError(msg)
+        class _internal(object):
+            session_issue = msg
+
+            def __init__(self, *args, **kwargs):
+                raise ValueError(msg)
 
         _internal.session_issue = msg
 
