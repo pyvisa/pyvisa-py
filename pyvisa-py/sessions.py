@@ -190,10 +190,10 @@ class Session(compat.with_metaclass(abc.ABCMeta)):
         self.parsed = parsed
         self.open_timeout = open_timeout
 
-        #: Get default timeout from constants
-        self.timeout =\
-            (attributes.AttributesByID[constants.VI_ATTR_TMO_VALUE].default /
-             1000.0)
+        #: Set the default timeout from constants
+        attr = constants.VI_ATTR_TMO_VALUE
+        default_timeout = attributes.AttributesByID[attr].default
+        self.set_attribute(attr, default_timeout)
 
         #: Used as a place holder for the object doing the lowlevel
         #: communication.
