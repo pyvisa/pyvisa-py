@@ -190,11 +190,6 @@ class Session(compat.with_metaclass(abc.ABCMeta)):
         self.parsed = parsed
         self.open_timeout = open_timeout
 
-        #: Set the default timeout from constants
-        attr = constants.VI_ATTR_TMO_VALUE
-        default_timeout = attributes.AttributesByID[attr].default
-        self.set_attribute(attr, default_timeout)
-
         #: Used as a place holder for the object doing the lowlevel
         #: communication.
         self.interface = None
@@ -209,6 +204,12 @@ class Session(compat.with_metaclass(abc.ABCMeta)):
                       constants.VI_ATTR_INTF_TYPE: parsed.interface_type,
                       constants.VI_ATTR_TMO_VALUE: (self._get_timeout,
                                                     self._set_timeout)}
+
+        #: Set the default timeout from constants
+        attr = constants.VI_ATTR_TMO_VALUE
+        default_timeout = attributes.AttributesByID[attr].default
+        self.set_attribute(attr, default_timeout)
+
         self.after_parsing()
 
     def after_parsing(self):
