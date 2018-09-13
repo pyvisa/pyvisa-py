@@ -25,7 +25,7 @@ requirements = ['pyvisa>=1.8']
 
 setup(name='PyVISA-py',
       description='Python VISA bindings for GPIB, RS232, and USB instruments',
-      version='0.4.0.dev',
+      version='0.3.1',
       long_description=long_description,
       author='Hernan E. Grecco',
       author_email='hernan.grecco@gmail.com',

@@ -1,6 +1,10 @@
 PyVISA-py Changelog
 ===================
 
+0.3.1 (2018-09-12)
+------------------
+
+- Fix initialization of timeout (issue identified in TCPIP resources) PR #160
 
 0.3 (2018-09-05)
 ----------------
