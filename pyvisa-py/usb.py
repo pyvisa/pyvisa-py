@@ -12,9 +12,9 @@
 
 from __future__ import division, unicode_literals, print_function, absolute_import
 
-import logging
 from pyvisa import constants, attributes
 
+from .common import logger
 from .sessions import Session, UnknownAttribute
 
 try:
@@ -178,7 +178,6 @@ class USBInstrSession(USBSession):
             try:
                 serial = dev.serial_number
             except (NotImplementedError, ValueError):
-                logger = logging.getLogger(__name__)
                 msg = ('Found a device whose serial number cannot be read.'
                        ' The partial VISA resource name is: ' + fmt)
                 logger.warning(msg, dict(board=0,
@@ -226,7 +225,6 @@ class USBRawSession(USBSession):
             try:
                 serial = dev.serial_number
             except (NotImplementedError, ValueError):
-                logger = logging.getLogger(__name__)
                 msg = ('Found a device whose serial number cannot be read.'
                        ' The partial VISA resource name is: ' + fmt)
                 logger.warning(msg, dict(board=0,
