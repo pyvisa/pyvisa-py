@@ -71,7 +71,7 @@ class USBSession(Session):
 
     def _get_timeout(self, attribute):
         if self.interface:
-            if self.interface.timeout == 2**32-1:
+            if self.interface.timeout is None or self.interface.timeout == 2**32-1:
                 self.timeout = None
             else:
                 self.timeout = self.interface.timeout / 1000
