@@ -12,7 +12,7 @@
 
     This file is an offspring of the Lantz Project.
 
-    :copyright: 2014 by PyVISA-py Authors, see AUTHORS for more details.
+    :copyright: 2014-2018 by PyVISA-py Authors, see AUTHORS for more details.
     :license: MIT, see LICENSE for more details.
 """
 
@@ -150,8 +150,6 @@ class USBRaw(object):
     #: Receive and Send endpoints to be used. If None the first IN (or OUT)
     #: BULK endpoint will be used.
     ENDPOINTS = (None, None)
-
-    timeout = 2000
 
     find_devices = staticmethod(find_devices)
 
