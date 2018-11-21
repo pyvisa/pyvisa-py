@@ -157,6 +157,8 @@ class USBRaw(object):
                  device_filters=None, timeout=None, **kwargs):
         super(USBRaw, self).__init__()
 
+        # Timeout expressed in ms as an integer and limited to 2**32-1
+        # If left to None pyusb will use its default value
         self.timeout = timeout
 
         device_filters = device_filters or {}

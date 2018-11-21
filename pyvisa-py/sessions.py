@@ -205,8 +205,9 @@ class Session(compat.with_metaclass(abc.ABCMeta)):
                       constants.VI_ATTR_TMO_VALUE: (self._get_timeout,
                                                     self._set_timeout)}
 
-        #: Timeout in the interface format. A meaningful value is attributed
-        #: to it when calling self.set_attribute(attr, default_timeout)
+        #: Timeout expressed in second or None for the absence of a timeout.
+        #: The default value is set when calling
+        #: self.set_attribute(attr, default_timeout)
         self.timeout = None
 
         #: Set the default timeout from constants
