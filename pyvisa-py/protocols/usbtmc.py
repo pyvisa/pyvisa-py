@@ -157,7 +157,7 @@ class USBRaw(object):
                  device_filters=None, timeout=None, **kwargs):
         super(USBRaw, self).__init__()
 
-        self.timeout = timeout
+        self.timeout = int(timeout)
 
         device_filters = device_filters or {}
         devices = list(self.find_devices(vendor, product, serial_number, None,
