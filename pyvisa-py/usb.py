@@ -6,7 +6,7 @@
     Serial Session implementation using PyUSB.
 
 
-    :copyright: 2014 by PyVISA-py Authors, see AUTHORS for more details.
+    :copyright: 2014-2018 by PyVISA-py Authors, see AUTHORS for more details.
     :license: MIT, see LICENSE for more details.
 """
 
@@ -199,7 +199,7 @@ class USBInstrSession(USBSession):
                                        int(self.parsed.model_code, 0),
                                        self.parsed.serial_number)
 
-        for name in ('SEND_END_EN', 'TERMCHAR', 'TERMCHAR_EN'):
+        for name in ('SEND_END_EN', 'TERMCHAR', 'TERMCHAR_EN', 'TMO_VALUE'):
             attribute = getattr(constants, 'VI_ATTR_' + name)
             self.attrs[attribute] = attributes.AttributesByID[attribute].default
 
@@ -246,6 +246,6 @@ class USBRawSession(USBSession):
                                              int(self.parsed.model_code, 0),
                                              self.parsed.serial_number)
 
-        for name in ('SEND_END_EN', 'TERMCHAR', 'TERMCHAR_EN'):
+        for name in ('SEND_END_EN', 'TERMCHAR', 'TERMCHAR_EN', 'TMO_VALUE'):
             attribute = getattr(constants, 'VI_ATTR_' + name)
             self.attrs[attribute] = attributes.AttributesByID[attribute].default

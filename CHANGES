@@ -4,7 +4,9 @@ PyVISA-py Changelog
 0.4.0 (unreleased)
 ------------------
 
-
+- fix initialization of timeout for the USB resources (the default was set
+  before creating the underlying connection to which the timeout must be passed
+  and was not). PR #167
 
 0.3.1 (2018-09-12)
 ------------------

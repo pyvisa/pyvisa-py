@@ -12,7 +12,7 @@
 
     This file is an offspring of the Lantz Project.
 
-    :copyright: 2014 by PyVISA-py Authors, see AUTHORS for more details.
+    :copyright: 2014-2018 by PyVISA-py Authors, see AUTHORS for more details.
     :license: MIT, see LICENSE for more details.
 """
 
@@ -151,14 +151,14 @@ class USBRaw(object):
     #: BULK endpoint will be used.
     ENDPOINTS = (None, None)
 
-    timeout = 2000
-
     find_devices = staticmethod(find_devices)
 
     def __init__(self, vendor=None, product=None, serial_number=None,
                  device_filters=None, timeout=None, **kwargs):
         super(USBRaw, self).__init__()
 
+        # Timeout expressed in ms as an integer and limited to 2**32-1
+        # If left to None pyusb will use its default value
         self.timeout = timeout
 
         device_filters = device_filters or {}

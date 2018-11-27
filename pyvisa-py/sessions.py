@@ -6,7 +6,7 @@
     Base Session class.
 
 
-    :copyright: 2014 by PyVISA-py Authors, see AUTHORS for more details.
+    :copyright: 2014-2018 by PyVISA-py Authors, see AUTHORS for more details.
     :license: MIT, see LICENSE for more details.
 """
 
@@ -204,6 +204,11 @@ class Session(compat.with_metaclass(abc.ABCMeta)):
                       constants.VI_ATTR_INTF_TYPE: parsed.interface_type,
                       constants.VI_ATTR_TMO_VALUE: (self._get_timeout,
                                                     self._set_timeout)}
+
+        #: Timeout expressed in second or None for the absence of a timeout.
+        #: The default value is set when calling
+        #: self.set_attribute(attr, default_timeout)
+        self.timeout = None
 
         #: Set the default timeout from constants
         attr = constants.VI_ATTR_TMO_VALUE
