@@ -73,7 +73,6 @@ class GPIBSession(Session):
         eos_mode = 0
         self.interface = Gpib(name=minor, pad=pad, sad=sad, timeout=timeout, send_eoi=send_eoi, eos_mode=eos_mode)
         self.controller = Gpib(name=minor) # this is the bus controller device
-        self.handle = self.interface.id
         # force timeout setting to interface
         self.set_attribute(constants.VI_ATTR_TMO_VALUE, attributes.AttributesByID[constants.VI_ATTR_TMO_VALUE].default)
 
@@ -126,7 +125,10 @@ class GPIBSession(Session):
         return status
 
     def close(self):
-        gpib.close(self.handle)
+        del self.interface
+        del self.controller
+        self.interface = None
+        self.controller = None
 
     def read(self, count):
         """Reads data from device or interface synchronously.
