@@ -20,6 +20,17 @@ from .sessions import Session, UnknownAttribute
 try:
     import gpib
     from Gpib import Gpib
+
+    # patch Gpib to avoid double closing of handles
+    def _patch_Gpib():
+        if not hasattr(Gpib, "close"):
+            _old_del = Gpib.__del__
+            def _inner(self):
+                _old_del(self)
+                self._own = False
+            Gpib.__del__ = _inner
+            Gpib.close = _inner
+    _patch_Gpib()
 except ImportError as e:
     Session.register_unavailable(constants.InterfaceType.gpib, 'INSTR',
                                  'Please install linux-gpib to use this resource type.\n%s' % e)
@@ -125,10 +136,8 @@ class GPIBSession(Session):
         return status
 
     def close(self):
-        del self.interface
-        del self.controller
-        self.interface = None
-        self.controller = None
+        self.interface.close()
+        self.controller.close()
 
     def read(self, count):
         """Reads data from device or interface synchronously.
