@@ -262,14 +262,10 @@ class Session(compat.with_metaclass(abc.ABCMeta)):
 
         :param command_byte: command byte to send
         :type command_byte: int, must be [0 255]
-        :return: return value of the library call
-        :rtype: :class:`pyvisa.constants.StatusCode`
+        :return: Number of written bytes, return value of the library call.
+        :rtype: int, :class:`pyvisa.constants.StatusCode`
         """
-        try:
-            return self.sessions[session].gpib_command(command_byte)
-
-        except KeyError:
-            return constants.StatusCode.error_invalid_object
+        return StatusCode.error_nonsupported_operation
 
     def assert_trigger(self, protocol):
         """Asserts software or hardware trigger.
