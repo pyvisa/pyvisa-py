@@ -4,6 +4,7 @@ PyVISA-py Changelog
 0.4.0 (unreleased)
 ------------------
 
+- avoid double closing of gpib resources PR #171
 - fix initialization of timeout for the USB resources (the default was set
   before creating the underlying connection to which the timeout must be passed
   and was not). PR #167
