@@ -6,6 +6,7 @@ PyVISA-py Changelog
 
 - fix return types of PyVisaLibrary and Session methods to match
   pyvisa.highlevel.VisaLibraryBase fix #169 PR #170
+- avoid double closing of gpib resources PR #171
 - fix initialization of timeout for the USB resources (the default was set
   before creating the underlying connection to which the timeout must be passed
   and was not). PR #167
