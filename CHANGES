@@ -4,6 +4,7 @@ PyVISA-py Changelog
 0.4.0 (unreleased)
 ------------------
 
+- fix wrong increment of lastxid in rpc in the case of timeout PR # 173
 - fix return types of PyVisaLibrary and Session methods to match
   pyvisa.highlevel.VisaLibraryBase fix #169 PR #170
 - avoid double closing of gpib resources PR #171

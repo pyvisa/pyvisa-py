@@ -321,7 +321,7 @@ def _sendrecord(sock, record, fragsize=None, timeout=None):
         record = record[fragsize:]
 
 
-def _recvrecord(sock, timeout, read_fun=None):
+def _recvrecord(sock, timeout, read_fun=None, client=None):
 
     record = bytearray()
     buffer = bytearray()
@@ -351,8 +351,13 @@ def _recvrecord(sock, timeout, read_fun=None):
         if sock in r:
             read_data = read_fun(exp_length)
             buffer.extend(read_data)
+        # Timeout was reached
         elif timeout is not None and time.time() >= finish_time:
-            # reached timeout
+            # In the total absence of answer from the instrument we can assume
+            # that xid should not be incremented since the instrument did not
+            # acknowledge the communication.
+            if not read_data:
+                client.lastxid -= 1
             logger.debug(('Time out encountered in %s.'
                           'Already receieved %d bytes. Last fragment is %d '
                           'bytes long and we were expecting %d'),
@@ -437,14 +442,14 @@ class RawTCPClient(Client):
         """
         if proc == 11:
             # vxi11.DEVICE_WRITE
-            self.timeout = (args[1] / 1000.0) + 2.0
+            self.timeout = (args[1] / 1000.0)
         elif proc in (12, 22):
             # vxi11.DEVICE_READ or vxi11.DEVICE_DOCMD
-            self.timeout = (args[2] / 1000.0) + 2.0
+            self.timeout = (args[2] / 1000.0)
         elif proc in (13, 14, 15, 16, 17):
             # vxi11.DEVICE_READSTB, vxi11.DEVICE_TRIGGER, vxi11.DEVICE_CLEAR,
             # vxi11.DEVICE_REMOTE, or vxi11.DEVICE_LOCAL
-            self.timeout = (args[3] / 1000.0) + 2.0
+            self.timeout = (args[3] / 1000.0)
         else:
             self.timeout = 4.0
 
@@ -467,7 +472,7 @@ class RawTCPClient(Client):
 
         _sendrecord(self.sock, call, timeout=self.timeout)
 
-        reply = _recvrecord(self.sock, self.timeout)
+        reply = _recvrecord(self.sock, self.timeout, client=self)
         u = self.unpacker
         u.reset(reply)
         xid, verf = u.unpack_replyheader()
