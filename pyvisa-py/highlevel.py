@@ -93,24 +93,52 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
     def _init(self):
 
         #: map session handle to session object.
-        #: dict[int, session.Session]
+        #: dict[int, sessions.Session]
         self.sessions = {}
 
-    def _register(self, obj):
+        #: map event handle to event object.
+        #: dict[int, Event]
+        self.events = {}
+
+    def _generate_handle(self):
+        """Creates a random but unique handle for a session object,
+        event or find list
+
+        :return: handle
+        :rtype: int
+        """
+        # VISA sessions, events, and find lists get unique logical identifiers
+        # from the same pool
+        handle = None
+        while (handle is None or
+               handle in self.sessions or
+               handle in self.events):
+            handle = random.randint(1000000, 9999999)
+        return handle
+
+    def _register_session(self, obj):
         """Creates a random but unique session handle for a session object,
-        register it in the sessions dictionary and return the value
+        registers it in the sessions dictionary and returns the value
 
         :param obj: a session object.
         :return: session handle
         :rtype: int
         """
-        session = None
-
-        while session is None or session in self.sessions:
-            session = random.randint(1000000, 9999999)
-
+        session = self._generate_handle()
         self.sessions[session] = obj
         return session
+
+    def _register_event(self, obj):
+        """Creates a random but unique session handle for an event object,
+        registers it in the event dictionary and returns the value
+
+        :param obj: an event object.
+        :return: event handle
+        :rtype: int
+        """
+        event_handle = self._generate_handle()
+        self.events[event_handle] = obj
+        return event_handle
 
     def _return_handler(self, ret_value, func, arguments):
         """Check return values for errors and warnings.
@@ -182,18 +210,20 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
         try:
             open_timeout = int(open_timeout)
         except ValueError:
-            raise ValueError('open_timeout (%r) must be an integer (or compatible type)' % open_timeout)
+            raise ValueError(
+                'open_timeout (%r) must be an integer (or compatible type)' % open_timeout)
 
         try:
             parsed = rname.parse_resource_name(resource_name)
         except rname.InvalidResourceName:
             return 0, StatusCode.error_invalid_resource_name
 
-        cls = sessions.Session.get_session_class(parsed.interface_type_const, parsed.resource_class)
+        cls = sessions.Session.get_session_class(
+            parsed.interface_type_const, parsed.resource_class)
 
         sess = cls(session, resource_name, parsed, open_timeout)
 
-        return self._register(sess), StatusCode.success
+        return self._register_session(sess), StatusCode.success
 
     def clear(self, session):
         """Clears a device.
@@ -214,7 +244,8 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
         """Write GPIB command byte on the bus.
 
         Corresponds to viGpibCommand function of the VISA library.
-        See: https://linux-gpib.sourceforge.io/doc_html/gpib-protocol.html#REFERENCE-COMMAND-BYTES
+        #REFERENCE-COMMAND-BYTES
+        See: https://linux-gpib.sourceforge.io/doc_html/gpib-protocol.html
 
         :param command_byte: command byte to send
         :type command_byte: int, must be [0 255]
@@ -280,12 +311,16 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
         :return: return value of the library call.
         :rtype: VISAStatus
         """
-        try:
-            sess = self.sessions[session]
-            if sess is not self:
-                sess.close()
-        except KeyError:
-            return StatusCode.error_invalid_object
+        for container in (self.sessions, self.events):
+            try:
+                obj = container[session]
+                if obj is not self:
+                    obj.close()
+                    del container[session]
+                    return StatusCode.success
+            except KeyError:
+                pass
+        return StatusCode.error_invalid_object
 
     def open_default_resource_manager(self):
         """This function returns a session to the Default Resource Manager resource.
@@ -295,7 +330,7 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
         :return: Unique logical identifier to a Default Resource Manager session, return value of the library call.
         :rtype: session, VISAStatus
         """
-        return self._register(self), StatusCode.success
+        return self._register_session(self), StatusCode.success
 
     def list_resources(self, session, query='?*::INSTR'):
         """Returns a tuple of all connected devices matching query.
@@ -368,12 +403,14 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
         :return: The state of the queried attribute for a specified resource, return value of the library call.
         :rtype: unicode | str | list | int, VISAStatus
         """
-        try:
-            sess = self.sessions[session]
-        except KeyError:
-            return None, StatusCode.error_invalid_object
+        for container in (self.sessions, self.events):
+            try:
+                obj = container[session]
+                break
+            except KeyError:
+                return None, StatusCode.error_invalid_object
 
-        return sess.get_attribute(attribute)
+        return obj.get_attribute(attribute)
 
     def set_attribute(self, session, attribute, attribute_state):
         """Sets the state of an attribute.
@@ -387,12 +424,14 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
         :rtype: VISAStatus
         """
 
-        try:
-            sess = self.sessions[session]
-        except KeyError:
-            return StatusCode.error_invalid_object
+        for container in (self.sessions, self.events):
+            try:
+                obj = container[session]
+                break
+            except KeyError:
+                return StatusCode.error_invalid_object
 
-        return sess.set_attribute(attribute, attribute_state)
+        return obj.set_attribute(attribute, attribute_state)
 
     def lock(self, session, lock_type, timeout, requested_key=None):
         """Establishes an access mode to the specified resources.
@@ -431,9 +470,146 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
         return sess.unlock()
 
     def disable_event(self, session, event_type, mechanism):
-        # TODO: implement this for GPIB finalization
-        pass
+        """Disables notification of the specified event type(s) via the specified mechanism(s).
+
+        Corresponds to viDisableEvent function of the VISA library.
+
+        :param session: Unique logical identifier to a session.
+        :param event_type: Logical event identifier.
+        :param mechanism: Specifies event handling mechanisms to be disabled.
+                        (Constants.VI_QUEUE, .VI_HNDLR, .VI_SUSPEND_HNDLR, .VI_ALL_MECH)
+        :return: return value of the library call.
+        :rtype: :class:`pyvisa.constants.StatusCode`
+        """
+        try:
+            sess = self.sessions[session]
+        except KeyError:
+            return StatusCode.error_invalid_object
+
+        # TODO: add support for VI_HNDLR, VI_SUSPEND_HNDLR, VI_ALL_MECH
+        if mechanism != constants.VI_QUEUE:
+            return StatusCode.error_nonsupported_mechanism
+
+        return sess.disable_event(event_type, mechanism)
 
     def discard_events(self, session, event_type, mechanism):
-        # TODO: implement this for GPIB finalization
-        pass
+        """Discards event occurrences for specified event types and mechanisms in a session.
+
+        Corresponds to viDiscardEvents function of the VISA library.
+
+        :param session: Unique logical identifier to a session.
+        :param event_type: Logical event identifier.
+        :param mechanism: Specifies event handling mechanisms to be discarded.
+                        (Constants.VI_QUEUE, .VI_SUSPEND_HNDLR, .VI_ALL_MECH)
+        :return: return value of the library call.
+        :rtype: :class:`pyvisa.constants.StatusCode`
+        """
+        try:
+            sess = self.sessions[session]
+        except KeyError:
+            return StatusCode.error_invalid_object
+
+        #  TODO: add support for VI_HNDLR, VI_SUSPEND_HNDLR, VI_ALL_MECH
+        if mechanism != constants.VI_QUEUE:
+            return StatusCode.error_nonsupported_mechanism
+
+        return sess.discard_events(event_type, mechanism)
+
+    def enable_event(self, session, event_type, mechanism, context=None):
+        """Enable event occurrences for specified event types and mechanisms in a session.
+
+        Corresponds to viEnableEvent function of the VISA library.
+
+        :param session: Unique logical identifier to a session.
+        :param event_type: Logical event identifier.
+        :param mechanism: Specifies event handling mechanisms to be enabled.
+                        (Constants.VI_QUEUE, .VI_HNDLR, .VI_SUSPEND_HNDLR)
+        :param context:
+        :return: return value of the library call.
+        :rtype: :class:`pyvisa.constants.StatusCode`
+        """
+        if context is None:
+            context = constants.VI_NULL
+        elif context != constants.VI_NULL:
+            warnings.warn('In enable_event, context will be set VI_NULL.')
+            context = constants.VI_NULL  # according to spec VPP-4.3, section 3.7.3.1
+
+        try:
+            sess = self.sessions[session]
+        except KeyError:
+            return StatusCode.error_invalid_object
+
+        return sess.enable_event(event_type, mechanism, context)
+
+    def install_handler(self, session, event_type, handler, user_handle):
+        """Installs handlers for event callbacks.
+
+        Corresponds to viInstallHandler function of the VISA library.
+
+        :param session: Unique logical identifier to a session.
+        :param event_type: Logical event identifier.
+        :param handler: Interpreted as a valid reference to a handler to be installed by a client application.
+        :param user_handle: A value specified by an application that can be used for identifying handlers
+                            uniquely for an event type.
+        :returns: a handler descriptor which consists of three elements:
+                 - handler (a python callable)
+                 - user handle (a ctypes object)
+                 - ctypes handler (ctypes object wrapping handler)
+                 and return value of the library call.
+        :rtype: int, :class:`pyvisa.constants.StatusCode`
+        """
+        try:
+            sess = self.sessions[session]
+        except KeyError:
+            return StatusCode.error_invalid_object
+
+        return sess.install_handler(event_type, handler, user_handle)
+
+    def uninstall_handler(self, session, event_type, handler, user_handle=None):
+        """Uninstalls handlers for events.
+
+        Corresponds to viUninstallHandler function of the VISA library.
+
+        :param session: Unique logical identifier to a session.
+        :param event_type: Logical event identifier.
+        :param handler: Interpreted as a valid reference to a handler to be uninstalled by a client application.
+        :param user_handle: A value specified by an application that can be used for identifying handlers
+                            uniquely in a session for an event.
+        :return: return value of the library call.
+        :rtype: :class:`pyvisa.constants.StatusCode`
+        """
+        try:
+            sess = self.sessions[session]
+        except KeyError:
+            return StatusCode.error_invalid_object
+
+        return sess.uninstall_handler(event_type, handler, user_handle)
+
+    def wait_on_event(self, session, in_event_type, timeout):
+        """Waits for an occurrence of the specified event for a given session.
+
+        Corresponds to viWaitOnEvent function of the VISA library.
+
+        :param session: Unique logical identifier to a session.
+        :param in_event_type: Logical identifier of the event(s) to wait for.
+        :param timeout: Absolute time period in time units that the resource shall wait for a specified event to
+                        occur before returning the time elapsed error. The time unit is in milliseconds.
+        :return: - Logical identifier of the event actually received
+                 - A handle specifying the unique occurrence of an event
+                 - return value of the library call.
+        :rtype: - eventtype
+                - event
+                - :class:`pyvisa.constants.StatusCode`
+        """
+        try:
+            sess = self.sessions[session]
+        except KeyError:
+            return None, None, StatusCode.error_invalid_object
+
+        # FIXME: for now calling Session's own wait_on_event() is the only way
+        # to notify PyVisaLibrary of the event and store it
+        out_event_type, event_attrs, ret = sess.wait_on_event(
+            in_event_type, timeout)
+        event_handle = self._register_event(event_attrs)
+
+        return out_event_type, event_handle, ret

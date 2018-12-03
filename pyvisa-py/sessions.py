@@ -203,7 +203,8 @@ class Session(compat.with_metaclass(abc.ABCMeta)):
                       constants.VI_ATTR_RSRC_CLASS: parsed.resource_class,
                       constants.VI_ATTR_INTF_TYPE: parsed.interface_type,
                       constants.VI_ATTR_TMO_VALUE: (self._get_timeout,
-                                                    self._set_timeout)}
+                                                    self._set_timeout),
+                      constants.VI_ATTR_MAX_QUEUE_LENGTH: 50}
 
         #: Timeout expressed in second or None for the absence of a timeout.
         #: The default value is set when calling
@@ -537,3 +538,92 @@ class Session(compat.with_metaclass(abc.ABCMeta)):
         else:
             self.timeout = value / 1000.0
         return StatusCode.success
+
+    def disable_event(self, event_type, mechanism):
+        """Disables notification of the specified event type(s) via the specified mechanism(s).
+
+        Corresponds to viDisableEvent function of the VISA library.
+
+        :param event_type: Logical event identifier.
+        :param mechanism: Specifies event handling mechanisms to be disabled.
+                        (Constants.VI_QUEUE, .VI_HNDLR, .VI_SUSPEND_HNDLR, .VI_ALL_MECH)
+        :return: return value of the library call.
+        :rtype: :class:`pyvisa.constants.StatusCode`
+        """
+        raise NotImplementedError
+
+    def discard_events(self, event_type, mechanism):
+        """Discards event occurrences for specified event types and mechanisms in a session.
+
+        Corresponds to viDiscardEvents function of the VISA library.
+
+        :param event_type: Logical event identifier.
+        :param mechanism: Specifies event handling mechanisms to be discarded.
+                        (Constants.VI_QUEUE, .VI_SUSPEND_HNDLR, .VI_ALL_MECH)
+        :return: return value of the library call.
+        :rtype: :class:`pyvisa.constants.StatusCode`
+        """
+        raise NotImplementedError
+
+    def enable_event(self, event_type, mechanism, context=None):
+        """Enable event occurrences for specified event types and mechanisms in a session.
+
+        Corresponds to viEnableEvent function of the VISA library.
+
+        :param event_type: Logical event identifier.
+        :param mechanism: Specifies event handling mechanisms to be enabled.
+                        (Constants.VI_QUEUE, .VI_HNDLR, .VI_SUSPEND_HNDLR)
+        :param context:
+        :return: return value of the library call.
+        :rtype: :class:`pyvisa.constants.StatusCode`
+        """
+        raise NotImplementedError
+
+    def install_handler(self, event_type, handler, user_handle):
+        """Installs handlers for event callbacks.
+
+        Corresponds to viInstallHandler function of the VISA library.
+
+        :param event_type: Logical event identifier.
+        :param handler: Interpreted as a valid reference to a handler to be installed by a client application.
+        :param user_handle: A value specified by an application that can be used for identifying handlers
+                            uniquely for an event type.
+        :returns: a handler descriptor which consists of three elements:
+                 - handler (a python callable)
+                 - user handle (a ctypes object)
+                 - ctypes handler (ctypes object wrapping handler)
+                 and return value of the library call.
+        :rtype: int, :class:`pyvisa.constants.StatusCode`
+        """
+        raise NotImplementedError
+
+    def uninstall_handler(self, event_type, handler, user_handle=None):
+        """Uninstalls handlers for events.
+
+        Corresponds to viUninstallHandler function of the VISA library.
+
+        :param event_type: Logical event identifier.
+        :param handler: Interpreted as a valid reference to a handler to be uninstalled by a client application.
+        :param user_handle: A value specified by an application that can be used for identifying handlers
+                            uniquely in a session for an event.
+        :return: return value of the library call.
+        :rtype: :class:`pyvisa.constants.StatusCode`
+        """
+        raise NotImplementedError
+
+    def wait_on_event(self, in_event_type, timeout):
+        """Waits for an occurrence of the specified event for a given session.
+
+        Corresponds to viWaitOnEvent function of the VISA library.
+
+        :param in_event_type: Logical identifier of the event(s) to wait for.
+        :param timeout: Absolute time period in time units that the resource shall wait for a specified event to
+                        occur before returning the time elapsed error. The time unit is in milliseconds.
+        :return: - Logical identifier of the event actually received
+                 - A handle specifying the unique occurrence of an event
+                 - return value of the library call.
+        :rtype: - eventtype
+                - event object # TODO
+                - :class:`pyvisa.constants.StatusCode`
+        """
+        raise NotImplementedError
