@@ -493,13 +493,13 @@ class GPIBSession(Session):
 
         # if the event queue is empty, wait for more events
         if not self.event_queue:
-            old_timeout = self._get_timeout(None)
+            old_timeout, _ = self._get_timeout(None)
             self._set_timeout(None, timeout)
 
             event_mask = 0
 
             if in_event_type in (constants.VI_EVENT_IO_COMPLETION, constants.VI_ALL_ENABLED_EVENTS):
-                event_mask |= gpib.CMPL
+                event_mask |= 0x100  # CMPL
 
             if in_event_type in (constants.VI_EVENT_SERVICE_REQ, constants.VI_ALL_ENABLED_EVENTS):
                 event_mask |= gpib.RQS
@@ -513,7 +513,7 @@ class GPIBSession(Session):
             self._set_timeout(None, old_timeout)
 
             # TODO: set event attributes
-            if gpib.CMPL & event_mask & sta:
+            if 0x100 & event_mask & sta:
                 self.event_queue.append((constants.VI_EVENT_IO_COMPLETION, {}))
 
             if gpib.RQS & event_mask & sta:
@@ -523,4 +523,4 @@ class GPIBSession(Session):
             out_event_type, event_data = self.event_queue.pop()
             return out_event_type, event_data, StatusCode.error_timeout
         except IndexError:
-            return None, None, StatusCode.error_timeout
+            return in_event_type, None, StatusCode.error_timeout
