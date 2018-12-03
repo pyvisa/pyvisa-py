@@ -25,6 +25,7 @@ try:
     def _patch_Gpib():
         if not hasattr(Gpib, "close"):
             _old_del = Gpib.__del__
+
             def _inner(self):
                 _old_del(self)
                 self._own = False
@@ -57,6 +58,8 @@ TIMETABLE = (0, 10e-6, 30e-6, 100e-6, 300e-6, 1e-3, 3e-3, 10e-3, 30e-3, 100e-3, 
 # TODO: Check board indices other than 0.
 BOARD = 0
 # TODO: Check secondary addresses.
+
+
 @Session.register(constants.InterfaceType.gpib, 'INSTR')
 class GPIBSession(Session):
     """A GPIB Session that uses linux-gpib to do the low level communication.
@@ -82,10 +85,20 @@ class GPIBSession(Session):
         timeout = 13
         send_eoi = 1
         eos_mode = 0
-        self.interface = Gpib(name=minor, pad=pad, sad=sad, timeout=timeout, send_eoi=send_eoi, eos_mode=eos_mode)
-        self.controller = Gpib(name=minor) # this is the bus controller device
+        self.interface = Gpib(name=minor, pad=pad, sad=sad,
+                              timeout=timeout, send_eoi=send_eoi, eos_mode=eos_mode)
+        self.controller = Gpib(name=minor)  # this is the bus controller device
         # force timeout setting to interface
-        self.set_attribute(constants.VI_ATTR_TMO_VALUE, attributes.AttributesByID[constants.VI_ATTR_TMO_VALUE].default)
+        self.set_attribute(constants.VI_ATTR_TMO_VALUE,
+                           attributes.AttributesByID[constants.VI_ATTR_TMO_VALUE].default)
+
+        # prepare set of allowed events
+        self.valid_event_types = [constants.VI_EVENT_IO_COMPLETION,
+                                  constants.VI_EVENT_SERVICE_REQ]
+
+        self.enabled_queue_events = set()
+
+        self.event_queue = []
 
     def _get_timeout(self, attribute):
         if self.interface:
@@ -150,9 +163,9 @@ class GPIBSession(Session):
         """
 
         # 0x2000 = 8192 = END
-        checker = lambda current: self.interface.ibsta() & 8192
+        def checker(current): return self.interface.ibsta() & 8192
 
-        reader = lambda: self.interface.read(count)
+        def reader(): return self.interface.read(count)
 
         return self._read(reader, count, checker, False, None, False, gpib.GpibError)
 
@@ -171,7 +184,7 @@ class GPIBSession(Session):
 
         try:
             self.interface.write(data)
-            count = self.interface.ibcnt() # number of bytes transmitted
+            count = self.interface.ibcnt()  # number of bytes transmitted
 
             return count, StatusCode.success
 
@@ -378,3 +391,136 @@ class GPIBSession(Session):
             return self.interface.serial_poll(), StatusCode.success
         except gpib.GpibError:
             return 0, StatusCode.error_system_error
+
+    def disable_event(self, event_type, mechanism):
+        """Disables notification of the specified event type(s) via the specified mechanism(s).
+
+        Corresponds to viDisableEvent function of the VISA library.
+
+        :param event_type: Logical event identifier.
+        :param mechanism: Specifies event handling mechanisms to be disabled.
+                        (Constants.VI_QUEUE, .VI_HNDLR, .VI_SUSPEND_HNDLR, .VI_ALL_MECH)
+        :return: return value of the library call.
+        :rtype: :class:`pyvisa.constants.StatusCode`
+        """
+
+        if event_type not in self.valid_event_types:
+            return StatusCode.error_invalid_event
+
+        if mechanism in (constants.VI_QUEUE, constants.VI_ALL_MECH):
+            if event_type not in self.enabled_queue_events:
+                return StatusCode.success_event_already_disabled
+
+            self.enabled_queue_events.remove(event_type)
+            return StatusCode.success
+
+        return StatusCode.error_invalid_mechanism
+
+    def discard_events(self, event_type, mechanism):
+        """Discards event occurrences for specified event types and mechanisms in a session.
+
+        Corresponds to viDiscardEvents function of the VISA library.
+
+        :param event_type: Logical event identifier.
+        :param mechanism: Specifies event handling mechanisms to be discarded.
+                        (Constants.VI_QUEUE, .VI_SUSPEND_HNDLR, .VI_ALL_MECH)
+        :return: return value of the library call.
+        :rtype: :class:`pyvisa.constants.StatusCode`
+        """
+        if event_type not in self.valid_event_types:
+            return StatusCode.error_invalid_event
+
+        if mechanism in (constants.VI_QUEUE, constants.VI_ALL_MECH):
+            self.event_queue = [(t, a) for t, a in self.event_queue if not (
+                event_type == constants.VI_ALL_ENABLED_EVENTS or t == event_type)]
+            return StatusCode.success
+
+        return StatusCode.error_invalid_mechanism
+
+    def enable_event(self, event_type, mechanism, context=None):
+        """Enable event occurrences for specified event types and mechanisms in a session.
+
+        Corresponds to viEnableEvent function of the VISA library.
+
+        :param event_type: Logical event identifier.
+        :param mechanism: Specifies event handling mechanisms to be enabled.
+                        (Constants.VI_QUEUE, .VI_HNDLR, .VI_SUSPEND_HNDLR)
+        :param context:
+        :return: return value of the library call.
+        :rtype: :class:`pyvisa.constants.StatusCode`
+        """
+
+        if event_type not in self.valid_event_types:
+            return StatusCode.error_invalid_event
+
+        if mechanism in (constants.VI_QUEUE, constants.VI_ALL_MECH):
+            # enable GPIB autopoll
+            try:
+                self.controller.config(7, 1)
+            except gpib.GpibError:
+                return StatusCode.error_invalid_setup
+
+            if event_type in self.enabled_queue_events:
+                return StatusCode.success_event_already_enabled
+            else:
+                self.enabled_queue_events.add(event_type)
+                return StatusCode.success
+
+        # mechanisms which are not implemented: constants.VI_SUSPEND_HNDLR, constants.VI_ALL_MECH
+        return StatusCode.error_invalid_mechanism
+
+    def wait_on_event(self, in_event_type, timeout):
+        """Waits for an occurrence of the specified event for a given session.
+
+        Corresponds to viWaitOnEvent function of the VISA library.
+
+        :param in_event_type: Logical identifier of the event(s) to wait for.
+        :param timeout: Absolute time period in time units that the resource shall wait for a specified event to
+                        occur before returning the time elapsed error. The time unit is in milliseconds.
+        :return: - Logical identifier of the event actually received
+                 - A handle specifying the unique occurrence of an event
+                 - return value of the library call.
+        :rtype: - eventtype
+                - event object # TODO
+                - :class:`pyvisa.constants.StatusCode`
+        """
+
+        if in_event_type not in self.valid_event_types:
+            return StatusCode.error_invalid_event
+
+        if in_event_type not in self.enabled_queue_events:
+            return StatusCode.error_not_enabled
+
+        # if the event queue is empty, wait for more events
+        if not self.event_queue:
+            old_timeout = self._get_timeout(None)
+            self._set_timeout(None, timeout)
+
+            event_mask = 0
+
+            if in_event_type in (constants.VI_EVENT_IO_COMPLETION, constants.VI_ALL_ENABLED_EVENTS):
+                event_mask |= gpib.CMPL
+
+            if in_event_type in (constants.VI_EVENT_SERVICE_REQ, constants.VI_ALL_ENABLED_EVENTS):
+                event_mask |= gpib.RQS
+
+            if timeout != 0:
+                event_mask |= gpib.TIMO
+
+            self.interface.wait(event_mask)
+            sta = self.interface.ibsta()
+
+            self._set_timeout(None, old_timeout)
+
+            # TODO: set event attributes
+            if gpib.CMPL & event_mask & sta:
+                self.event_queue.append((constants.VI_EVENT_IO_COMPLETION, {}))
+
+            if gpib.RQS & event_mask & sta:
+                self.event_queue.append((constants.VI_EVENT_SERVICE_REQ, {}))
+
+        try:
+            out_event_type, event_data = self.event_queue.pop()
+            return out_event_type, event_data, StatusCode.error_timeout
+        except IndexError:
+            return None, None, StatusCode.error_timeout
