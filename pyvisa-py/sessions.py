@@ -265,7 +265,7 @@ class Session(compat.with_metaclass(abc.ABCMeta)):
         :return: Number of written bytes, return value of the library call.
         :rtype: int, :class:`pyvisa.constants.StatusCode`
         """
-        return StatusCode.error_nonsupported_operation
+        return 0, StatusCode.error_nonsupported_operation
 
     def assert_trigger(self, protocol):
         """Asserts software or hardware trigger.
