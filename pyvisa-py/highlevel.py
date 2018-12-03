@@ -195,22 +195,6 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
 
         return self._register(sess), StatusCode.success
 
-    def assert_trigger(self, session, protocol):
-        """Asserts software or hardware trigger.
-
-        Corresponds to viAssertTrigger function of the VISA library.
-
-        :param session: Unique logical identifier to a session.
-        :param protocol: Trigger protocol to use during assertion. (Constants.PROT*)
-        :return: return value of the library call.
-        :rtype: :class:`pyvisa.constants.StatusCode`
-        """
-        try:
-            sess = self.sessions[session]
-        except KeyError:
-            return 0, constants.StatusCode.error_invalid_object
-        return sess.assert_trigger(protocol)
-
     def clear(self, session):
         """Clears a device.
 
@@ -223,7 +207,7 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
         try:
             sess = self.sessions[session]
         except KeyError:
-            return 0, constants.StatusCode.error_invalid_object
+            return constants.StatusCode.error_invalid_object
         return sess.clear()
 
     def gpib_command(self, session, command_byte):
@@ -271,7 +255,7 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
         try:
             sess = self.sessions[session]
         except KeyError:
-            return 0, constants.StatusCode.error_invalid_object
+            return constants.StatusCode.error_invalid_object
         return sess.gpib_send_ifc()
 
     def read_stb(self, session):

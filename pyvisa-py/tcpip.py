@@ -207,7 +207,7 @@ class TCPIPInstrSession(Session):
         """
 
         if attribute == constants.VI_ATTR_TCPIP_ADDR:
-            return self.host_address, StatusCode.success
+            return self.parsed.host_address, StatusCode.success
 
         elif attribute == constants.VI_ATTR_TCPIP_DEVICE_NAME:
             raise NotImplementedError
@@ -311,7 +311,7 @@ class TCPIPInstrSession(Session):
 
         error = self.interface.device_lock(self.link, flags, self.lock_timeout)
 
-        return VXI11_ERRORS_TO_VISA[error]
+        return '', VXI11_ERRORS_TO_VISA[error]
 
     def unlock(self):
         """Relinquishes a lock for the specified resource.

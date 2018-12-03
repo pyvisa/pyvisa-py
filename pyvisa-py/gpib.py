@@ -196,9 +196,9 @@ class GPIBSession(Session):
 
         try:
             self.interface.clear()
-            return 0, StatusCode.success
-        except Exception:
-            return 0, StatusCode.error_system_error
+            return StatusCode.success
+        except gpib.GpibError:
+            return StatusCode.error_system_error
 
     def gpib_command(self, command_byte):
         """Write GPIB command byte on the bus.
@@ -208,23 +208,22 @@ class GPIBSession(Session):
 
         :param command_byte: command byte to send
         :type command_byte: int, must be [0 255]
-        :return: return value of the library call
-        :rtype: :class:`pyvisa.constants.StatusCode`
+        :return: Number of written bytes, return value of the library call.
+        :rtype: int, :class:`pyvisa.constants.StatusCode`
         """
 
         if 0 <= command_byte <= 255:
             data = chr(command_byte)
         else:
-            return StatusCode.error_nonsupported_operation
+            return 0, StatusCode.error_nonsupported_operation
 
         try:
-            self.controller.command(data)
-            return StatusCode.success
+            return self.controller.command(data), StatusCode.success
 
         except gpib.GpibError:
-            return StatusCode.error_system_error
+            return 0, StatusCode.error_system_error
 
-    def trigger(self, protocol):
+    def assert_trigger(self, protocol):
         """Asserts hardware trigger.
         Only supports protocol = constants.VI_TRIG_PROT_DEFAULT
 
@@ -257,9 +256,9 @@ class GPIBSession(Session):
 
         try:
             self.controller.interface_clear()
-            return 0, StatusCode.success
-        except:
-            return 0, StatusCode.error_system_error
+            return StatusCode.success
+        except gpib.GpibError:
+            return StatusCode.error_system_error
 
     def _get_attribute(self, attribute):
         """Get the value for a given VISA attribute for this session.
@@ -375,4 +374,7 @@ class GPIBSession(Session):
         raise UnknownAttribute(attribute)
 
     def read_stb(self):
-        return self.interface.serial_poll()
+        try:
+            return self.interface.serial_poll(), StatusCode.success
+        except gpib.GpibError:
+            return 0, StatusCode.error_system_error
