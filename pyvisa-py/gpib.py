@@ -493,8 +493,8 @@ class GPIBSession(Session):
 
         # if the event queue is empty, wait for more events
         if not self.event_queue:
-            old_timeout, _ = self._get_timeout(None)
-            self._set_timeout(None, timeout)
+            old_timeout = self.timeout
+            self.timeout = timeout
 
             event_mask = 0
 
@@ -510,7 +510,7 @@ class GPIBSession(Session):
             self.interface.wait(event_mask)
             sta = self.interface.ibsta()
 
-            self._set_timeout(None, old_timeout)
+            self.timeout = old_timeout
 
             # TODO: set event attributes
             if 0x100 & event_mask & sta:
@@ -521,6 +521,7 @@ class GPIBSession(Session):
 
         try:
             out_event_type, event_data = self.event_queue.pop()
-            return out_event_type, event_data, StatusCode.error_timeout
+            return out_event_type, event_data, StatusCode.success
         except IndexError:
             return in_event_type, None, StatusCode.error_timeout
+
