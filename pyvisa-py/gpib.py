@@ -289,8 +289,17 @@ class GPIBSession(Session):
                 return constants.VI_NO_SEC_ADDR, StatusCode.success
 
         elif attribute == constants.VI_ATTR_GPIB_REN_STATE:
-            # I have no idea how to implement this.
-            raise NotImplementedError
+            try:
+                lines = self.controller.lines()
+                if not lines & gpib.ValidREN:
+                    return constants.VI_STATE_UNKNOWN, StatusCode.success
+                if lines & gpib.BusREN:
+                    return constants.VI_STATE_ASSERTED, StatusCode.success
+                else:
+                    return constants.VI_STATE_UNASSERTED, StatusCode.success
+            except AttributeError:
+                # some versions of linux-gpib do not expose Gpib.lines()
+                return constants.VI_STATE_UNKNOWN, StatusCode.success
 
         elif attribute == constants.VI_ATTR_GPIB_UNADDR_EN:
             # IbaUnAddr 0x1b
