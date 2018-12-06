@@ -101,8 +101,12 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
         self.events = {}
 
     def _generate_handle(self):
-        """Creates a random but unique handle for a session object,
-        event or find list
+        """Creates a random and unique handle.
+
+        Handles are used for:
+        - session object (viSession)
+        - events (viEvent)
+        - find list (viFindList)
 
         :return: handle
         :rtype: int
