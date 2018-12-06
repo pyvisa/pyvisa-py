@@ -93,8 +93,8 @@ class GPIBSession(Session):
                            attributes.AttributesByID[constants.VI_ATTR_TMO_VALUE].default)
 
         # prepare set of allowed events
-        self.valid_event_types = [constants.VI_EVENT_IO_COMPLETION,
-                                  constants.VI_EVENT_SERVICE_REQ]
+        self.valid_event_types = {constants.VI_EVENT_IO_COMPLETION,
+                                  constants.VI_EVENT_SERVICE_REQ}
 
         self.enabled_queue_events = set()
 
