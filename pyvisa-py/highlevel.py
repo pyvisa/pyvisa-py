@@ -490,10 +490,6 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
         except KeyError:
             return StatusCode.error_invalid_object
 
-        # TODO: add support for VI_HNDLR, VI_SUSPEND_HNDLR, VI_ALL_MECH
-        if mechanism != constants.VI_QUEUE:
-            return StatusCode.error_nonsupported_mechanism
-
         return sess.disable_event(event_type, mechanism)
 
     def discard_events(self, session, event_type, mechanism):
@@ -512,10 +508,6 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
             sess = self.sessions[session]
         except KeyError:
             return StatusCode.error_invalid_object
-
-        #  TODO: add support for VI_HNDLR, VI_SUSPEND_HNDLR, VI_ALL_MECH
-        if mechanism != constants.VI_QUEUE:
-            return StatusCode.error_nonsupported_mechanism
 
         return sess.discard_events(event_type, mechanism)
 
