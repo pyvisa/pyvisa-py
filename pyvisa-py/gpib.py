@@ -38,6 +38,46 @@ except ImportError as e:
     raise
 
 
+class GPIBEvent(object):
+    """A simple event object that holds event attributes.
+    """
+
+    def __init__(self, attrs):
+        """Initialize GPIBEvent with an attribute dictionary.
+
+        :param attrs: Event attributes to be stored.
+        :type attrs: dict or dictionary-like
+        """
+        self.attrs = {attribute: value for attribute, value in attrs.items()}
+
+    def __del__(self):
+        self.close()
+
+    def get_attribute(self, attr):
+        """Retrieves the state of an attribute.
+
+        Corresponds to viGetAttribute function of the VISA library for this particular event.
+
+        :param attribute: Event attribute for which the state query is made (see Attributes.*)
+        :return: The state of the queried attribute, return value describing success.
+        :rtype: unicode | str | list | int, VISAStatus
+        """
+        try:
+            return self.attrs[attr], StatusCode.success
+        except KeyError:
+            return None, StatusCode.error_nonsupported_attribute
+
+    def close(self):
+        """Closes the event.
+
+        Corresponds to viClose function of the VISA library.
+
+        :return: return value of the library call.
+        :rtype: VISAStatus
+        """
+        return StatusCode.success
+
+
 def _find_listeners():
     """Find GPIB listeners.
     """
@@ -514,10 +554,12 @@ class GPIBSession(Session):
 
             # TODO: set event attributes
             if 0x100 & event_mask & sta:
-                self.event_queue.append((constants.VI_EVENT_IO_COMPLETION, {}))
+                self.event_queue.append(
+                    (constants.VI_EVENT_IO_COMPLETION, GPIBEvent({})))
 
             if gpib.RQS & event_mask & sta:
-                self.event_queue.append((constants.VI_EVENT_SERVICE_REQ, {}))
+                self.event_queue.append(
+                    (constants.VI_EVENT_SERVICE_REQ, GPIBEvent({})))
 
         try:
             out_event_type, event_data = self.event_queue.pop()
