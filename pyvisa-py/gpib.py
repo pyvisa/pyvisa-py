@@ -554,12 +554,24 @@ class GPIBSession(Session):
 
             # TODO: set event attributes
             if 0x100 & event_mask & sta:
+                evt_type = constants.VI_EVENT_IO_COMPLETION
+                # TODO: implement all event attributes
+                # VI_ATTR_EVENT_TYPE: VI_EVENT_IO_COMPLETION,
+                # VI_ATTR_STATUS: return code of the asynchronous operation that has completed,
+                # VI_ATTR_JOB_ID: job ID of the asynchronous operation that has completed,
+                # VI_ATTR_BUFFER: the address of the buffer that was used in the asynchronous operation,
+                # VI_ATTR_RET_COUNT/VI_ATTR_RET_COUNT_32/VI_ATTR_RET_COUNT_64: number of elements that were asynchronously transferred,
+                # VI_ATTR_OPER_NAME: name of the operation generating the event
+                attrs = {
+                    constants.VI_ATTR_EVENT_TYPE: constants.VI_EVENT_IO_COMPLETION}
                 self.event_queue.append(
-                    (constants.VI_EVENT_IO_COMPLETION, GPIBEvent({})))
+                    (constants.VI_EVENT_IO_COMPLETION,
+                     GPIBEvent(attrs)))
 
             if gpib.RQS & event_mask & sta:
                 self.event_queue.append(
-                    (constants.VI_EVENT_SERVICE_REQ, GPIBEvent({})))
+                    (constants.VI_EVENT_SERVICE_REQ,
+                     GPIBEvent({constants.VI_ATTR_EVENT_TYPE: constants.VI_EVENT_SERVICE_REQ})))
 
         try:
             out_event_type, event_data = self.event_queue.pop()
