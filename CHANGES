@@ -4,6 +4,9 @@ PyVISA-py Changelog
 0.4.0 (unreleased)
 ------------------
 
+- add GPIB support for proprietary device drivers on Windows and Linux
+  (experimental): try importing gpib-ctypes if linux-gpib is not present.
+  fix #105 #137
 - fix return types of PyVisaLibrary and Session methods to match
   pyvisa.highlevel.VisaLibraryBase fix #169 PR #170
 - avoid double closing of gpib resources PR #171
