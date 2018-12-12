@@ -15,7 +15,7 @@ from bisect import bisect
 
 from pyvisa import constants, logger, attributes
 
-from .sessions import Session, UnknownAttribute
+from .sessions import Session, UnknownAttribute, EventData
 
 try:
     import gpib
@@ -36,46 +36,6 @@ except ImportError as e:
     Session.register_unavailable(constants.InterfaceType.gpib, 'INSTR',
                                  'Please install linux-gpib to use this resource type.\n%s' % e)
     raise
-
-
-class GPIBEvent(object):
-    """A simple event object that holds event attributes.
-    """
-
-    def __init__(self, attrs):
-        """Initialize GPIBEvent with an attribute dictionary.
-
-        :param attrs: Event attributes to be stored.
-        :type attrs: dict or dictionary-like
-        """
-        self.attrs = {attribute: value for attribute, value in attrs.items()}
-
-    def __del__(self):
-        self.close()
-
-    def get_attribute(self, attr):
-        """Retrieves the state of an attribute.
-
-        Corresponds to viGetAttribute function of the VISA library for this particular event.
-
-        :param attribute: Event attribute for which the state query is made (see Attributes.*)
-        :return: The state of the queried attribute, return value describing success.
-        :rtype: unicode | str | list | int, VISAStatus
-        """
-        try:
-            return self.attrs[attr], StatusCode.success
-        except KeyError:
-            return None, StatusCode.error_nonsupported_attribute
-
-    def close(self):
-        """Closes the event.
-
-        Corresponds to viClose function of the VISA library.
-
-        :return: return value of the library call.
-        :rtype: VISAStatus
-        """
-        return StatusCode.success
 
 
 def _find_listeners():
@@ -518,10 +478,10 @@ class GPIBSession(Session):
         :param timeout: Absolute time period in time units that the resource shall wait for a specified event to
                         occur before returning the time elapsed error. The time unit is in milliseconds.
         :return: - Logical identifier of the event actually received
-                 - A handle specifying the unique occurrence of an event
+                 - An object specifying the unique occurrence of an event
                  - return value of the library call.
         :rtype: - eventtype
-                - event object # TODO
+                - EventData
                 - :class:`pyvisa.constants.StatusCode`
         """
 
@@ -552,26 +512,22 @@ class GPIBSession(Session):
 
             self.timeout = old_timeout
 
-            # TODO: set event attributes
             if 0x100 & event_mask & sta:
-                evt_type = constants.VI_EVENT_IO_COMPLETION
                 # TODO: implement all event attributes
                 # VI_ATTR_EVENT_TYPE: VI_EVENT_IO_COMPLETION,
-                # VI_ATTR_STATUS: return code of the asynchronous operation that has completed,
+                # VI_ATTR_STATUS: return code of the asynchronous IO operation that has completed,
                 # VI_ATTR_JOB_ID: job ID of the asynchronous operation that has completed,
                 # VI_ATTR_BUFFER: the address of the buffer that was used in the asynchronous operation,
                 # VI_ATTR_RET_COUNT/VI_ATTR_RET_COUNT_32/VI_ATTR_RET_COUNT_64: number of elements that were asynchronously transferred,
                 # VI_ATTR_OPER_NAME: name of the operation generating the event
-                attrs = {
-                    constants.VI_ATTR_EVENT_TYPE: constants.VI_EVENT_IO_COMPLETION}
                 self.event_queue.append(
                     (constants.VI_EVENT_IO_COMPLETION,
-                     GPIBEvent(attrs)))
+                     EventData({constants.VI_ATTR_EVENT_TYPE: constants.VI_EVENT_IO_COMPLETION})))
 
             if gpib.RQS & event_mask & sta:
                 self.event_queue.append(
                     (constants.VI_EVENT_SERVICE_REQ,
-                     GPIBEvent({constants.VI_ATTR_EVENT_TYPE: constants.VI_EVENT_SERVICE_REQ})))
+                     EventData({constants.VI_ATTR_EVENT_TYPE: constants.VI_EVENT_SERVICE_REQ})))
 
         try:
             out_event_type, event_data = self.event_queue.pop()

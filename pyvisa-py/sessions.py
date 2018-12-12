@@ -44,6 +44,47 @@ class UnknownAttribute(Exception):
     __repr__ = __str__
 
 
+class EventData(object):
+    """A simple storage that holds attributes of a single event.
+    """
+
+    def __init__(self, attrs):
+        """Initialize EventData with an attribute dictionary.
+
+        :param attrs: Event attributes to be stored.
+        :type attrs: dict or dictionary-like
+        """
+        super()
+        self.attrs = {attr: value for attr, value in attrs.items()}
+
+    def __del__(self):
+        self.close()
+
+    def get_attribute(self, attr):
+        """Retrieves the state of an attribute.
+
+        Corresponds to viGetAttribute function of the VISA library for this particular event.
+
+        :param attribute: Event attribute for which the state query is made (see Attributes.*)
+        :return: The state of the queried attribute, return value describing success.
+        :rtype: unicode | str | list | int, VISAStatus
+        """
+        try:
+            return self.attrs[attr], StatusCode.success
+        except KeyError:
+            return None, StatusCode.error_nonsupported_attribute
+
+    def close(self):
+        """Closes the event.
+
+        Corresponds to viClose function of the VISA library.
+
+        :return: return value of the library call.
+        :rtype: VISAStatus
+        """
+        return StatusCode.success
+
+
 class Session(compat.with_metaclass(abc.ABCMeta)):
     """A base class for Session objects.
 
@@ -620,10 +661,10 @@ class Session(compat.with_metaclass(abc.ABCMeta)):
         :param timeout: Absolute time period in time units that the resource shall wait for a specified event to
                         occur before returning the time elapsed error. The time unit is in milliseconds.
         :return: - Logical identifier of the event actually received
-                 - A handle specifying the unique occurrence of an event
+                 - An object specifying the unique occurrence of an event
                  - return value of the library call.
         :rtype: - eventtype
-                - event object # TODO
+                - EventData
                 - :class:`pyvisa.constants.StatusCode`
         """
         raise NotImplementedError
