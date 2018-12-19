@@ -58,7 +58,7 @@ development so please report any issues you may encounter.
 
 
 If I only need **TCPIP**, do I need to install PySerial, PyUSB, linux-gpib, or gpib-ctypes?
-------------------------------------------------------------------
+-------------------------------------------------------------------------------------------
 
 No. Libraries are loaded on demand.
 
