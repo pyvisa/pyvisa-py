@@ -46,15 +46,19 @@ FAQ
 Which libraries are used by PyVISA-py?
 --------------------------------------
 
-It depends on the interface type. For **ASRL** and **USB** we use PySerial_ and PyUSB_
-respectively. For **TCPIP** we use the :py:mod:`socket` module in the Python Standard Library.
-**GPIB** resources are not currently supported but they are in the plan using `linux-gpib`_.
+It depends on the interface type. For **ASRL** and **USB** we use PySerial_ and PyUSB_,
+respectively. PySerial_ version 3.0 or newer is required.
 
-PySerial_ version 3.0 or newer is required.
+For **TCPIP** we use the :py:mod:`socket` module in the Python Standard Library.
+
+On Linux, **GPIB** resources are supported using the `linux-gpib`_ project's Python bindings.
+On Windows as well as Linux systems with proprietary GPIB device drivers, experimental GPIB
+support is available through `gpib-ctypes`_. The `gpib-ctypes`_ library is still in
+development so please report any issues you may encounter.
 
 
-If I only need **TCPIP**, do I need to install PySerial and PyUSB?
-------------------------------------------------------------------
+If I only need **TCPIP**, do I need to install PySerial, PyUSB, linux-gpib, or gpib-ctypes?
+-------------------------------------------------------------------------------------------
 
 No. Libraries are loaded on demand.
 
@@ -126,4 +130,5 @@ from higher level applications.
 .. _`LibreVISA`: http://www.librevisa.org/
 .. _`issue tracker`: https://github.com/pyvisa/pyvisa-py/issues
 .. _`linux-gpib`: http://linux-gpib.sourceforge.net/
+.. _`gpib-ctypes`: https://pypi.org/project/gpib-ctypes/
 

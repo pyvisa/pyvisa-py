@@ -22,6 +22,8 @@ __doc__ = long_description
 
 requirements = ['pyvisa>=1.8']
 
+extras_requirements = {'gpib-ctypes': 'gpib-ctypes>=0.3.0'}
+
 
 setup(name='PyVISA-py',
       description='Python VISA bindings for GPIB, RS232, and USB instruments',
@@ -36,6 +38,7 @@ setup(name='PyVISA-py',
       keywords='Remote VISA GPIB USB serial RS232 measurement acquisition',
       license='MIT License',
       install_requires=requirements,
+      extras_requires=extras_requirements,
       classifiers=[
         'Development Status :: 4 - Beta',
         'Intended Audience :: Developers',
