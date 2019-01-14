@@ -12,6 +12,8 @@
 
 from __future__ import division, unicode_literals, print_function, absolute_import
 
+import errno
+
 from pyvisa import constants, attributes
 
 from .common import logger
@@ -80,6 +82,7 @@ class USBSession(Session):
     def _set_timeout(self, attribute, value):
         status = super(USBSession, self)._set_timeout(attribute, value)
         timeout = int(self.timeout*1000) if self.timeout else 2**32-1
+        timeout = min(timeout, 2**32-1)
         if self.interface:
             self.interface.timeout = timeout
         return status
@@ -193,6 +196,31 @@ class USBInstrSession(USBSession):
                                   serial_number=serial,
                                   usb_interface_number=intfc))
         return out
+
+    def read(self, count):
+        """Reads data from device or interface synchronously.
+
+        Corresponds to viRead function of the VISA library.
+
+        :param count: Number of bytes to be read.
+        :return: data read, return value of the library call.
+        :rtype: (bytes, VISAStatus)
+        """
+
+        supress_end_en, _ = self.get_attribute(constants.VI_ATTR_SUPPRESS_END_EN)
+        if supress_end_en:
+            raise ValueError('VI_ATTR_SUPPRESS_END_EN == True is currently unsupported by pyvisa-py')
+
+        term_char, _ = self.get_attribute(constants.VI_ATTR_TERMCHAR)
+        term_char_en, _ = self.get_attribute(constants.VI_ATTR_TERMCHAR_EN)
+
+        try:
+            data = self.interface.read(count)
+        except usb.USBError as exc:
+            if exc.errno in (errno.ETIMEDOUT, -errno.ETIMEDOUT):
+                return bytes(), StatusCode.error_timeout
+
+        return bytes(data), StatusCode.success
 
     def after_parsing(self):
         self.interface = usbtmc.USBTMC(int(self.parsed.manufacturer_id, 0),

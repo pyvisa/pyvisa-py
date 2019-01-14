@@ -62,6 +62,15 @@ class Request(enum.IntEnum):
     indicator_pulse = 64
 
 
+class UsbTmcStatus(enum.IntEnum):
+    success = 1
+    pending = 2
+    failed = 0x80
+    transfer_not_in_progress = 0x81
+    split_not_in_progress = 0x82
+    split_in_progress = 0x83
+
+
 def find_tmc_devices(vendor=None, product=None, serial_number=None,
                      custom_match=None, **kwargs):
     """Find connected USBTMC devices. See usbutil.find_devices for more info.
@@ -105,12 +114,15 @@ class BulkInMessage(namedtuple('BulkInMessage', 'msgid btag btaginverse '
     @classmethod
     def from_bytes(cls, data):
         msgid, btag, btaginverse = struct.unpack_from('BBBx', data)
-        assert msgid == MsgID.dev_dep_msg_in
+        if msgid != MsgID.dev_dep_msg_in:
+            raise ValueError("Unexpected MsgID 0x{:02x}".format(msgid))
 
         transfer_size, transfer_attributes = struct.unpack_from('<LBxxx', data,
                                                                 4)
 
-        data = data[12:]
+        # Truncate data to the specified length (discard padding).
+        data = data[12:12+transfer_size]
+
         return cls(msgid, btag, btaginverse, transfer_size,
                    transfer_attributes, data)
 
@@ -221,10 +233,7 @@ class USBRaw(object):
         :type data: bytes
         """
 
-        try:
-            return self.usb_send_ep.write(data)
-        except usb.core.USBError as e:
-            raise ValueError(str(e))
+        return self.usb_send_ep.write(data)
 
     def read(self, size):
         """Receive raw bytes to the instrument.
@@ -247,6 +256,7 @@ class USBRaw(object):
 
 class USBTMC(USBRaw):
 
+    # Maximum number of bytes per transfer (for sending and receiving).
     RECV_CHUNK = 1024 ** 2
 
     find_devices = staticmethod(find_tmc_devices)
@@ -291,6 +301,44 @@ class USBTMC(USBRaw):
 
         return interfaces[0]
 
+    def _abort_bulk_in(self, btag):
+        """Request that the device abort a pending Bulk-IN operation."""
+
+        abort_timeout_ms = 5000
+
+        # Send INITIATE_ABORT_BULK_IN.
+        data = self.usb_dev.ctrl_transfer(
+            usb.util.build_request_type(usb.util.CTRL_IN,
+                                        usb.util.CTRL_TYPE_CLASS,
+                                        usb.util.CTRL_RECIPIENT_ENDPOINT),
+            Request.initiate_abort_bulk_in,
+            btag,
+            self.usb_recv_ep.bEndpointAddress,
+            0x0002,
+            timeout=abort_timeout_ms)
+
+        if data[0] != UsbTmcStatus.success:
+            # Abort Bulk-IN failed. Ignore it.
+            return
+
+        # Read remaining data from Bulk-IN endpoint.
+        self.usb_recv_ep.read(self.RECV_CHUNK, abort_timeout_ms)
+
+        # Send CHECK_ABORT_BULK_IN until it completes.
+        for retry in range(100):
+            data = self.usb_dev.ctrl_transfer(
+                usb.util.build_request_type(usb.util.CTRL_IN,
+                                            usb.util.CTRL_TYPE_CLASS,
+                                            usb.util.CTRL_RECIPIENT_ENDPOINT),
+                Request.check_abort_bulk_in_status,
+                0x0000,
+                self.usb_recv_ep.bEndpointAddress,
+                0x0008,
+                timeout=abort_timeout_ms)
+            if data[0] != UsbTmcStatus.pending:
+                break
+            time.sleep(0.05)
+
     def write(self, data):
         """Send raw bytes to the instrument.
 
@@ -303,21 +351,29 @@ class USBTMC(USBRaw):
 
         raw_write = super(USBTMC, self).write
 
-        while not end > size:
+        # Send all data via one or more Bulk-OUT transfers.
+        # Set the EOM flag on the last transfer only.
+        # Send at least one transfer (possibly empty).
+        while (end == 0) or (end < size):
             begin, end = end, begin + self.RECV_CHUNK
 
             self._btag = (self._btag % 255) + 1
 
-            data = BulkOutMessage.build_array(self._btag, end > size,
-                                              data[begin:end])
+            eom = (end >= size)
+            data = BulkOutMessage.build_array(self._btag, eom, data[begin:end])
 
             bytes_sent += raw_write(data)
 
-        return bytes_sent
+        return size
 
     def read(self, size):
 
         recv_chunk = self.RECV_CHUNK
+        if size > 0 and size < recv_chunk:
+            recv_chunk = size
+
+        header_size = 12
+        max_padding = 511
 
         eom = False
 
@@ -333,12 +389,18 @@ class USBTMC(USBRaw):
 
             raw_write(req)
 
-            resp = raw_read(recv_chunk)
-
-            response = BulkInMessage.from_bytes(resp)
+            try:
+                resp = raw_read(recv_chunk + header_size + max_padding)
+                response = BulkInMessage.from_bytes(resp)
+            except (usb.core.USBError, ValueError):
+                # Abort failed Bulk-IN operation.
+                self._abort_bulk_in(self._btag)
+                raise
 
             received.extend(response.data)
 
-            eom = response.transfer_attributes & 1
+            # Detect EOM only when device sends all expected bytes.
+            if len(response.data) >= response.transfer_size:
+                eom = response.transfer_attributes & 1
 
         return bytes(received)
