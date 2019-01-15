@@ -229,7 +229,8 @@ class USBInstrSession(USBSession):
 
         for name in ('SEND_END_EN', 'TERMCHAR', 'TERMCHAR_EN', 'TMO_VALUE'):
             attribute = getattr(constants, 'VI_ATTR_' + name)
-            self.attrs[attribute] = attributes.AttributesByID[attribute].default
+            self.set_attribute(attribute,
+                               attributes.AttributesByID[attribute].default)
 
 
 @Session.register(constants.InterfaceType.usb, 'RAW')
@@ -276,4 +277,5 @@ class USBRawSession(USBSession):
 
         for name in ('SEND_END_EN', 'TERMCHAR', 'TERMCHAR_EN', 'TMO_VALUE'):
             attribute = getattr(constants, 'VI_ATTR_' + name)
-            self.attrs[attribute] = attributes.AttributesByID[attribute].default
+            self.set_attribute(attribute,
+                               attributes.AttributesByID[attribute].default)
