@@ -307,6 +307,10 @@ class USBTMC(USBRaw):
         abort_timeout_ms = 5000
 
         # Send INITIATE_ABORT_BULK_IN.
+        # According to USBTMC 1.00 4.2.1.4:
+        #   wValue = bTag value of transfer to be aborted
+        #   wIndex = Bulk-IN endpoint
+        #   wLength = 0x0002 (length of device response)
         data = self.usb_dev.ctrl_transfer(
             usb.util.build_request_type(usb.util.CTRL_IN,
                                         usb.util.CTRL_TYPE_CLASS,
@@ -324,7 +328,11 @@ class USBTMC(USBRaw):
         # Read remaining data from Bulk-IN endpoint.
         self.usb_recv_ep.read(self.RECV_CHUNK, abort_timeout_ms)
 
-        # Send CHECK_ABORT_BULK_IN until it completes.
+        # Send CHECK_ABORT_BULK_IN_STATUS until it completes.
+        # According to USBTMC 1.00 4.2.1.5:
+        #   wValue = 0x0000
+        #   wIndex = Bulk-IN endpoint
+        #   wLength = 0x0008 (length of device response)
         for retry in range(100):
             data = self.usb_dev.ctrl_transfer(
                 usb.util.build_request_type(usb.util.CTRL_IN,

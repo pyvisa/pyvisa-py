@@ -219,6 +219,7 @@ class USBInstrSession(USBSession):
         except usb.USBError as exc:
             if exc.errno in (errno.ETIMEDOUT, -errno.ETIMEDOUT):
                 return bytes(), StatusCode.error_timeout
+            raise
 
         return bytes(data), StatusCode.success
 
