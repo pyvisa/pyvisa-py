@@ -233,7 +233,10 @@ class USBRaw(object):
         :type data: bytes
         """
 
-        return self.usb_send_ep.write(data)
+        try:
+            return self.usb_send_ep.write(data)
+        except usb.core.USBError as e:
+            raise ValueError(str(e))
 
     def read(self, size):
         """Receive raw bytes to the instrument.
