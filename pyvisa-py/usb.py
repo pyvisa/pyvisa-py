@@ -46,6 +46,11 @@ except Exception as e:
 StatusCode = constants.StatusCode
 
 
+class USBTimeoutException(Exception):
+    """Exception used internally to indicate USB timeout."""
+    pass
+
+
 class USBSession(Session):
     """Base class for drivers that communicate with usb devices
     via usb port using pyUSB
@@ -97,6 +102,15 @@ class USBSession(Session):
         :rtype: (bytes, VISAStatus)
         """
 
+        def _usb_reader():
+            """Data reader identifying usb timeout exception."""
+            try:
+                return self.interface.read(count)
+            except usb.USBError as exc:
+                if exc.errno in (errno.ETIMEDOUT, -errno.ETIMEDOUT):
+                    raise USBTimeoutException()
+                raise
+
         supress_end_en, _ = self.get_attribute(constants.VI_ATTR_SUPPRESS_END_EN)
 
         if supress_end_en:
@@ -105,13 +119,13 @@ class USBSession(Session):
         term_char, _ = self.get_attribute(constants.VI_ATTR_TERMCHAR)
         term_char_en, _ = self.get_attribute(constants.VI_ATTR_TERMCHAR_EN)
 
-        return self._read(lambda: self.interface.read(count),
+        return self._read(_usb_reader,
                           count,
                           lambda current: True, # USB always returns a complete message
                           supress_end_en,
                           term_char,
                           term_char_en,
-                          usb.USBError)
+                          USBTimeoutException)
 
     def write(self, data):
         """Writes data to device or interface synchronously.
@@ -196,32 +210,6 @@ class USBInstrSession(USBSession):
                                   serial_number=serial,
                                   usb_interface_number=intfc))
         return out
-
-    def read(self, count):
-        """Reads data from device or interface synchronously.
-
-        Corresponds to viRead function of the VISA library.
-
-        :param count: Number of bytes to be read.
-        :return: data read, return value of the library call.
-        :rtype: (bytes, VISAStatus)
-        """
-
-        supress_end_en, _ = self.get_attribute(constants.VI_ATTR_SUPPRESS_END_EN)
-        if supress_end_en:
-            raise ValueError('VI_ATTR_SUPPRESS_END_EN == True is currently unsupported by pyvisa-py')
-
-        term_char, _ = self.get_attribute(constants.VI_ATTR_TERMCHAR)
-        term_char_en, _ = self.get_attribute(constants.VI_ATTR_TERMCHAR_EN)
-
-        try:
-            data = self.interface.read(count)
-        except usb.USBError as exc:
-            if exc.errno in (errno.ETIMEDOUT, -errno.ETIMEDOUT):
-                return bytes(), StatusCode.error_timeout
-            raise
-
-        return bytes(data), StatusCode.success
 
     def after_parsing(self):
         self.interface = usbtmc.USBTMC(int(self.parsed.manufacturer_id, 0),
