@@ -13,6 +13,9 @@ PyVISA-py Changelog
 - fix initialization of timeout for the USB resources (the default was set
   before creating the underlying connection to which the timeout must be passed
   and was not). PR #167
+- implement USBTMC abort sequence after read timeout to avoid losing
+  communication with the instrument after a timeout occurs. PR #179
+- fix custom timeout for USB instruments. PR #179
 
 0.3.1 (2018-09-12)
 ------------------
