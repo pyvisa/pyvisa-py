@@ -12,6 +12,8 @@
 
 from __future__ import division, unicode_literals, print_function, absolute_import
 
+import errno
+
 from pyvisa import constants, attributes
 
 from .common import logger
@@ -42,6 +44,11 @@ except Exception as e:
 
 
 StatusCode = constants.StatusCode
+
+
+class USBTimeoutException(Exception):
+    """Exception used internally to indicate USB timeout."""
+    pass
 
 
 class USBSession(Session):
@@ -80,6 +87,7 @@ class USBSession(Session):
     def _set_timeout(self, attribute, value):
         status = super(USBSession, self)._set_timeout(attribute, value)
         timeout = int(self.timeout*1000) if self.timeout else 2**32-1
+        timeout = min(timeout, 2**32-1)
         if self.interface:
             self.interface.timeout = timeout
         return status
@@ -94,6 +102,15 @@ class USBSession(Session):
         :rtype: (bytes, VISAStatus)
         """
 
+        def _usb_reader():
+            """Data reader identifying usb timeout exception."""
+            try:
+                return self.interface.read(count)
+            except usb.USBError as exc:
+                if exc.errno in (errno.ETIMEDOUT, -errno.ETIMEDOUT):
+                    raise USBTimeoutException()
+                raise
+
         supress_end_en, _ = self.get_attribute(constants.VI_ATTR_SUPPRESS_END_EN)
 
         if supress_end_en:
@@ -102,13 +119,13 @@ class USBSession(Session):
         term_char, _ = self.get_attribute(constants.VI_ATTR_TERMCHAR)
         term_char_en, _ = self.get_attribute(constants.VI_ATTR_TERMCHAR_EN)
 
-        return self._read(lambda: self.interface.read(count),
+        return self._read(_usb_reader,
                           count,
                           lambda current: True, # USB always returns a complete message
                           supress_end_en,
                           term_char,
                           term_char_en,
-                          usb.USBError)
+                          USBTimeoutException)
 
     def write(self, data):
         """Writes data to device or interface synchronously.
@@ -201,7 +218,8 @@ class USBInstrSession(USBSession):
 
         for name in ('SEND_END_EN', 'TERMCHAR', 'TERMCHAR_EN', 'TMO_VALUE'):
             attribute = getattr(constants, 'VI_ATTR_' + name)
-            self.attrs[attribute] = attributes.AttributesByID[attribute].default
+            self.set_attribute(attribute,
+                               attributes.AttributesByID[attribute].default)
 
 
 @Session.register(constants.InterfaceType.usb, 'RAW')
@@ -248,4 +266,5 @@ class USBRawSession(USBSession):
 
         for name in ('SEND_END_EN', 'TERMCHAR', 'TERMCHAR_EN', 'TMO_VALUE'):
             attribute = getattr(constants, 'VI_ATTR_' + name)
-            self.attrs[attribute] = attributes.AttributesByID[attribute].default
+            self.set_attribute(attribute,
+                               attributes.AttributesByID[attribute].default)
