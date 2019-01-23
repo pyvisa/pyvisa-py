@@ -238,7 +238,7 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
         :rtype: :class:`pyvisa.constants.StatusCode`
         """
         try:
-            return self.sessions[session].trigger(protocol)
+            return self.sessions[session].assert_trigger(protocol)
 
         except KeyError:
             return constants.StatusCode.error_invalid_object
