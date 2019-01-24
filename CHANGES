@@ -16,6 +16,7 @@ PyVISA-py Changelog
 - implement USBTMC abort sequence after read timeout to avoid losing
   communication with the instrument after a timeout occurs. PR #179
 - fix custom timeout for USB instruments. PR #179
+- fix triggering for all protocols. PR #180
 
 0.3.1 (2018-09-12)
 ------------------
