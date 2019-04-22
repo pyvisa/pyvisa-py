@@ -115,16 +115,26 @@ class BulkInMessage(namedtuple('BulkInMessage', 'msgid btag btaginverse '
     def from_bytes(cls, data):
         msgid, btag, btaginverse = struct.unpack_from('BBBx', data)
         if msgid != MsgID.dev_dep_msg_in:
-            raise ValueError("Unexpected MsgID 0x{:02x}".format(msgid))
+                        return BulkInMessage.from_quirky(data)
 
-        transfer_size, transfer_attributes = struct.unpack_from('<LBxxx', data,
-                                                                4)
+        transfer_size, transfer_attributes = struct.unpack_from('<LBxxx', data, 4)
 
-        # Truncate data to the specified length (discard padding).
         data = data[12:12+transfer_size]
-
         return cls(msgid, btag, btaginverse, transfer_size,
                    transfer_attributes, data)
+
+    @classmethod
+    def from_quirky(cls, data):
+        """Constructs a correct response for quirky devices"""
+        msgid, btag, btaginverse = struct.unpack_from('BBBx', data)
+        # check whether it contains a ';' and if throw away the first 12 bytes
+        if ';' in str(data):
+            transfer_size, transfer_attributes = struct.unpack_from('<LBxxx', data, 4)
+            data = data[12:]
+        else:
+            transfer_size = 0
+            transfer_attributes = 1
+        return cls(msgid, btag, btaginverse, transfer_size, transfer_attributes, data)
 
     @staticmethod
     def build_array(btag, transfer_size, term_char=None):
