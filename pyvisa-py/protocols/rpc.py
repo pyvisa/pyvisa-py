@@ -453,6 +453,12 @@ class RawTCPClient(Client):
         else:
             self.timeout = 4.0
 
+        # In case of a timeout because the instrument cannot answer, the
+        # instrument should let use something went wrong. If we hit the hard
+        # timeout of the rpc, it means something worse happened (cable
+        # unplugged).
+        self.timeout += 1.0
+
         return super(RawTCPClient, self).make_call(proc, args, pack_func,
                                                    unpack_func)
 

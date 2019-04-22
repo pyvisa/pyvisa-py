@@ -60,8 +60,11 @@ class TCPIPInstrSession(Session):
         # TODO: board_number not handled
         # TODO: lan_device_name not handled
         # vx11 expect all timeouts to be expressed in ms and should be integers
-        self.interface = vxi11.CoreClient(self.parsed.host_address,
-                                          self.open_timeout)
+        try:
+            self.interface = vxi11.CoreClient(self.parsed.host_address,
+                                              self.open_timeout)
+        except rpc.RPCError:
+            raise errors.VisaIOError(constants.VI_ERROR_RSRC_NFOUND)
 
         self.max_recv_size = 1024
         self.lock_timeout = 10000
