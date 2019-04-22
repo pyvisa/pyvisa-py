@@ -5,12 +5,19 @@ PyVISA-py Changelog
 ------------------
 
 - fix wrong increment of lastxid in rpc in the case of timeout PR # 173
+- add GPIB support for proprietary device drivers on Windows and Linux
+  (experimental): try importing gpib-ctypes if linux-gpib is not present.
+  fix #105 #137
 - fix return types of PyVisaLibrary and Session methods to match
   pyvisa.highlevel.VisaLibraryBase fix #169 PR #170
 - avoid double closing of gpib resources PR #171
 - fix initialization of timeout for the USB resources (the default was set
   before creating the underlying connection to which the timeout must be passed
   and was not). PR #167
+- implement USBTMC abort sequence after read timeout to avoid losing
+  communication with the instrument after a timeout occurs. PR #179
+- fix custom timeout for USB instruments. PR #179
+- fix triggering for all protocols. PR #180
 
 0.3.1 (2018-09-12)
 ------------------

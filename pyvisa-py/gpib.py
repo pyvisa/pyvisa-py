@@ -3,7 +3,7 @@
     pyvisa-py.gpib
     ~~~~~~~~~~~~~~
 
-    GPIB Session implementation using linux-gpib.
+    GPIB Session implementation using linux-gpib or gpib-ctypes.
 
 
     :copyright: 2015 by PyVISA-py Authors, see AUTHORS for more details.
@@ -20,21 +20,29 @@ from .sessions import Session, UnknownAttribute
 try:
     import gpib
     from Gpib import Gpib
+except ImportError:
+    try:
+        from gpib_ctypes import gpib
+        from gpib_ctypes.Gpib import Gpib
+    except ImportError as e:
+        Session.register_unavailable(constants.InterfaceType.gpib, 'INSTR',
+                                     'Please install linux-gpib (Linux) or '
+                                     'gpib-ctypes (Windows, Linux) to use '
+                                     'this resource type.\n%s' % e)
+        raise
 
-    # patch Gpib to avoid double closing of handles
-    def _patch_Gpib():
-        if not hasattr(Gpib, "close"):
-            _old_del = Gpib.__del__
-            def _inner(self):
-                _old_del(self)
-                self._own = False
-            Gpib.__del__ = _inner
-            Gpib.close = _inner
-    _patch_Gpib()
-except ImportError as e:
-    Session.register_unavailable(constants.InterfaceType.gpib, 'INSTR',
-                                 'Please install linux-gpib to use this resource type.\n%s' % e)
-    raise
+# patch Gpib to avoid double closing of handles
+def _patch_Gpib():
+    if not hasattr(Gpib, "close"):
+        _old_del = Gpib.__del__
+
+        def _inner(self):
+            _old_del(self)
+            self._own = False
+        Gpib.__del__ = _inner
+        Gpib.close = _inner
+
+_patch_Gpib()
 
 
 def _find_listeners():
@@ -289,8 +297,17 @@ class GPIBSession(Session):
                 return constants.VI_NO_SEC_ADDR, StatusCode.success
 
         elif attribute == constants.VI_ATTR_GPIB_REN_STATE:
-            # I have no idea how to implement this.
-            raise NotImplementedError
+            try:
+                lines = self.controller.lines()
+                if not lines & gpib.ValidREN:
+                    return constants.VI_STATE_UNKNOWN, StatusCode.success
+                if lines & gpib.BusREN:
+                    return constants.VI_STATE_ASSERTED, StatusCode.success
+                else:
+                    return constants.VI_STATE_UNASSERTED, StatusCode.success
+            except AttributeError:
+                # some versions of linux-gpib do not expose Gpib.lines()
+                return constants.VI_STATE_UNKNOWN, StatusCode.success
 
         elif attribute == constants.VI_ATTR_GPIB_UNADDR_EN:
             # IbaUnAddr 0x1b
