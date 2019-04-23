@@ -121,9 +121,9 @@ from higher level applications.
 
 
 
-.. _PySerial: http://pyserial.sourceforge.net/
+.. _PySerial: https://pythonhosted.org/pyserial/
 .. _PyVISA: http://pyvisa.readthedocs.org/
-.. _PyUSB: http://walac.github.io/pyusb/
+.. _PyUSB: https://github.com/pyusb/pyusb
 .. _PyPI: https://pypi.python.org/pypi/PyVISA-py
 .. _GitHub: https://github.com/pyvisa/pyvisa-py
 .. _`National Instruments's VISA`: http://ni.com/visa/
