@@ -17,6 +17,7 @@ PyVISA-py Changelog
   communication with the instrument after a timeout occurs. PR #179
 - fix custom timeout for USB instruments. PR #179
 - fix triggering for all protocols. PR #180
+- add support for "quirky" devices made by Rigol. PR #186
 
 0.3.1 (2018-09-12)
 ------------------
