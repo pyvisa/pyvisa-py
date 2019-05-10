@@ -217,7 +217,7 @@ class CoreClient(rpc.TCPClient):
                                   self.packer.pack_device_write_parms,
                                   self.unpacker.unpack_device_write_resp)
         except socket.timeout as e:
-            return ErrorCodes.io_error, e.args[0], ''
+            return ErrorCodes.io_error, e.args[0]
 
     def device_read(self, link, request_size, io_timeout, lock_timeout, flags,
                     term_char):

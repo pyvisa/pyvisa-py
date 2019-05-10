@@ -321,7 +321,7 @@ def _sendrecord(sock, record, fragsize=None, timeout=None):
         record = record[fragsize:]
 
 
-def _recvrecord(sock, timeout, read_fun=None, client=None):
+def _recvrecord(sock, timeout, read_fun=None):
 
     record = bytearray()
     buffer = bytearray()
@@ -353,11 +353,6 @@ def _recvrecord(sock, timeout, read_fun=None, client=None):
             buffer.extend(read_data)
         # Timeout was reached
         elif timeout is not None and time.time() >= finish_time:
-            # In the total absence of answer from the instrument we can assume
-            # that xid should not be incremented since the instrument did not
-            # acknowledge the communication.
-            if not read_data:
-                client.lastxid -= 1
             logger.debug(('Time out encountered in %s.'
                           'Already receieved %d bytes. Last fragment is %d '
                           'bytes long and we were expecting %d'),
@@ -478,7 +473,7 @@ class RawTCPClient(Client):
 
         _sendrecord(self.sock, call, timeout=self.timeout)
 
-        reply = _recvrecord(self.sock, self.timeout, client=self)
+        reply = _recvrecord(self.sock, self.timeout)
         u = self.unpacker
         u.reset(reply)
         xid, verf = u.unpack_replyheader()
