@@ -254,40 +254,6 @@ class Session(compat.with_metaclass(abc.ABCMeta)):
         """
         pass
 
-    def gpib_command(self, command_byte):
-        """Write GPIB command byte on the bus.
-
-        Corresponds to viGpibCommand function of the VISA library.
-        See: https://linux-gpib.sourceforge.io/doc_html/gpib-protocol.html#REFERENCE-COMMAND-BYTES
-
-        :param command_byte: command byte to send
-        :type command_byte: int, must be [0 255]
-        :return: Number of written bytes, return value of the library call.
-        :rtype: int, :class:`pyvisa.constants.StatusCode`
-        """
-        return 0, StatusCode.error_nonsupported_operation
-
-    def assert_trigger(self, protocol):
-        """Asserts software or hardware trigger.
-
-        Corresponds to viAssertTrigger function of the VISA library.
-
-        :param protocol: Trigger protocol to use during assertion. (Constants.PROT*)
-        :return: return value of the library call.
-        :rtype: :class:`pyvisa.constants.StatusCode`
-        """
-        raise NotImplementedError
-
-    def gpib_send_ifc(self):
-        """Pulse the interface clear line (IFC) for at least 100 microseconds.
-
-        Corresponds to viGpibSendIFC function of the VISA library.
-
-        :return: return value of the library call.
-        :rtype: :class:`pyvisa.constants.StatusCode`
-        """
-        return StatusCode.error_nonsupported_operation
-
     def clear(self):
         """Clears a device.
 
@@ -329,6 +295,79 @@ class Session(compat.with_metaclass(abc.ABCMeta)):
         Corresponds to viUnlock function of the VISA library.
 
         :param session: Unique logical identifier to a session.
+        :return: return value of the library call.
+        :rtype: :class:`pyvisa.constants.StatusCode`
+        """
+        return StatusCode.error_nonsupported_operation
+
+    def gpib_command(self, command_byte):
+        """Write GPIB command byte on the bus.
+
+        Corresponds to viGpibCommand function of the VISA library.
+        See: https://linux-gpib.sourceforge.io/doc_html/gpib-protocol.html#REFERENCE-COMMAND-BYTES
+
+        :param command_byte: command byte to send
+        :type command_byte: int, must be [0 255]
+        :return: Number of written bytes, return value of the library call.
+        :rtype: int, :class:`pyvisa.constants.StatusCode`
+        """
+        return 0, StatusCode.error_nonsupported_operation
+
+    def assert_trigger(self, protocol):
+        """Asserts software or hardware trigger.
+
+        Corresponds to viAssertTrigger function of the VISA library.
+
+        :param protocol: Trigger protocol to use during assertion. (Constants.PROT*)
+        :return: return value of the library call.
+        :rtype: :class:`pyvisa.constants.StatusCode`
+        """
+        raise NotImplementedError
+
+    def gpib_send_ifc(self):
+        """Pulse the interface clear line (IFC) for at least 100 microseconds.
+
+        Corresponds to viGpibSendIFC function of the VISA library.
+
+        :return: return value of the library call.
+        :rtype: :class:`pyvisa.constants.StatusCode`
+        """
+        return StatusCode.error_nonsupported_operation
+
+    def gpib_control_ren(self, mode):
+        """Controls the state of the GPIB Remote Enable (REN) interface line, and optionally the remote/local
+        state of the device.
+
+        Corresponds to viGpibControlREN function of the VISA library.
+
+        :param mode: Specifies the state of the REN line and optionally the device remote/local state.
+                     (Constants.VI_GPIB_REN*)
+        :return: return value of the library call.
+        :rtype: :class:`pyvisa.constants.StatusCode`
+        """
+        return StatusCode.error_nonsupported_operation
+
+    def gpib_control_atn(self, mode):
+        """Specifies the state of the ATN line and the local active controller state.
+
+        Corresponds to viGpibControlATN function of the VISA library.
+
+        :param mode: Specifies the state of the ATN line and optionally the local active controller state.
+                     (Constants.VI_GPIB_ATN*)
+        :return: return value of the library call.
+        :rtype: :class:`pyvisa.constants.StatusCode`
+        """
+        return StatusCode.error_nonsupported_operation
+
+    def gpib_pass_control(self, primary_address, secondary_address):
+        """Tell the GPIB device at the specified address to become controller in charge (CIC).
+
+        Corresponds to viGpibPassControl function of the VISA library.
+
+        :param primary_address: Primary address of the GPIB device to which you want to pass control.
+        :param secondary_address: Secondary address of the targeted GPIB device.
+                                  If the targeted device does not have a secondary address,
+                                  this parameter should contain the value Constants.VI_NO_SEC_ADDR.
         :return: return value of the library call.
         :rtype: :class:`pyvisa.constants.StatusCode`
         """

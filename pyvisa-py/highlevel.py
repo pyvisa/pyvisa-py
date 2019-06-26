@@ -223,7 +223,6 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
         """
         try:
             return self.sessions[session].gpib_command(command_byte)
-
         except KeyError:
             return constants.StatusCode.error_invalid_object
 
@@ -239,7 +238,6 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
         """
         try:
             return self.sessions[session].assert_trigger(protocol)
-
         except KeyError:
             return constants.StatusCode.error_invalid_object
 
@@ -257,6 +255,60 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
         except KeyError:
             return constants.StatusCode.error_invalid_object
         return sess.gpib_send_ifc()
+
+    def gpib_control_ren(self, session, mode):
+        """Controls the state of the GPIB Remote Enable (REN) interface line, and optionally the remote/local
+        state of the device.
+
+        Corresponds to viGpibControlREN function of the VISA library.
+
+        :param session: Unique logical identifier to a session.
+        :param mode: Specifies the state of the REN line and optionally the device remote/local state.
+                     (Constants.VI_GPIB_REN*)
+        :return: return value of the library call.
+        :rtype: :class:`pyvisa.constants.StatusCode`
+        """
+        try:
+            sess = self.sessions[session]
+        except KeyError:
+            return constants.StatusCode.error_invalid_object
+        return sess.gpib_control_ren()
+
+    def gpib_control_atn(self, session, mode):
+        """Specifies the state of the ATN line and the local active controller state.
+
+        Corresponds to viGpibControlATN function of the VISA library.
+
+        :param session: Unique logical identifier to a session.
+        :param mode: Specifies the state of the ATN line and optionally the local active controller state.
+                     (Constants.VI_GPIB_ATN*)
+        :return: return value of the library call.
+        :rtype: :class:`pyvisa.constants.StatusCode`
+        """
+        try:
+            sess = self.sessions[session]
+        except KeyError:
+            return constants.StatusCode.error_invalid_object
+        return sess.gpib_control_atn()
+
+    def gpib_pass_control(self, session, primary_address, secondary_address):
+        """Tell the GPIB device at the specified address to become controller in charge (CIC).
+
+        Corresponds to viGpibPassControl function of the VISA library.
+
+        :param session: Unique logical identifier to a session.
+        :param primary_address: Primary address of the GPIB device to which you want to pass control.
+        :param secondary_address: Secondary address of the targeted GPIB device.
+                                  If the targeted device does not have a secondary address,
+                                  this parameter should contain the value Constants.VI_NO_SEC_ADDR.
+        :return: return value of the library call.
+        :rtype: :class:`pyvisa.constants.StatusCode`
+        """
+        try:
+            sess = self.sessions[session]
+        except KeyError:
+            return constants.StatusCode.error_invalid_object
+        return sess.gpib_pass_control()
 
     def read_stb(self, session):
         """Reads a status byte of the service request.
@@ -323,7 +375,6 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
         :return: data read, return value of the library call.
         :rtype: bytes, VISAStatus
         """
-
         # from the session handle, dispatch to the read method of the session object.
         try:
             ret = self.sessions[session].read(count)
@@ -346,7 +397,6 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
         :return: Number of bytes actually transferred, return value of the library call.
         :rtype: int, VISAStatus
         """
-
         # from the session handle, dispatch to the write method of the session object.
         try:
             ret = self.sessions[session].write(data)

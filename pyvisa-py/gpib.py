@@ -12,23 +12,42 @@
 
 from __future__ import division, unicode_literals, print_function, absolute_import
 from bisect import bisect
+import ctypes  # Used for ibln not ideal
 
 from pyvisa import constants, logger, attributes
 
 from .sessions import Session, UnknownAttribute
 
 try:
-    import gpib
-    from Gpib import Gpib
-except ImportError:
+    GPIB_CTYPES = True
+    from gpib_ctypes import gpib
+    from gpib_ctypes.Gpib import Gpib, GpibError
+
+    # Add some extra binding not available by default
+    extra_funcs = [
+        ("ibcac", [ctypes.c_int, ctypes.c_int], ctypes.c_int),
+        ("ibgts", [ctypes.c_int, ctypes.c_int], ctypes.c_int),
+        ("ibln", [ctypes.c_int, ctypes.int, ctypes.int,
+                  ctypes.POINTER(ctypes.c_short)], ctypes.c_int),
+        ("ibpct", [ctypes.c_int], ctypes.c_int),
+    ]
+    for name, argtypes, restype in extra_funcs:
+        libfunction = _lib[name]
+        libfunction.argtypes = argtypes
+        libfunction.restype = restype
+
+except ImportError as e:
+    GPIB_CTYPES = False
     try:
-        from gpib_ctypes import gpib
-        from gpib_ctypes.Gpib import Gpib
+        import gpib
+        from Gpib import Gpib, GpibError
     except ImportError as e:
         Session.register_unavailable(constants.InterfaceType.gpib, 'INSTR',
                                      'Please install linux-gpib (Linux) or '
                                      'gpib-ctypes (Windows, Linux) to use '
-                                     'this resource type.\n%s' % e)
+                                     'this resource type. Note that installing'
+                                     ' gpib-ctypes will give you access to a '
+                                     'broader range of funcionality.\n%s' % e)
         raise
 
 # patch Gpib to avoid double closing of handles
@@ -43,6 +62,10 @@ def _patch_Gpib():
         Gpib.close = _inner
 
 _patch_Gpib()
+
+
+# TODO: Check board indices other than 0.
+BOARD = 0
 
 
 def _find_listeners():
@@ -62,18 +85,51 @@ StatusCode = constants.StatusCode
 TIMETABLE = (0, 10e-6, 30e-6, 100e-6, 300e-6, 1e-3, 3e-3, 10e-3, 30e-3, 100e-3, 300e-3, 1.0, 3.0,
              10.0, 30.0, 100.0, 300.0, 1000.0)
 
-# TODO: Check board indices other than 0.
-BOARD = 0
-# TODO: Check secondary addresses.
-@Session.register(constants.InterfaceType.gpib, 'INSTR')
-class GPIBSession(Session):
-    """A GPIB Session that uses linux-gpib to do the low level communication.
+
+def convert_gpib_error(error, status, operation):
+    """Convert a GPIB error to a VISA StatusCode.
+
+    :param error: Error to use to determine the proper status code.
+    :type error: gpib.GpibError
+    :param status: Status byte of the GPIB library.
+    :type status: int
+    :param operation: Name of the operation that caused an exception. Used in logging.
+    :type operation: str
+    :return: Status code matching the GPIB error.
+    :rtype: constants.StatusCode
+
     """
+    # First check the imeout condition in the status byte
+    if status & 0x4000:
+        return constants.StatusCode.error_timeout
+    # All other cases are hard errors.
+    # In particular linux-gpib simply gives a string we could parse but that
+    # feels brittle. As a consequence we only try to be smart when using
+    # gpib-ctypes. However in both cases we log the exception at debug level.
+    else:
+        logger.debug('Failed to %s.', exc_info=error)
+        if not GPIB_CTYPES:
+            return constants.StatusCode.error_system_error
+        if error.code == 1:
+            return constants.StatusCode.error_not_cic
+        elif error.code == 2:
+            return constants.StatusCode.error_no_listeners
+        elif error.code == 4:
+            return constants.StatusCode.error_invalid_mode
+        elif error.code == 11:
+            return constants.StatusCode.error_nonsupported_operation
+        elif error.code == 1:
+            return constants.StatusCode.error_not_cic
+        elif error.code == 21:
+            return constants.StatusCode.error_resource_locked
+        else:
+            return constants.StatusCode.error_system_error
 
-    @staticmethod
-    def list_resources():
-        return ['GPIB0::%d::INSTR' % pad for pad in _find_listeners()]
 
+class _GPIBCommon(object):
+    """Common base class for GPIB sessions.
+
+    """
     @classmethod
     def get_low_level_info(cls):
         try:
@@ -90,10 +146,14 @@ class GPIBSession(Session):
         timeout = 13
         send_eoi = 1
         eos_mode = 0
-        self.interface = Gpib(name=minor, pad=pad, sad=sad, timeout=timeout, send_eoi=send_eoi, eos_mode=eos_mode)
-        self.controller = Gpib(name=minor) # this is the bus controller device
+        # Used to talk to a specific resource
+        self.interface = Gpib(name=minor, pad=pad, sad=sad, timeout=timeout,
+                              send_eoi=send_eoi, eos_mode=eos_mode)
+        # Bus wide operation
+        self.controller = Gpib(name=minor)
         # force timeout setting to interface
-        self.set_attribute(constants.VI_ATTR_TMO_VALUE, attributes.AttributesByID[constants.VI_ATTR_TMO_VALUE].default)
+        self.set_attribute(constants.VI_ATTR_TMO_VALUE,
+                           attributes.AttributesByID[constants.VI_ATTR_TMO_VALUE].default)
 
     def _get_timeout(self, attribute):
         if self.interface:
@@ -156,9 +216,8 @@ class GPIBSession(Session):
         :return: data read, return value of the library call.
         :rtype: bytes, constants.StatusCode
         """
-
-        # 0x2000 = 8192 = END
-        checker = lambda current: self.interface.ibsta() & 8192
+        # END 0x2000
+        checker = lambda current: self.interface.ibsta() & 0x2000
 
         reader = lambda: self.interface.read(count)
 
@@ -174,7 +233,6 @@ class GPIBSession(Session):
         :return: Number of bytes actually transferred, return value of the library call.
         :rtype: int, VISAStatus
         """
-
         logger.debug('GPIB.write %r' % data)
 
         try:
@@ -182,91 +240,59 @@ class GPIBSession(Session):
             count = self.interface.ibcnt() # number of bytes transmitted
 
             return count, StatusCode.success
+        except gpib.GpibError as e:
+            return 0, convert_gpib_error(e, self.interface.ibsta(), 'write')
 
-        except gpib.GpibError:
-            # 0x4000 = 16384 = TIMO
-            if self.interface.ibsta() & 16384:
-                return 0, StatusCode.error_timeout
-            else:
-                return 0, StatusCode.error_system_error
+    def gpib_control_ren(self, mode):
+        """Controls the state of the GPIB Remote Enable (REN) interface line, and optionally the remote/local
+        state of the device.
 
-    def clear(self):
-        """Clears a device.
-
-        Corresponds to viClear function of the VISA library.
+        Corresponds to viGpibControlREN function of the VISA library.
 
         :param session: Unique logical identifier to a session.
+        :param mode: Specifies the state of the REN line and optionally the device remote/local state.
+                     (Constants.VI_GPIB_REN*)
         :return: return value of the library call.
         :rtype: :class:`pyvisa.constants.StatusCode`
         """
-
-        logger.debug('GPIB.device clear')
-
-        try:
-            self.interface.clear()
-            return StatusCode.success
-        except gpib.GpibError:
-            return StatusCode.error_system_error
-
-    def gpib_command(self, command_byte):
-        """Write GPIB command byte on the bus.
-
-        Corresponds to viGpibCommand function of the VISA library.
-        See: https://linux-gpib.sourceforge.io/doc_html/gpib-protocol.html#REFERENCE-COMMAND-BYTES
-
-        :param command_byte: command byte to send
-        :type command_byte: int, must be [0 255]
-        :return: Number of written bytes, return value of the library call.
-        :rtype: int, :class:`pyvisa.constants.StatusCode`
-        """
-
-        if 0 <= command_byte <= 255:
-            data = chr(command_byte)
-        else:
-            return 0, StatusCode.error_nonsupported_operation
+        if self.parsed.interface_type == 'INTFC':
+            if mode not in (constants.VI_GPIB_REN_ASSERT,
+                            constants.VI_GPIB_REN_DEASSERT,
+                            constants.VI_GPIB_REN_ASSERT_LLO):
+                return constants.StatusCode.error_nonsupported_operation
 
         try:
-            return self.controller.command(data), StatusCode.success
+            if mode == constants.VI_GPIB_REN_DEASSERT_GTL:
+                # Send GTL command byte (cf linux-gpib documentation)
+                self.interface.command(chr(1))
+            if mode in (constants.VI_GPIB_REN_DEASSERT,
+                        constants.VI_GPIB_REN_DEASSERT_GTL):
+                self.controller.remote_enable(0)
 
-        except gpib.GpibError:
-            return 0, StatusCode.error_system_error
+            if mode == constants.VI_GPIB_REN_ASSERT_LLO:
+                # LLO
+                self.interface.command(b'0x11')
+            elif mode == constants.VI_GPIB_REN_ADDRESS_GTL:
+                # GTL
+                self.interface.command(b'0x1')
+            elif mode == constants.VI_GPIB_REN_ASSERT_ADDRESS_LLO:
+                pass
+            elif mode in (constants.VI_GPIB_REN_ASSERT,
+                          constants.VI_GPIB_REN_ASSERT_ADDRESS):
+                self.controller.remote_enable(1)
+                if mode == constants.VI_GPIB_REN_ASSERT_ADDRESS:
+                    # 0 for the secondary address means don't use it
+                    found_listener = ctypes.c_short()
+                    gpib.ibln(self.parsed.board,
+                              self.parsed.primary_address,
+                              self.parsed.secondary_address,
+                              ctypes.byref(found_listener))
+        except GpibError as e:
+            return convert_gpib_error(e,
+                                      self.interface.ibsta(),
+                                      'perform control REN')
 
-    def assert_trigger(self, protocol):
-        """Asserts hardware trigger.
-        Only supports protocol = constants.VI_TRIG_PROT_DEFAULT
-
-        :return: return value of the library call.
-        :rtype: :class:`pyvisa.constants.StatusCode`
-        """
-
-        logger.debug('GPIB.device assert hardware trigger')
-
-        try:
-            if protocol == constants.VI_TRIG_PROT_DEFAULT:
-                self.interface.trigger()
-                return StatusCode.success
-            else:
-                return StatusCode.error_nonsupported_operation
-        except gpib.GpibError:
-            return StatusCode.error_system_error
-
-    def gpib_send_ifc(self):
-        """Pulse the interface clear line (IFC) for at least 100 microseconds.
-
-        Corresponds to viGpibSendIFC function of the VISA library.
-
-        :param session: Unique logical identifier to a session.
-        :return: return value of the library call.
-        :rtype: :class:`pyvisa.constants.StatusCode`
-        """
-
-        logger.debug('GPIB.interface clear')
-
-        try:
-            self.controller.interface_clear()
-            return StatusCode.success
-        except gpib.GpibError:
-            return StatusCode.error_system_error
+        return constants.StatusCode.success
 
     def _get_attribute(self, attribute):
         """Get the value for a given VISA attribute for this session.
@@ -390,8 +416,155 @@ class GPIBSession(Session):
 
         raise UnknownAttribute(attribute)
 
+
+# TODO: Check secondary addresses.
+@Session.register(constants.InterfaceType.gpib, 'INSTR')
+class GPIBSession(Session, _GPIBCommon):
+    """A GPIB Session that uses linux-gpib to do the low level communication.
+    """
+
+    @staticmethod
+    def list_resources():
+        return ['GPIB0::%d::INSTR' % pad for pad in _find_listeners()]
+
+    def clear(self):
+        """Clears a device.
+
+        Corresponds to viClear function of the VISA library.
+
+        :param session: Unique logical identifier to a session.
+        :return: return value of the library call.
+        :rtype: :class:`pyvisa.constants.StatusCode`
+        """
+
+        logger.debug('GPIB.device clear')
+        try:
+            self.interface.clear()
+            return StatusCode.success
+        except gpib.GpibError:
+            return convert_gpib_error(e, self.interface.ibsta(), 'clear')
+
+    def assert_trigger(self, protocol):
+        """Asserts hardware trigger.
+        Only supports protocol = constants.VI_TRIG_PROT_DEFAULT
+
+        :return: return value of the library call.
+        :rtype: :class:`pyvisa.constants.StatusCode`
+        """
+
+        logger.debug('GPIB.device assert hardware trigger')
+
+        try:
+            if protocol == constants.VI_TRIG_PROT_DEFAULT:
+                self.interface.trigger()
+                return StatusCode.success
+            else:
+                return StatusCode.error_nonsupported_operation
+        except gpib.GpibError:
+            return convert_gpib_error(e,
+                                      self.interface.ibsta(),
+                                      'assert trigger')
+
     def read_stb(self):
         try:
             return self.interface.serial_poll(), StatusCode.success
         except gpib.GpibError:
-            return 0, StatusCode.error_system_error
+            return 0, convert_gpib_error(e, self.interface.ibsta(), 'read STB')
+
+
+# TODO: Check board indices other than 0.
+@Session.register(constants.InterfaceType.gpib, 'INTFC')
+class GPIBInterface(Session, _GPIBCommon):
+    """A GPIB Interface that uses linux-gpib to do the low level communication.
+    """
+
+    @staticmethod
+    def list_resources():
+        return ['GPIB0::%d::INTFC' % pad for pad in _find_listeners()]
+
+    def gpib_command(self, command_byte):
+        """Write GPIB command byte on the bus.
+
+        Corresponds to viGpibCommand function of the VISA library.
+        See: https://linux-gpib.sourceforge.io/doc_html/gpib-protocol.html#REFERENCE-COMMAND-BYTES
+
+        :param command_byte: command byte to send
+        :type command_byte: int, must be [0 255]
+        :return: Number of written bytes, return value of the library call.
+        :rtype: int, :class:`pyvisa.constants.StatusCode`
+        """
+        if 0 <= command_byte <= 255:
+            data = chr(command_byte)
+        else:
+            return 0, StatusCode.error_nonsupported_operation
+
+        try:
+            return self.controller.command(data), StatusCode.success
+        except gpib.GpibError:
+            return 0, convert_gpib_status(self.interface.ibsta())
+
+    def gpib_send_ifc(self):
+        """Pulse the interface clear line (IFC) for at least 100 microseconds.
+
+        Corresponds to viGpibSendIFC function of the VISA library.
+
+        :param session: Unique logical identifier to a session.
+        :return: return value of the library call.
+        :rtype: :class:`pyvisa.constants.StatusCode`
+        """
+        logger.debug('GPIB.interface clear')
+        try:
+            self.controller.interface_clear()
+            return StatusCode.success
+        except gpib.GpibError:
+            return convert_gpib_error(e, self.interface.ibsta(), 'send IFC')
+
+    def gpib_control_atn(self, mode):
+        """Specifies the state of the ATN line and the local active controller state.
+
+        Corresponds to viGpibControlATN function of the VISA library.
+
+        :param session: Unique logical identifier to a session.
+        :param mode: Specifies the state of the ATN line and optionally the local active controller state.
+                     (Constants.VI_GPIB_ATN*)
+        :return: return value of the library call.
+        :rtype: :class:`pyvisa.constants.StatusCode`
+        """
+        logger.debug('GPIB.control atn')
+        if mode == constants.VI_GPIB_ATN_ASSERT:
+            status = gpib.ibcac(self.controller.id, 0)
+        elif mode == constants.VI_GPIB_ATN_DEASSERT:
+            status = gpib.ibgts(self.controller.id, 0)
+        elif mode == constants.VI_GPIB_ATN_ASSERT_IMMEDIATE:
+            # Asynchronous assertion (the name is counter intuitive)
+            status = gpib.ibcac(self.controller.id, 1)
+        elif mode == constants.VI_GPIB_ATN_DEASSERT_HANDSHAKE:
+            status = sgpib.ibgts(self.controller.id, 1)
+        else:
+            return constants.StatusCode.error_invalid_mode
+        return convert_gpib_status(status)
+
+    def gpib_pass_control(self, primary_address, secondary_address):
+        """Tell the GPIB device at the specified address to become controller in charge (CIC).
+
+        Corresponds to viGpibPassControl function of the VISA library.
+
+        :param session: Unique logical identifier to a session.
+        :param primary_address: Primary address of the GPIB device to which you want to pass control.
+        :param secondary_address: Secondary address of the targeted GPIB device.
+                                  If the targeted device does not have a secondary address,
+                                  this parameter should contain the value Constants.VI_NO_SEC_ADDR.
+        :return: return value of the library call.
+        :rtype: :class:`pyvisa.constants.StatusCode`
+        """
+        # ibpct need to get the device id matching the primary and secondary address
+        logger.debug('GPIB.pass control')
+        try:
+            did = gpib.dev(self.parsed.board, primary_address, secondary_address)
+        except gpib.GpibError:
+            logger.exception('Failed to get id for %s, %d',
+                             primary_address, secondary_address)
+            return StatusCode.error_resource_not_found
+
+        status = gpib.ibpct(did)
+        return convert_gpib_status(status)
