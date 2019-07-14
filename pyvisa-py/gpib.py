@@ -206,7 +206,8 @@ class _GPIBCommon(object):
         return status
 
     def close(self):
-        self.interface.close()
+        if self.interface:
+            self.interface.close()
         self.controller.close()
 
     def read(self, count):
