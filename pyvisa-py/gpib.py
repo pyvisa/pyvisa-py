@@ -453,7 +453,7 @@ class GPIBSession(_GPIBCommon, Session):
         try:
             self.interface.clear()
             return StatusCode.success
-        except gpib.GpibError:
+        except gpib.GpibError as e:
             return convert_gpib_error(e, self.interface.ibsta(), 'clear')
 
     def assert_trigger(self, protocol):
@@ -480,7 +480,7 @@ class GPIBSession(_GPIBCommon, Session):
     def read_stb(self):
         try:
             return self.interface.serial_poll(), StatusCode.success
-        except gpib.GpibError:
+        except gpib.GpibError as e:
             return 0, convert_gpib_error(e, self.interface.ibsta(), 'read STB')
 
 
