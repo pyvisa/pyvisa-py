@@ -471,7 +471,7 @@ class GPIBSession(_GPIBCommon, Session):
                 return StatusCode.success
             else:
                 return StatusCode.error_nonsupported_operation
-        except gpib.GpibError:
+        except gpib.GpibError as e:
             return convert_gpib_error(e,
                                       self.interface.ibsta(),
                                       'assert trigger')
