@@ -494,10 +494,7 @@ class GPIBInterface(_GPIBCommon, Session):
         return ['GPIB0::%d::INTFC' % pad for pad in _find_listeners()]
 
     def after_parsing(self):
-        print("PARSED: ", self.parsed)
-        #print(self.get_attribute(constants.VI_ATTR_GPIB_PRIMARY_ADDR))
-        #print(self.primary_address)		
-        #print(self.primary_address)		
+        logger.debug("PARSED: ", self.parsed)
         minor = int(self.parsed.board)
         sad = 0
         timeout = 13
@@ -509,7 +506,6 @@ class GPIBInterface(_GPIBCommon, Session):
         # force timeout setting to interface
         self.set_attribute(constants.VI_ATTR_TMO_VALUE,
                            attributes.AttributesByID[constants.VI_ATTR_TMO_VALUE].default)
-        #super(GPIBInterface, self).after_parsing()
 
     def gpib_command(self, command_byte):
         """Write GPIB command byte on the bus.
