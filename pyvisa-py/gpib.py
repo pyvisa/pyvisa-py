@@ -21,18 +21,18 @@ from .sessions import Session, UnknownAttribute
 try:
     GPIB_CTYPES = True
     from gpib_ctypes import gpib
-    from gpib_ctypes.Gpib import Gpib, GpibError
+    from gpib_ctypes.Gpib import Gpib
 
     # Add some extra binding not available by default
     extra_funcs = [
         ("ibcac", [ctypes.c_int, ctypes.c_int], ctypes.c_int),
         ("ibgts", [ctypes.c_int, ctypes.c_int], ctypes.c_int),
-        ("ibln", [ctypes.c_int, ctypes.int, ctypes.int,
+        ("ibln", [ctypes.c_int, ctypes.c_int, ctypes.c_int,
                   ctypes.POINTER(ctypes.c_short)], ctypes.c_int),
         ("ibpct", [ctypes.c_int], ctypes.c_int),
     ]
     for name, argtypes, restype in extra_funcs:
-        libfunction = _lib[name]
+        libfunction = gpib._lib[name]
         libfunction.argtypes = argtypes
         libfunction.restype = restype
 
@@ -165,7 +165,8 @@ class _GPIBCommon(object):
             else:
                 # value is 0 or out of range -> infinite
                 self.timeout = None
-        return super(GPIBSession, self)._get_timeout(attribute)
+        return super(_GPIBCommon, self)._get_timeout(attribute)
+        #return self.timeout
 
     def _set_timeout(self, attribute, value):
         """
@@ -192,7 +193,7 @@ class _GPIBCommon(object):
         16  300 seconds
         17  1000 seconds
         """
-        status = super(GPIBSession, self)._set_timeout(attribute, value)
+        status = super(_GPIBCommon, self)._set_timeout(attribute, value)
         if self.interface:
             if self.timeout is None:
                 gpib_timeout = 0
@@ -201,6 +202,7 @@ class _GPIBCommon(object):
                 gpib_timeout = min(bisect(TIMETABLE, 0.999 * self.timeout), 17)
                 self.timeout = TIMETABLE[gpib_timeout]
             self.interface.timeout(gpib_timeout)
+        #return StatusCode.success
         return status
 
     def close(self):
@@ -303,22 +305,26 @@ class _GPIBCommon(object):
         :return: The state of the queried attribute for a specified resource, return value of the library call.
         :rtype: (unicode | str | list | int, VISAStatus)
         """
-
+        if self.interface:
+            ifc = self.interface
+        else:
+            ifc = self.controller
         if attribute == constants.VI_ATTR_GPIB_READDR_EN:
             # IbaREADDR 0x6
             # Setting has no effect in linux-gpib.
-            return self.interface.ask(6), StatusCode.success
+            return ifc.ask(6), StatusCode.success
 
         elif attribute == constants.VI_ATTR_GPIB_PRIMARY_ADDR:
             # IbaPAD 0x1
-            return self.interface.ask(1), StatusCode.success
+            return ifc.ask(1), StatusCode.success
+
 
         elif attribute == constants.VI_ATTR_GPIB_SECONDARY_ADDR:
             # IbaSAD 0x2
             # Remove 0x60 because National Instruments.
-            sad = self.interface.ask(2)
-            if self.interface.ask(2):
-                return self.interface.ask(2) - 96, StatusCode.success
+            sad = ifc.ask(2)
+            if ifc.ask(2):
+                return ifc.ask(2) - 96, StatusCode.success
             else:
                 return constants.VI_NO_SEC_ADDR, StatusCode.success
 
@@ -337,21 +343,22 @@ class _GPIBCommon(object):
 
         elif attribute == constants.VI_ATTR_GPIB_UNADDR_EN:
             # IbaUnAddr 0x1b
-            if self.interface.ask(27):
+            if ifc.ask(27):
                 return constants.VI_TRUE, StatusCode.success
             else:
                 return constants.VI_FALSE, StatusCode.success
 
         elif attribute == constants.VI_ATTR_SEND_END_EN:
-            # IbaEndBitIsNormal 0x1a
-            if self.interface.ask(26):
+            # replace IbaEndBitIsNormal 0x1a
+            # IbcEOT 0x4
+            if ifc.ask(4):
                 return constants.VI_TRUE, StatusCode.success
             else:
                 return constants.VI_FALSE, StatusCode.success
 
         elif attribute == constants.VI_ATTR_INTF_NUM:
             # IbaBNA 0x200
-            return self.interface.ask(512), StatusCode.success
+            return ifc.ask(512), StatusCode.success
 
         elif attribute == constants.VI_ATTR_INTF_TYPE:
             return constants.InterfaceType.gpib, StatusCode.success
@@ -368,12 +375,15 @@ class _GPIBCommon(object):
         :return: return value of the library call.
         :rtype: VISAStatus
         """
-
+        if self.interface:
+            ifc = self.interface
+        else:
+            ifc = self.controller
         if attribute == constants.VI_ATTR_GPIB_READDR_EN:
             # IbcREADDR 0x6
             # Setting has no effect in linux-gpib.
             if isinstance(attribute_state, int):
-                self.interface.config(6, attribute_state)
+                ifc.config(6, attribute_state)
                 return StatusCode.success
             else:
                 return StatusCode.error_nonsupported_attribute_state
@@ -381,7 +391,7 @@ class _GPIBCommon(object):
         elif attribute == constants.VI_ATTR_GPIB_PRIMARY_ADDR:
             # IbcPAD 0x1
             if isinstance(attribute_state, int) and 0 <= attribute_state <= 30:
-                self.interface.config(1, attribute_state)
+                ifc.config(1, attribute_state)
                 return StatusCode.success
             else:
                 return StatusCode.error_nonsupported_attribute_state
@@ -390,8 +400,8 @@ class _GPIBCommon(object):
             # IbcSAD 0x2
             # Add 0x60 because National Instruments.
             if isinstance(attribute_state, int) and 0 <= attribute_state <= 30:
-                if self.interface.ask(2):
-                    self.interface.config(2, attribute_state + 96)
+                if ifc.ask(2):
+                    ifc.config(2, attribute_state + 96)
                     return StatusCode.success
                 else:
                     return StatusCode.error_nonsupported_attribute
@@ -401,15 +411,16 @@ class _GPIBCommon(object):
         elif attribute == constants.VI_ATTR_GPIB_UNADDR_EN:
             # IbcUnAddr 0x1b
             try:
-                self.interface.config(27, attribute_state)
+                ifc.config(27, attribute_state)
                 return StatusCode.success
             except gpib.GpibError:
                 return StatusCode.error_nonsupported_attribute_state
 
         elif attribute == constants.VI_ATTR_SEND_END_EN:
             # IbcEndBitIsNormal 0x1a
+            # IbcEOT 0x4
             if isinstance(attribute_state, int):
-                self.interface.config(26, attribute_state)
+                ifc.config(4, attribute_state)
                 return StatusCode.success
             else:
                 return StatusCode.error_nonsupported_attribute_state
@@ -419,7 +430,7 @@ class _GPIBCommon(object):
 
 # TODO: Check secondary addresses.
 @Session.register(constants.InterfaceType.gpib, 'INSTR')
-class GPIBSession(Session, _GPIBCommon):
+class GPIBSession(_GPIBCommon, Session):
     """A GPIB Session that uses linux-gpib to do the low level communication.
     """
 
@@ -474,13 +485,31 @@ class GPIBSession(Session, _GPIBCommon):
 
 # TODO: Check board indices other than 0.
 @Session.register(constants.InterfaceType.gpib, 'INTFC')
-class GPIBInterface(Session, _GPIBCommon):
+class GPIBInterface(_GPIBCommon, Session):
     """A GPIB Interface that uses linux-gpib to do the low level communication.
     """
 
     @staticmethod
     def list_resources():
         return ['GPIB0::%d::INTFC' % pad for pad in _find_listeners()]
+
+    def after_parsing(self):
+        print("PARSED: ", self.parsed)
+        #print(self.get_attribute(constants.VI_ATTR_GPIB_PRIMARY_ADDR))
+        #print(self.primary_address)		
+        #print(self.primary_address)		
+        minor = int(self.parsed.board)
+        sad = 0
+        timeout = 13
+        send_eoi = 1
+        eos_mode = 0
+        # Used to talk to a specific resource
+        # Bus wide operation
+        self.controller = Gpib(name=minor)
+        # force timeout setting to interface
+        self.set_attribute(constants.VI_ATTR_TMO_VALUE,
+                           attributes.AttributesByID[constants.VI_ATTR_TMO_VALUE].default)
+        #super(GPIBInterface, self).after_parsing()
 
     def gpib_command(self, command_byte):
         """Write GPIB command byte on the bus.
