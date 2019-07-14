@@ -166,7 +166,6 @@ class _GPIBCommon(object):
                 # value is 0 or out of range -> infinite
                 self.timeout = None
         return super(_GPIBCommon, self)._get_timeout(attribute)
-        #return self.timeout
 
     def _set_timeout(self, attribute, value):
         """
@@ -202,7 +201,6 @@ class _GPIBCommon(object):
                 gpib_timeout = min(bisect(TIMETABLE, 0.999 * self.timeout), 17)
                 self.timeout = TIMETABLE[gpib_timeout]
             self.interface.timeout(gpib_timeout)
-        #return StatusCode.success
         return status
 
     def close(self):
@@ -351,6 +349,8 @@ class _GPIBCommon(object):
 
         elif attribute == constants.VI_ATTR_SEND_END_EN:
             # replace IbaEndBitIsNormal 0x1a
+	    # IbcEndBitIsNormal relates to EOI on read() 
+            # not write(). see issue #196 
             # IbcEOT 0x4
             if ifc.ask(4):
                 return constants.VI_TRUE, StatusCode.success
@@ -418,7 +418,9 @@ class _GPIBCommon(object):
                 return StatusCode.error_nonsupported_attribute_state
 
         elif attribute == constants.VI_ATTR_SEND_END_EN:
-            # IbcEndBitIsNormal 0x1a
+            # replace IbaEndBitIsNormal 0x1a
+	    # IbcEndBitIsNormal relates to EOI on read() 
+            # not write() 
             # IbcEOT 0x4
             if isinstance(attribute_state, int):
                 ifc.config(4, attribute_state)
