@@ -510,22 +510,17 @@ class GPIBInterface(_GPIBCommon, Session):
         self.set_attribute(constants.VI_ATTR_TMO_VALUE,
                            attributes.AttributesByID[constants.VI_ATTR_TMO_VALUE].default)
 
-    def gpib_command(self, command_byte):
+    def gpib_command(self, command_bytes):
         """Write GPIB command byte on the bus.
 
         Corresponds to viGpibCommand function of the VISA library.
         See: https://linux-gpib.sourceforge.io/doc_html/gpib-protocol.html#REFERENCE-COMMAND-BYTES
 
-        :param command_byte: command byte to send
-        :type command_byte: int, must be [0 255]
+        :param command_bytes: command bytes to send
+        :type command_bytes: bytes
         :return: Number of written bytes, return value of the library call.
         :rtype: int, :class:`pyvisa.constants.StatusCode`
         """
-        if 0 <= command_byte <= 255:
-            data = chr(command_byte)
-        else:
-            return 0, StatusCode.error_nonsupported_operation
-
         try:
             return self.controller.command(data), StatusCode.success
         except gpib.GpibError:
