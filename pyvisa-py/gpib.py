@@ -12,7 +12,6 @@
 
 from __future__ import division, unicode_literals, print_function, absolute_import
 from bisect import bisect
-import ctypes  # Used for ibln not ideal
 
 from pyvisa import constants, logger, attributes
 
@@ -22,19 +21,6 @@ try:
     GPIB_CTYPES = True
     from gpib_ctypes import gpib
     from gpib_ctypes.Gpib import Gpib
-
-    # Add some extra binding not available by default
-    extra_funcs = [
-        ("ibcac", [ctypes.c_int, ctypes.c_int], ctypes.c_int),
-        ("ibgts", [ctypes.c_int, ctypes.c_int], ctypes.c_int),
-        ("ibln", [ctypes.c_int, ctypes.c_int, ctypes.c_int,
-                  ctypes.POINTER(ctypes.c_short)], ctypes.c_int),
-        ("ibpct", [ctypes.c_int], ctypes.c_int),
-    ]
-    for name, argtypes, restype in extra_funcs:
-        libfunction = gpib._lib[name]
-        libfunction.argtypes = argtypes
-        libfunction.restype = restype
 
 except ImportError as e:
     GPIB_CTYPES = False
@@ -283,11 +269,9 @@ class _GPIBCommon(object):
                 self.controller.remote_enable(1)
                 if mode == constants.VI_GPIB_REN_ASSERT_ADDRESS:
                     # 0 for the secondary address means don't use it
-                    found_listener = ctypes.c_short()
-                    gpib.ibln(self.parsed.board,
+                    found_listener = gpib.listener(self.parsed.board, 
                               self.parsed.primary_address,
-                              self.parsed.secondary_address,
-                              ctypes.byref(found_listener))
+                              self.parsed.secondary_address)
         except GpibError as e:
             return convert_gpib_error(e,
                                       self.interface.ibsta(),
