@@ -156,6 +156,11 @@ class _GPIBCommon(object):
         self.set_attribute(constants.VI_ATTR_TMO_VALUE,
                            attributes.AttributesByID[constants.VI_ATTR_TMO_VALUE].default)
 
+        for name in ('SEND_END_EN', 'TERMCHAR', 'TERMCHAR_EN'):
+            attribute = getattr(constants, 'VI_ATTR_' + name)
+            self.attrs[attribute] =\
+                attributes.AttributesByID[attribute].default
+
     def _get_timeout(self, attribute):
         if self.interface:
             # 0x3 is the hexadecimal reference to the IbaTMO (timeout) configuration
@@ -350,8 +355,8 @@ class _GPIBCommon(object):
 
         elif attribute == constants.VI_ATTR_SEND_END_EN:
             # replace IbaEndBitIsNormal 0x1a
-	    # IbcEndBitIsNormal relates to EOI on read() 
-            # not write(). see issue #196 
+	    # IbcEndBitIsNormal relates to EOI on read()
+            # not write(). see issue #196
             # IbcEOT 0x4
             if ifc.ask(4):
                 return constants.VI_TRUE, StatusCode.success
@@ -420,8 +425,8 @@ class _GPIBCommon(object):
 
         elif attribute == constants.VI_ATTR_SEND_END_EN:
             # replace IbaEndBitIsNormal 0x1a
-	    # IbcEndBitIsNormal relates to EOI on read() 
-            # not write() 
+	    # IbcEndBitIsNormal relates to EOI on read()
+            # not write()
             # IbcEOT 0x4
             if isinstance(attribute_state, int):
                 ifc.config(4, attribute_state)
