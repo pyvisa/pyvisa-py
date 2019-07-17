@@ -22,6 +22,7 @@ try:
     GPIB_CTYPES = True
     from gpib_ctypes import gpib
     from gpib_ctypes.Gpib import Gpib
+    from gpib_ctypes.gpib.gpib import _lib as gpib_lib
 
     # Add some extra binding not available by default
     extra_funcs = [
@@ -32,7 +33,7 @@ try:
         ("ibpct", [ctypes.c_int], ctypes.c_int),
     ]
     for name, argtypes, restype in extra_funcs:
-        libfunction = gpib._lib[name]
+        libfunction = gpib_lib[name]
         libfunction.argtypes = argtypes
         libfunction.restype = restype
 
