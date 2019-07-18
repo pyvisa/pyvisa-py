@@ -354,9 +354,8 @@ class _GPIBCommon(object):
                 return constants.VI_FALSE, StatusCode.success
 
         elif attribute == constants.VI_ATTR_SEND_END_EN:
-            # replace IbaEndBitIsNormal 0x1a
-	    # IbcEndBitIsNormal relates to EOI on read()
-            # not write(). see issue #196
+            # Do not use IbaEndBitIsNormal 0x1a which relates to EOI on read() 
+            # not write(). see issue #196 
             # IbcEOT 0x4
             if ifc.ask(4):
                 return constants.VI_TRUE, StatusCode.success
@@ -424,9 +423,8 @@ class _GPIBCommon(object):
                 return StatusCode.error_nonsupported_attribute_state
 
         elif attribute == constants.VI_ATTR_SEND_END_EN:
-            # replace IbaEndBitIsNormal 0x1a
-	    # IbcEndBitIsNormal relates to EOI on read()
-            # not write()
+            # Do not use IbaEndBitIsNormal 0x1a which relates to EOI on read() 
+            # not write(). see issue #196 
             # IbcEOT 0x4
             if isinstance(attribute_state, int):
                 ifc.config(4, attribute_state)
@@ -503,7 +501,6 @@ class GPIBInterface(_GPIBCommon, Session):
         return ['GPIB0::%d::INTFC' % pad for pad in _find_listeners()]
 
     def after_parsing(self):
-        logger.debug("PARSED: ", self.parsed)
         minor = int(self.parsed.board)
         sad = 0
         timeout = 13
@@ -528,7 +525,7 @@ class GPIBInterface(_GPIBCommon, Session):
         :rtype: int, :class:`pyvisa.constants.StatusCode`
         """
         try:
-            return self.controller.command(data), StatusCode.success
+            return self.controller.command(command_bytes), StatusCode.success
         except gpib.GpibError:
             return 0, convert_gpib_status(self.interface.ibsta())
 
@@ -545,7 +542,7 @@ class GPIBInterface(_GPIBCommon, Session):
         try:
             self.controller.interface_clear()
             return StatusCode.success
-        except gpib.GpibError:
+        except gpib.GpibError as e:
             return convert_gpib_error(e, self.interface.ibsta(), 'send IFC')
 
     def gpib_control_atn(self, mode):
