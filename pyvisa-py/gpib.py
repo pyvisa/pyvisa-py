@@ -300,7 +300,7 @@ class _GPIBCommon(object):
                 if mode == constants.VI_GPIB_REN_ASSERT_ADDRESS:
                     # 0 for the secondary address means don't use it
                     found_listener = ctypes.c_short()
-                    gpib.ibln(self.parsed.board,
+                    gpib_lib.ibln(self.parsed.board,
                               self.parsed.primary_address,
                               self.parsed.secondary_address,
                               ctypes.byref(found_listener))
@@ -553,14 +553,14 @@ class GPIBInterface(_GPIBCommon, Session):
         """
         logger.debug('GPIB.control atn')
         if mode == constants.VI_GPIB_ATN_ASSERT:
-            status = gpib.ibcac(self.controller.id, 0)
+            status = gpib_lib.ibcac(self.controller.id, 0)
         elif mode == constants.VI_GPIB_ATN_DEASSERT:
-            status = gpib.ibgts(self.controller.id, 0)
+            status = gpib_lib.ibgts(self.controller.id, 0)
         elif mode == constants.VI_GPIB_ATN_ASSERT_IMMEDIATE:
             # Asynchronous assertion (the name is counter intuitive)
-            status = gpib.ibcac(self.controller.id, 1)
+            status = gpib_lib.ibcac(self.controller.id, 1)
         elif mode == constants.VI_GPIB_ATN_DEASSERT_HANDSHAKE:
-            status = sgpib.ibgts(self.controller.id, 1)
+            status = gpib_lib.ibgts(self.controller.id, 1)
         else:
             return constants.StatusCode.error_invalid_mode
         return convert_gpib_status(status)
@@ -587,5 +587,5 @@ class GPIBInterface(_GPIBCommon, Session):
                              primary_address, secondary_address)
             return StatusCode.error_resource_not_found
 
-        status = gpib.ibpct(did)
+        status = gpib_lib.ibpct(did)
         return convert_gpib_status(status)

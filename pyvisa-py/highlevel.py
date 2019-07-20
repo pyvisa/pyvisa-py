@@ -408,6 +408,29 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
 
         return ret
 
+    def buffer_read(self, session, count):
+        """Reads data from device or interface through the use of a formatted I/O read buffer.
+        Corresponds to viBufRead function of the VISA library.
+
+        :param session: Unique logical identifier to a session.
+        :param count: Number of bytes to be read.
+        :return: data read, return value of the library call.
+        :rtype: bytes, VISAStatus
+        """
+        return self.read(session, count)
+
+    def buffer_write(self, session, data):
+        """Writes data to a formatted I/O write buffer synchronously.
+        Corresponds to viBufWrite function of the VISA library.
+
+        :param session: Unique logical identifier to a session.
+        :param data: data to be written.
+        :type data: str
+        :return: Number of bytes actually transferred, return value of the library call.
+        :rtype: int, VISAStatus
+        """
+        return self.write(session, data)
+
     def get_attribute(self, session, attribute):
         """Retrieves the state of an attribute.
 
