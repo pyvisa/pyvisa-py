@@ -12,6 +12,7 @@
 
 from __future__ import division, unicode_literals, print_function, absolute_import
 from bisect import bisect
+import ctypes  # Used for ibln not ideal
 
 from pyvisa import constants, logger, attributes
 
@@ -21,6 +22,20 @@ try:
     GPIB_CTYPES = True
     from gpib_ctypes import gpib
     from gpib_ctypes.Gpib import Gpib
+    from gpib_ctypes.gpib.gpib import _lib as gpib_lib
+
+    # Add some extra binding not available by default
+    extra_funcs = [
+        ("ibcac", [ctypes.c_int, ctypes.c_int], ctypes.c_int),
+        ("ibgts", [ctypes.c_int, ctypes.c_int], ctypes.c_int),
+        ("ibln", [ctypes.c_int, ctypes.c_int, ctypes.c_int,
+                  ctypes.POINTER(ctypes.c_short)], ctypes.c_int),
+        ("ibpct", [ctypes.c_int], ctypes.c_int),
+    ]
+    for name, argtypes, restype in extra_funcs:
+        libfunction = gpib_lib[name]
+        libfunction.argtypes = argtypes
+        libfunction.restype = restype
 
 except ImportError as e:
     GPIB_CTYPES = False
@@ -141,6 +156,11 @@ class _GPIBCommon(object):
         self.set_attribute(constants.VI_ATTR_TMO_VALUE,
                            attributes.AttributesByID[constants.VI_ATTR_TMO_VALUE].default)
 
+        for name in ('SEND_END_EN', 'TERMCHAR', 'TERMCHAR_EN'):
+            attribute = getattr(constants, 'VI_ATTR_' + name)
+            self.attrs[attribute] =\
+                attributes.AttributesByID[attribute].default
+
     def _get_timeout(self, attribute):
         if self.interface:
             # 0x3 is the hexadecimal reference to the IbaTMO (timeout) configuration
@@ -204,9 +224,13 @@ class _GPIBCommon(object):
         :rtype: bytes, constants.StatusCode
         """
         # END 0x2000
-        checker = lambda current: self.interface.ibsta() & 0x2000
+        if not self.interface:
+          base = self.controller
+        else:
+          base = self.interface 
+        checker = lambda current: base.ibsta() & 0x2000
 
-        reader = lambda: self.interface.read(count)
+        reader = lambda: base.read(count)
 
         return self._read(reader, count, checker, False, None, False, gpib.GpibError)
 
@@ -223,8 +247,12 @@ class _GPIBCommon(object):
         logger.debug('GPIB.write %r' % data)
 
         try:
-            self.interface.write(data)
-            count = self.interface.ibcnt() # number of bytes transmitted
+            if not self.interface:
+               base = self.controller
+            else:
+               base = self.interface
+            base.write(data)
+            count = base.ibcnt() # number of bytes transmitted
 
             return count, StatusCode.success
         except gpib.GpibError as e:
@@ -269,9 +297,11 @@ class _GPIBCommon(object):
                 self.controller.remote_enable(1)
                 if mode == constants.VI_GPIB_REN_ASSERT_ADDRESS:
                     # 0 for the secondary address means don't use it
-                    found_listener = gpib.listener(self.parsed.board, 
+                    found_listener = ctypes.c_short()
+                    gpib_lib.ibln(self.parsed.board,
                               self.parsed.primary_address,
-                              self.parsed.secondary_address)
+                              self.parsed.secondary_address,
+                              ctypes.byref(found_listener))
         except GpibError as e:
             return convert_gpib_error(e,
                                       self.interface.ibsta(),
@@ -332,8 +362,7 @@ class _GPIBCommon(object):
                 return constants.VI_FALSE, StatusCode.success
 
         elif attribute == constants.VI_ATTR_SEND_END_EN:
-            # replace IbaEndBitIsNormal 0x1a
-	    # IbcEndBitIsNormal relates to EOI on read() 
+            # Do not use IbaEndBitIsNormal 0x1a which relates to EOI on read() 
             # not write(). see issue #196 
             # IbcEOT 0x4
             if ifc.ask(4):
@@ -402,9 +431,8 @@ class _GPIBCommon(object):
                 return StatusCode.error_nonsupported_attribute_state
 
         elif attribute == constants.VI_ATTR_SEND_END_EN:
-            # replace IbaEndBitIsNormal 0x1a
-	    # IbcEndBitIsNormal relates to EOI on read() 
-            # not write() 
+            # Do not use IbaEndBitIsNormal 0x1a which relates to EOI on read() 
+            # not write(). see issue #196 
             # IbcEOT 0x4
             if isinstance(attribute_state, int):
                 ifc.config(4, attribute_state)
@@ -481,7 +509,6 @@ class GPIBInterface(_GPIBCommon, Session):
         return ['GPIB0::%d::INTFC' % pad for pad in _find_listeners()]
 
     def after_parsing(self):
-        logger.debug("PARSED: ", self.parsed)
         minor = int(self.parsed.board)
         sad = 0
         timeout = 13
@@ -506,7 +533,7 @@ class GPIBInterface(_GPIBCommon, Session):
         :rtype: int, :class:`pyvisa.constants.StatusCode`
         """
         try:
-            return self.controller.command(data), StatusCode.success
+            return self.controller.command(command_bytes), StatusCode.success
         except gpib.GpibError:
             return 0, convert_gpib_status(self.interface.ibsta())
 
@@ -523,7 +550,7 @@ class GPIBInterface(_GPIBCommon, Session):
         try:
             self.controller.interface_clear()
             return StatusCode.success
-        except gpib.GpibError:
+        except gpib.GpibError as e:
             return convert_gpib_error(e, self.interface.ibsta(), 'send IFC')
 
     def gpib_control_atn(self, mode):
@@ -539,14 +566,14 @@ class GPIBInterface(_GPIBCommon, Session):
         """
         logger.debug('GPIB.control atn')
         if mode == constants.VI_GPIB_ATN_ASSERT:
-            status = gpib.ibcac(self.controller.id, 0)
+            status = gpib_lib.ibcac(self.controller.id, 0)
         elif mode == constants.VI_GPIB_ATN_DEASSERT:
-            status = gpib.ibgts(self.controller.id, 0)
+            status = gpib_lib.ibgts(self.controller.id, 0)
         elif mode == constants.VI_GPIB_ATN_ASSERT_IMMEDIATE:
             # Asynchronous assertion (the name is counter intuitive)
-            status = gpib.ibcac(self.controller.id, 1)
+            status = gpib_lib.ibcac(self.controller.id, 1)
         elif mode == constants.VI_GPIB_ATN_DEASSERT_HANDSHAKE:
-            status = sgpib.ibgts(self.controller.id, 1)
+            status = gpib_lib.ibgts(self.controller.id, 1)
         else:
             return constants.StatusCode.error_invalid_mode
         return convert_gpib_status(status)
@@ -573,5 +600,5 @@ class GPIBInterface(_GPIBCommon, Session):
                              primary_address, secondary_address)
             return StatusCode.error_resource_not_found
 
-        status = gpib.ibpct(did)
+        status = gpib_lib.ibpct(did)
         return convert_gpib_status(status)
