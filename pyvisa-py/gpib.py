@@ -147,9 +147,11 @@ class _GPIBCommon(object):
         timeout = 13
         send_eoi = 1
         eos_mode = 0
-        # Used to talk to a specific resource
-        self.interface = Gpib(name=minor, pad=pad, sad=sad, timeout=timeout,
-                              send_eoi=send_eoi, eos_mode=eos_mode)
+        if self.parsed.resource_class == 'INSTR':
+            # Used to talk to a specific resource
+            self.interface = Gpib(name=minor, pad=pad, sad=sad,
+                                  timeout=timeout, send_eoi=send_eoi,
+                                  eos_mode=eos_mode)
         # Bus wide operation
         self.controller = Gpib(name=minor)
         # force timeout setting to interface
@@ -223,15 +225,15 @@ class _GPIBCommon(object):
         :return: data read, return value of the library call.
         :rtype: bytes, constants.StatusCode
         """
+        # INTFC don't have an interface so use the controller
+        ifc = self.interface or self.controller
+
         # END 0x2000
-        if not self.interface:
-          base = self.controller
-        else:
-          base = self.interface 
-        checker = lambda current: base.ibsta() & 0x2000
 
-        reader = lambda: base.read(count)
+        checker = lambda current: ifc.ibsta() & 0x2000
 
+        reader = lambda: ifc.read(count)
+        
         return self._read(reader, count, checker, False, None, False, gpib.GpibError)
 
     def write(self, data):
@@ -246,17 +248,16 @@ class _GPIBCommon(object):
         """
         logger.debug('GPIB.write %r' % data)
 
-        try:
-            if not self.interface:
-               base = self.controller
-            else:
-               base = self.interface
-            base.write(data)
-            count = base.ibcnt() # number of bytes transmitted
+        # INTFC don't have an interface so use the controller
+        ifc = self.interface or self.controller
 
+        try:
+            ifc.write(data)
+            count = ifc.ibcnt() # number of bytes transmitted
+            
             return count, StatusCode.success
         except gpib.GpibError as e:
-            return 0, convert_gpib_error(e, self.interface.ibsta(), 'write')
+            return 0, convert_gpib_error(e, ifc.ibsta(), 'write')
 
     def gpib_control_ren(self, mode):
         """Controls the state of the GPIB Remote Enable (REN) interface line, and optionally the remote/local
@@ -276,25 +277,27 @@ class _GPIBCommon(object):
                             constants.VI_GPIB_REN_ASSERT_LLO):
                 return constants.StatusCode.error_nonsupported_operation
 
+        # INTFC don't have an interface so use the controller
+        ifc = self.interface or self.controller
         try:
             if mode == constants.VI_GPIB_REN_DEASSERT_GTL:
                 # Send GTL command byte (cf linux-gpib documentation)
-                self.interface.command(chr(1))
+                ifc.command(chr(1))
             if mode in (constants.VI_GPIB_REN_DEASSERT,
                         constants.VI_GPIB_REN_DEASSERT_GTL):
                 self.controller.remote_enable(0)
 
             if mode == constants.VI_GPIB_REN_ASSERT_LLO:
                 # LLO
-                self.interface.command(b'0x11')
+                ifc.command(b'0x11')
             elif mode == constants.VI_GPIB_REN_ADDRESS_GTL:
                 # GTL
-                self.interface.command(b'0x1')
+                ifc.command(b'0x1')
             elif mode == constants.VI_GPIB_REN_ASSERT_ADDRESS_LLO:
                 pass
             elif mode in (constants.VI_GPIB_REN_ASSERT,
                           constants.VI_GPIB_REN_ASSERT_ADDRESS):
-                self.controller.remote_enable(1)
+                ifc.remote_enable(1)
                 if mode == constants.VI_GPIB_REN_ASSERT_ADDRESS:
                     # 0 for the secondary address means don't use it
                     found_listener = ctypes.c_short()
@@ -318,10 +321,9 @@ class _GPIBCommon(object):
         :return: The state of the queried attribute for a specified resource, return value of the library call.
         :rtype: (unicode | str | list | int, VISAStatus)
         """
-        if self.interface:
-            ifc = self.interface
-        else:
-            ifc = self.controller
+        # INTFC don't have an interface so use the controller
+        ifc = self.interface or self.controller
+
         if attribute == constants.VI_ATTR_GPIB_READDR_EN:
             # IbaREADDR 0x6
             # Setting has no effect in linux-gpib.
@@ -362,9 +364,9 @@ class _GPIBCommon(object):
                 return constants.VI_FALSE, StatusCode.success
 
         elif attribute == constants.VI_ATTR_SEND_END_EN:
-            # Do not use IbaEndBitIsNormal 0x1a which relates to EOI on read() 
-            # not write(). see issue #196 
-            # IbcEOT 0x4
+          # Do not use IbaEndBitIsNormal 0x1a which relates to EOI on read() 
+          # not write(). see issue #196 
+          # IbcEOT 0x4
             if ifc.ask(4):
                 return constants.VI_TRUE, StatusCode.success
             else:
@@ -389,10 +391,9 @@ class _GPIBCommon(object):
         :return: return value of the library call.
         :rtype: VISAStatus
         """
-        if self.interface:
-            ifc = self.interface
-        else:
-            ifc = self.controller
+        # INTFC don't have an interface so use the controller
+        ifc = self.interface or self.controller
+
         if attribute == constants.VI_ATTR_GPIB_READDR_EN:
             # IbcREADDR 0x6
             # Setting has no effect in linux-gpib.
@@ -507,19 +508,6 @@ class GPIBInterface(_GPIBCommon, Session):
     @staticmethod
     def list_resources():
         return ['GPIB0::%d::INTFC' % pad for pad in _find_listeners()]
-
-    def after_parsing(self):
-        minor = int(self.parsed.board)
-        sad = 0
-        timeout = 13
-        send_eoi = 1
-        eos_mode = 0
-        # Used to talk to a specific resource
-        # Bus wide operation
-        self.controller = Gpib(name=minor)
-        # force timeout setting to interface
-        self.set_attribute(constants.VI_ATTR_TMO_VALUE,
-                           attributes.AttributesByID[constants.VI_ATTR_TMO_VALUE].default)
 
     def gpib_command(self, command_bytes):
         """Write GPIB command byte on the bus.
