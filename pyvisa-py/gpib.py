@@ -229,11 +229,10 @@ class _GPIBCommon(object):
         ifc = self.interface or self.controller
 
         # END 0x2000
-
         checker = lambda current: ifc.ibsta() & 0x2000
 
         reader = lambda: ifc.read(count)
-        
+
         return self._read(reader, count, checker, False, None, False, gpib.GpibError)
 
     def write(self, data):
@@ -254,7 +253,7 @@ class _GPIBCommon(object):
         try:
             ifc.write(data)
             count = ifc.ibcnt() # number of bytes transmitted
-            
+
             return count, StatusCode.success
         except gpib.GpibError as e:
             return 0, convert_gpib_error(e, ifc.ibsta(), 'write')
@@ -364,9 +363,9 @@ class _GPIBCommon(object):
                 return constants.VI_FALSE, StatusCode.success
 
         elif attribute == constants.VI_ATTR_SEND_END_EN:
-          # Do not use IbaEndBitIsNormal 0x1a which relates to EOI on read() 
-          # not write(). see issue #196 
-          # IbcEOT 0x4
+            # Do not use IbaEndBitIsNormal 0x1a which relates to EOI on read()
+            # not write(). see issue #196
+            # IbcEOT 0x4
             if ifc.ask(4):
                 return constants.VI_TRUE, StatusCode.success
             else:
@@ -432,8 +431,8 @@ class _GPIBCommon(object):
                 return StatusCode.error_nonsupported_attribute_state
 
         elif attribute == constants.VI_ATTR_SEND_END_EN:
-            # Do not use IbaEndBitIsNormal 0x1a which relates to EOI on read() 
-            # not write(). see issue #196 
+            # Do not use IbaEndBitIsNormal 0x1a which relates to EOI on read()
+            # not write(). see issue #196
             # IbcEOT 0x4
             if isinstance(attribute_state, int):
                 ifc.config(4, attribute_state)
