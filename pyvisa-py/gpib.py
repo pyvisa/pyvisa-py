@@ -146,6 +146,7 @@ class _GPIBCommon(object):
         timeout = 13
         send_eoi = 1
         eos_mode = 0
+        self.interface = None
         if self.parsed.resource_class == 'INSTR':
             pad = int(self.parsed.primary_address)
             # Used to talk to a specific resource
