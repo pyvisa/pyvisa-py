@@ -142,12 +142,12 @@ class _GPIBCommon(object):
 
     def after_parsing(self):
         minor = int(self.parsed.board)
-        pad = int(self.parsed.primary_address)
         sad = 0
         timeout = 13
         send_eoi = 1
         eos_mode = 0
         if self.parsed.resource_class == 'INSTR':
+            pad = int(self.parsed.primary_address)
             # Used to talk to a specific resource
             self.interface = Gpib(name=minor, pad=pad, sad=sad,
                                   timeout=timeout, send_eoi=send_eoi,
