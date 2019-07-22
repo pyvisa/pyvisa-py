@@ -203,9 +203,12 @@ class CoreClient(rpc.TCPClient):
 
     def create_link(self, id, lock_device, lock_timeout, name):
         params = (id, lock_device, lock_timeout, name)
-        return self.make_call(CREATE_LINK, params,
-                              self.packer.pack_create_link_parms,
-                              self.unpacker.unpack_create_link_resp)
+        try:
+            return self.make_call(CREATE_LINK, params,
+                                self.packer.pack_create_link_parms,
+                                self.unpacker.unpack_create_link_resp)
+        except socket.timeout as e:
+            return ErrorCodes.device_not_accessible, None, None, None
 
     def device_write(self, link, io_timeout, lock_timeout, flags, data):
         params = (link, io_timeout, lock_timeout, flags, data)
@@ -214,7 +217,7 @@ class CoreClient(rpc.TCPClient):
                                   self.packer.pack_device_write_parms,
                                   self.unpacker.unpack_device_write_resp)
         except socket.timeout as e:
-            return ErrorCodes.io_timeout, e.args[0], ''
+            return ErrorCodes.io_error, e.args[0]
 
     def device_read(self, link, request_size, io_timeout, lock_timeout, flags,
                     term_char):
@@ -225,7 +228,7 @@ class CoreClient(rpc.TCPClient):
                                   self.packer.pack_device_read_parms,
                                   self.unpacker.unpack_device_read_resp)
         except socket.timeout as e:
-            return ErrorCodes.io_timeout, e.args[0], ''
+            return ErrorCodes.io_error, e.args[0], ''
 
     def device_read_stb(self, link, flags, lock_timeout, io_timeout):
         params = (link, flags, lock_timeout, io_timeout)

@@ -4,6 +4,7 @@ PyVISA-py Changelog
 0.4.0 (unreleased)
 ------------------
 
+- fix improper wait time before a timeout in the TCPIP backend PR # 173
 - add GPIB support for proprietary device drivers on Windows and Linux
   (experimental): try importing gpib-ctypes if linux-gpib is not present.
   fix #105 #137

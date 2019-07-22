@@ -351,8 +351,8 @@ def _recvrecord(sock, timeout, read_fun=None):
         if sock in r:
             read_data = read_fun(exp_length)
             buffer.extend(read_data)
+        # Timeout was reached
         elif timeout is not None and time.time() >= finish_time:
-            # reached timeout
             logger.debug(('Time out encountered in %s.'
                           'Already receieved %d bytes. Last fragment is %d '
                           'bytes long and we were expecting %d'),
@@ -437,16 +437,22 @@ class RawTCPClient(Client):
         """
         if proc == 11:
             # vxi11.DEVICE_WRITE
-            self.timeout = (args[1] / 1000.0) + 2.0
+            self.timeout = (args[1] / 1000.0)
         elif proc in (12, 22):
             # vxi11.DEVICE_READ or vxi11.DEVICE_DOCMD
-            self.timeout = (args[2] / 1000.0) + 2.0
+            self.timeout = (args[2] / 1000.0)
         elif proc in (13, 14, 15, 16, 17):
             # vxi11.DEVICE_READSTB, vxi11.DEVICE_TRIGGER, vxi11.DEVICE_CLEAR,
             # vxi11.DEVICE_REMOTE, or vxi11.DEVICE_LOCAL
-            self.timeout = (args[3] / 1000.0) + 2.0
+            self.timeout = (args[3] / 1000.0)
         else:
             self.timeout = 4.0
+
+        # In case of a timeout because the instrument cannot answer, the
+        # instrument should let use something went wrong. If we hit the hard
+        # timeout of the rpc, it means something worse happened (cable
+        # unplugged).
+        self.timeout += 1.0
 
         return super(RawTCPClient, self).make_call(proc, args, pack_func,
                                                    unpack_func)
