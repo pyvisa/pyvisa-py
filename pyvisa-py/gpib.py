@@ -159,7 +159,7 @@ class _GPIBCommon(object):
         self.set_attribute(constants.VI_ATTR_TMO_VALUE,
                            attributes.AttributesByID[constants.VI_ATTR_TMO_VALUE].default)
 
-        for name in ('SEND_END_EN', 'TERMCHAR', 'TERMCHAR_EN'):
+        for name in ('TERMCHAR', 'TERMCHAR_EN'):
             attribute = getattr(constants, 'VI_ATTR_' + name)
             self.attrs[attribute] =\
                 attributes.AttributesByID[attribute].default
