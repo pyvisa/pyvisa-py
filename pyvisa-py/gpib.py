@@ -68,21 +68,26 @@ _patch_Gpib()
 # TODO: Check board indices other than 0.
 BOARD = 0
 
-
-def _find_listeners():
-    """Find GPIB listeners.
+def _find_boards():
+    """Find GPIB board addresses.
     """
     for board in range(16):
       try:
-        boardpad = gpib.ask(board, 1)
+        yield board, gpib.ask(board, 1)
+      except gpib.GpibError as e:
+        logger.debug("GPIB board %i error in _find_boards(): %s", board,repr(e))
+   
+def _find_listeners():
+    """Find GPIB listeners.
+    """
+    for board, boardpad in _find_boards():
+      try:
         for i in range(31):
           try:
               if boardpad != i and gpib.listener(board, i):
-                  yield i
+                  yield board, i
           except gpib.GpibError as e:
               logger.debug("GPIB board %i addr %i error in _find_listeners(): %s", board, i, repr(e))
-      except gpib.GpibError as e:
-           logger.debug("GPIB board %i error in _find_listeners(): %s", board,repr(e))
 
 
 StatusCode = constants.StatusCode
@@ -457,7 +462,7 @@ class GPIBSession(_GPIBCommon, Session):
 
     @staticmethod
     def list_resources():
-        return ['GPIB0::%d::INSTR' % pad for pad in _find_listeners()]
+        return ['GPIB%d::%d::INSTR' % (board, pad) for board, pad in _find_listeners()]
 
     def clear(self):
         """Clears a device.
@@ -512,7 +517,7 @@ class GPIBInterface(_GPIBCommon, Session):
 
     @staticmethod
     def list_resources():
-        return ['GPIB0::%d::INTFC' % pad for pad in _find_listeners()]
+        return ['GPIB%d::INTFC' % board for board, pad, in _find_boards()]
 
     def gpib_command(self, command_bytes):
         """Write GPIB command byte on the bus.
