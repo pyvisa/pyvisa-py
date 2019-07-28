@@ -539,7 +539,7 @@ class GPIBInterface(_GPIBCommon, Session):
         try:
             return self.controller.command(command_bytes), StatusCode.success
         except gpib.GpibError as e:
-            return convert_gpib_error(e, self.interface.ibsta()"gpib command")
+            return convert_gpib_error(e, self.interface.ibsta(), 'gpib command')
 
     def gpib_send_ifc(self):
         """Pulse the interface clear line (IFC) for at least 100 microseconds.
