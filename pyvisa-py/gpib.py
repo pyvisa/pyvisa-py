@@ -81,13 +81,12 @@ def _find_listeners():
     """Find GPIB listeners.
     """
     for board, boardpad in _find_boards():
-      try:
-        for i in range(31):
-          try:
-              if boardpad != i and gpib.listener(board, i):
-                  yield board, i
-          except gpib.GpibError as e:
-              logger.debug("GPIB board %i addr %i error in _find_listeners(): %s", board, i, repr(e))
+      for i in range(31):
+        try:
+          if boardpad != i and gpib.listener(board, i):
+            yield board, i
+        except gpib.GpibError as e:
+            logger.debug("GPIB board %i addr %i error in _find_listeners(): %s", board, i, repr(e))
 
 
 StatusCode = constants.StatusCode
