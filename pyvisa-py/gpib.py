@@ -539,7 +539,7 @@ class GPIBInterface(_GPIBCommon, Session):
         try:
             return self.controller.command(command_bytes), StatusCode.success
         except gpib.GpibError as e:
-            return convert_gpib_error(e, self.interface.ibsta(), 'gpib command')
+            return convert_gpib_error(e, self.controller.ibsta(), 'gpib command')
 
     def gpib_send_ifc(self):
         """Pulse the interface clear line (IFC) for at least 100 microseconds.
@@ -555,7 +555,7 @@ class GPIBInterface(_GPIBCommon, Session):
             self.controller.interface_clear()
             return StatusCode.success
         except gpib.GpibError as e:
-            return convert_gpib_error(e, self.interface.ibsta(), 'send IFC')
+            return convert_gpib_error(e, self.controller.ibsta(), 'send IFC')
 
     def gpib_control_atn(self, mode):
         """Specifies the state of the ATN line and the local active controller state.
