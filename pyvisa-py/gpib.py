@@ -136,7 +136,14 @@ def convert_gpib_error(error, status, operation):
         else:
             return constants.StatusCode.error_system_error
 
-
+def convert_gpib_status(status):
+    if status & 0x4000:
+        return constants.StatusCode.error_timeout
+    elif status & 0x8000:
+      return constants.StatusCode.error_system_error
+    else:
+      return constants.StatusCode.success
+      
 class _GPIBCommon(object):
     """Common base class for GPIB sessions.
 
@@ -532,8 +539,8 @@ class GPIBInterface(_GPIBCommon, Session):
         """
         try:
             return self.controller.command(command_bytes), StatusCode.success
-        except gpib.GpibError:
-            return 0, convert_gpib_status(self.interface.ibsta())
+        except gpib.GpibError as e:
+            return convert_gpib_error(e, self.interface.ibsta()"gpib command")
 
     def gpib_send_ifc(self):
         """Pulse the interface clear line (IFC) for at least 100 microseconds.
