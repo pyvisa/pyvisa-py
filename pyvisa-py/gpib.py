@@ -6,7 +6,7 @@
     GPIB Session implementation using linux-gpib or gpib-ctypes.
 
 
-    :copyright: 2015 by PyVISA-py Authors, see AUTHORS for more details.
+    :copyright: 2015-2019 by PyVISA-py Authors, see AUTHORS for more details.
     :license: MIT, see LICENSE for more details.
 """
 
@@ -65,9 +65,6 @@ def _patch_Gpib():
 _patch_Gpib()
 
 
-# TODO: Check board indices other than 0.
-BOARD = 0
-
 def _find_boards():
     """Find GPIB board addresses.
     """
@@ -76,7 +73,8 @@ def _find_boards():
         yield board, gpib.ask(board, 1)
       except gpib.GpibError as e:
         logger.debug("GPIB board %i error in _find_boards(): %s", board,repr(e))
-   
+
+
 def _find_listeners():
     """Find GPIB listeners.
     """
@@ -88,6 +86,35 @@ def _find_listeners():
         except gpib.GpibError as e:
             logger.debug("GPIB board %i addr %i error in _find_listeners(): %s", board, i, repr(e))
 
+
+def _analyse_lines_value(value, line):
+    """Determine the state of a GPIB line based on the iblines byte.
+
+    """
+    if line == constants.VI_ATTR_GPIB_REN_STATE:
+        # REN bit valid = 0x10, REN bit value = 0x100
+        validity_mask = 0x10
+        value_mask = 0x100
+    elif line == constants.VI_ATTR_GPIB_ATN_STATE:
+        # ATN bit valid = 0x40, ATN bit value = 0x4000
+        validity_mask = 0x40
+        value_mask = 0x4000
+    elif line == constants.VI_ATTR_GPIB_NDAC_STATE:
+        # NDAC bit valid = 0x2, NDAC bit value = 0x200
+        validity_mask = 0x2
+        value_mask = 0x200
+    elif line == constants.VI_ATTR_GPIB_SRQ_STATE:
+        # SRQ bit valid = 0x20, SRQ bit value = 0x2000
+        validity_mask = 0x20
+        value_mask = 0x2000
+
+    if not value & validity_mask:
+        return constants.VI_STATE_UNKNOWN, StatusCode.success
+    else:
+        if value & value_mask:
+            return constants.VI_STATE_ASSERTED, StatusCode.success
+        else:
+            return constants.VI_STATE_UNASSERTED, StatusCode.success
 
 StatusCode = constants.StatusCode
 
@@ -135,6 +162,7 @@ def convert_gpib_error(error, status, operation):
         else:
             return constants.StatusCode.error_system_error
 
+
 def convert_gpib_status(status):
     if status & 0x4000:
         return constants.StatusCode.error_timeout
@@ -142,9 +170,26 @@ def convert_gpib_status(status):
       return constants.StatusCode.error_system_error
     else:
       return constants.StatusCode.success
-      
+
+
 class _GPIBCommon(object):
     """Common base class for GPIB sessions.
+
+    Both INSTR and INTFC resources share the following attributes:
+    - VI_ATTR_INTF_TYPE
+    - VI_ATTR_TMO_VALUE
+    - VI_ATTR_INTF_INST_NAME
+    - VI_ATTR_INTF_NUM
+    - VI_ATTR_DMA_ALLOW_EN
+    - VI_ATTR_SEND_END_EN
+    - VI_ATTR_TERMCHAR
+    - VI_ATTR_TERM_CHAR_EN
+    - VI_ATTR_RD_BUF_OPER_MODE
+    - VI_ATTR_WR_BUF_OPER_MODE
+    - VI_ATTR_FILE_APPEND_EN
+    - VI_ATTR_GPIB_PRIMARY_ADDR
+    - VI_ATTR_GPIB_SECONDARY_ADDR
+    - VI_ATTR_GPIB_REN_STATE
 
     """
     @classmethod
@@ -171,7 +216,8 @@ class _GPIBCommon(object):
                                   eos_mode=eos_mode)
         # Bus wide operation
         self.controller = Gpib(name=minor)
-        # force timeout setting to interface
+
+        # Force timeout setting to interface
         self.set_attribute(constants.VI_ATTR_TMO_VALUE,
                            attributes.AttributesByID[constants.VI_ATTR_TMO_VALUE].default)
 
@@ -337,18 +383,19 @@ class _GPIBCommon(object):
         :return: The state of the queried attribute for a specified resource, return value of the library call.
         :rtype: (unicode | str | list | int, VISAStatus)
         """
+        # TODO implement the following attributes
+        # - VI_ATTR_INTF_INST_NAME RO
+        # - VI_ATTR_DMA_ALLOW_EN RW
+        # - VI_ATTR_RD_BUF_OPER_MODE RW
+        # - VI_ATTR_WR_BUF_OPER_MODE RW
+        # - VI_ATTR_FILE_APPEND_EN RW
+
         # INTFC don't have an interface so use the controller
         ifc = self.interface or self.controller
 
-        if attribute == constants.VI_ATTR_GPIB_READDR_EN:
-            # IbaREADDR 0x6
-            # Setting has no effect in linux-gpib.
-            return ifc.ask(6), StatusCode.success
-
-        elif attribute == constants.VI_ATTR_GPIB_PRIMARY_ADDR:
+        if attribute == constants.VI_ATTR_GPIB_PRIMARY_ADDR:
             # IbaPAD 0x1
             return ifc.ask(1), StatusCode.success
-
 
         elif attribute == constants.VI_ATTR_GPIB_SECONDARY_ADDR:
             # IbaSAD 0x2
@@ -362,22 +409,10 @@ class _GPIBCommon(object):
         elif attribute == constants.VI_ATTR_GPIB_REN_STATE:
             try:
                 lines = self.controller.lines()
-                if not lines & gpib.ValidREN:
-                    return constants.VI_STATE_UNKNOWN, StatusCode.success
-                if lines & gpib.BusREN:
-                    return constants.VI_STATE_ASSERTED, StatusCode.success
-                else:
-                    return constants.VI_STATE_UNASSERTED, StatusCode.success
+                return _analyse_lines_value(lines, attribute)
             except AttributeError:
                 # some versions of linux-gpib do not expose Gpib.lines()
                 return constants.VI_STATE_UNKNOWN, StatusCode.success
-
-        elif attribute == constants.VI_ATTR_GPIB_UNADDR_EN:
-            # IbaUnAddr 0x1b
-            if ifc.ask(27):
-                return constants.VI_TRUE, StatusCode.success
-            else:
-                return constants.VI_FALSE, StatusCode.success
 
         elif attribute == constants.VI_ATTR_SEND_END_EN:
             # Do not use IbaEndBitIsNormal 0x1a which relates to EOI on read()
@@ -407,6 +442,12 @@ class _GPIBCommon(object):
         :return: return value of the library call.
         :rtype: VISAStatus
         """
+        # TODO implement the following attributes
+        # - VI_ATTR_DMA_ALLOW_EN RW
+        # - VI_ATTR_RD_BUF_OPER_MODE RW
+        # - VI_ATTR_WR_BUF_OPER_MODE RW
+        # - VI_ATTR_FILE_APPEND_EN RW
+
         # INTFC don't have an interface so use the controller
         ifc = self.interface or self.controller
 
@@ -514,8 +555,79 @@ class GPIBSession(_GPIBCommon, Session):
         except gpib.GpibError as e:
             return 0, convert_gpib_error(e, self.interface.ibsta(), 'read STB')
 
+    def _get_attribute(self, attribute):
+        """Get the value for a given VISA attribute for this session.
 
-# TODO: Check board indices other than 0.
+        Use to implement custom logic for attributes. GPIB::INSTR have the
+        following specific attributes:
+
+        - VI_ATTR_TRIG_ID
+        - VI_ATTR_IO_PROT
+        - VI_ATTR_SUPPRESS_END_EN
+        - VI_ATTR_GPIB_READDR_EN
+        - VI_ATTR_GPIB_UNADDR_EN
+
+        :param attribute: Resource attribute for which the state query is made
+        :return: The state of the queried attribute for a specified resource, return value of the library call.
+        :rtype: (unicode | str | list | int, VISAStatus)
+        """
+        # TODO implement the following attributes
+        # - VI_ATTR_TRIG_ID RW or RO see specs
+        # - VI_ATTR_IO_PROT RW
+        # - VI_ATTR_SUPPRESS_END_EN RW
+        ifc = self.interface
+
+        if attribute == constants.VI_ATTR_GPIB_READDR_EN:
+            # IbaREADDR 0x6
+            # Setting has no effect in linux-gpib.
+            return ifc.ask(6), StatusCode.success
+
+        elif attribute == constants.VI_ATTR_GPIB_UNADDR_EN:
+            # IbaUnAddr 0x1b
+            if ifc.ask(27):
+                return constants.VI_TRUE, StatusCode.success
+            else:
+                return constants.VI_FALSE, StatusCode.success
+
+        return super(GPIBSession, self)._get_attribute(attribute)
+
+    def _set_attribute(self, attribute, attribute_state):
+        """Sets the state of an attribute.
+
+        Corresponds to viSetAttribute function of the VISA library.
+
+        :param attribute: Attribute for which the state is to be modified. (Attributes.*)
+        :param attribute_state: The state of the attribute to be set for the specified object.
+        :return: return value of the library call.
+        :rtype: VISAStatus
+        """
+        # TODO implement the following attributes
+        # - VI_ATTR_TRIG_ID RW or RO see specs
+        # - VI_ATTR_IO_PROT RW
+        # - VI_ATTR_SUPPRESS_END_EN RW
+        ifc = self.interface
+
+        if attribute == constants.VI_ATTR_GPIB_READDR_EN:
+            # IbcREADDR 0x6
+            # Setting has no effect in linux-gpib.
+            if isinstance(attribute_state, int):
+                ifc.config(6, attribute_state)
+                return StatusCode.success
+            else:
+                return StatusCode.error_nonsupported_attribute_state
+
+        elif attribute == constants.VI_ATTR_GPIB_UNADDR_EN:
+            # IbcUnAddr 0x1b
+            try:
+                ifc.config(27, attribute_state)
+                return StatusCode.success
+            except gpib.GpibError:
+                return StatusCode.error_nonsupported_attribute_state
+
+        return super(GPIBSession, self)._set_attribute(attribute,
+                                                       attribute_state)
+
+
 @Session.register(constants.InterfaceType.gpib, 'INTFC')
 class GPIBInterface(_GPIBCommon, Session):
     """A GPIB Interface that uses linux-gpib to do the low level communication.
@@ -523,7 +635,7 @@ class GPIBInterface(_GPIBCommon, Session):
 
     @staticmethod
     def list_resources():
-        return ['GPIB%d::INTFC' % board for board, pad, in _find_boards()]
+        return ['GPIB%d::INTFC' % board for board, pad in _find_boards()]
 
     def gpib_command(self, command_bytes):
         """Write GPIB command byte on the bus.
@@ -606,3 +718,68 @@ class GPIBInterface(_GPIBCommon, Session):
 
         status = gpib_lib.ibpct(did)
         return convert_gpib_status(status)
+
+
+    def _get_attribute(self, attribute):
+        """Get the value for a given VISA attribute for this session.
+
+        Use to implement custom logic for attributes. GPIB::INTFC have the
+        following specific attributes:
+
+        - VI_ATTR_DEV_STATUS_BYTE
+        - VI_ATTR_GPIB_ATN_STATE
+        - VI_ATTR_GPIB_NDAC_STATE
+        - VI_ATTR_GPIB_SRQ_STATE
+        - VI_ATTR_GPIB_CIC_STATE
+        - VI_ATTR_GPIB_SYS_CNTRL_STATE
+        - VI_ATTR_GPIB_HS488_CBL_LEN
+        - VI_ATTR_GPIB_ADDR_STATE
+
+        :param attribute: Resource attribute for which the state query is made
+        :return: The state of the queried attribute for a specified resource, return value of the library call.
+        :rtype: (unicode | str | list | int, VISAStatus)
+        """
+        # TODO implement the following attributes
+        # - VI_ATTR_DEV_STATUS_BYTE RW
+        # - VI_ATTR_GPIB_SYS_CNTRL_STATE RW
+        # - VI_ATTR_GPIB_HS488_CBL_LEN RO
+        # - VI_ATTR_GPIB_ADDR_STATE RO
+        ifc = self.controller
+
+        if attribute == constants.VI_ATTR_GPIB_CIC_STATE:
+            # ibsta CIC = 0x0020
+            if ifc.ibsta() & 0x0020:
+                return constants.VI_TRUE, StatusCode.success
+            else:
+                return constants.VI_FALSE, StatusCode.success
+
+        elif attribute in (constants.VI_ATTR_GPIB_ATN_STATE,
+                           constants.VI_ATTR_GPIB_NDAC_STATE,
+                           constants.VI_ATTR_GPIB_SRQ_STATE):
+            try:
+                lines = ifc.lines()
+                return _analyse_lines_value(lines, attribute)
+            except AttributeError:
+                # some versions of linux-gpib do not expose Gpib.lines()
+                return constants.VI_STATE_UNKNOWN, StatusCode.success
+
+        return super(GPIBSession, self)._get_attribute(attribute)
+
+    def _set_attribute(self, attribute, attribute_state):
+        """Sets the state of an attribute.
+
+        Corresponds to viSetAttribute function of the VISA library.
+
+        :param attribute: Attribute for which the state is to be modified. (Attributes.*)
+        :param attribute_state: The state of the attribute to be set for the specified object.
+        :return: return value of the library call.
+        :rtype: VISAStatus
+        """
+        # TODO implement the following attributes
+        # - VI_ATTR_GPIB_SYS_CNTRL_STATE
+        # - VI_ATTR_DEV_STATUS_BYTE
+
+        # INTFC don't have an interface so use the controller
+        ifc = self.controller
+
+        return super(GPIBSession, self)._set_attribute(attribute, attribute_state)
