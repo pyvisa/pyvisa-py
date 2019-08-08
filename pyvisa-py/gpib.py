@@ -65,9 +65,6 @@ def _patch_Gpib():
 _patch_Gpib()
 
 
-# TODO: Check board indices other than 0.
-BOARD = 0
-
 def _find_boards():
     """Find GPIB board addresses.
     """
@@ -523,7 +520,7 @@ class GPIBInterface(_GPIBCommon, Session):
 
     @staticmethod
     def list_resources():
-        return ['GPIB%d::INTFC' % board for board, pad, in _find_boards()]
+        return ['GPIB%d::INTFC' % board for board, pad in _find_boards()]
 
     def gpib_command(self, command_bytes):
         """Write GPIB command byte on the bus.
