@@ -68,16 +68,25 @@ _patch_Gpib()
 # TODO: Check board indices other than 0.
 BOARD = 0
 
-
+def _find_boards():
+    """Find GPIB board addresses.
+    """
+    for board in range(16):
+      try:
+        yield board, gpib.ask(board, 1)
+      except gpib.GpibError as e:
+        logger.debug("GPIB board %i error in _find_boards(): %s", board,repr(e))
+   
 def _find_listeners():
     """Find GPIB listeners.
     """
-    for i in range(31):
+    for board, boardpad in _find_boards():
+      for i in range(31):
         try:
-            if gpib.listener(BOARD, i) and gpib.ask(BOARD, 1) != i:
-                yield i
+          if boardpad != i and gpib.listener(board, i):
+            yield board, i
         except gpib.GpibError as e:
-            logger.debug("GPIB error in _find_listeners(): %s", repr(e))
+            logger.debug("GPIB board %i addr %i error in _find_listeners(): %s", board, i, repr(e))
 
 
 StatusCode = constants.StatusCode
@@ -126,7 +135,14 @@ def convert_gpib_error(error, status, operation):
         else:
             return constants.StatusCode.error_system_error
 
-
+def convert_gpib_status(status):
+    if status & 0x4000:
+        return constants.StatusCode.error_timeout
+    elif status & 0x8000:
+      return constants.StatusCode.error_system_error
+    else:
+      return constants.StatusCode.success
+      
 class _GPIBCommon(object):
     """Common base class for GPIB sessions.
 
@@ -452,7 +468,7 @@ class GPIBSession(_GPIBCommon, Session):
 
     @staticmethod
     def list_resources():
-        return ['GPIB0::%d::INSTR' % pad for pad in _find_listeners()]
+        return ['GPIB%d::%d::INSTR' % (board, pad) for board, pad in _find_listeners()]
 
     def clear(self):
         """Clears a device.
@@ -507,7 +523,7 @@ class GPIBInterface(_GPIBCommon, Session):
 
     @staticmethod
     def list_resources():
-        return ['GPIB0::%d::INTFC' % pad for pad in _find_listeners()]
+        return ['GPIB%d::INTFC' % board for board, pad, in _find_boards()]
 
     def gpib_command(self, command_bytes):
         """Write GPIB command byte on the bus.
@@ -522,8 +538,8 @@ class GPIBInterface(_GPIBCommon, Session):
         """
         try:
             return self.controller.command(command_bytes), StatusCode.success
-        except gpib.GpibError:
-            return 0, convert_gpib_status(self.interface.ibsta())
+        except gpib.GpibError as e:
+            return convert_gpib_error(e, self.controller.ibsta(), 'gpib command')
 
     def gpib_send_ifc(self):
         """Pulse the interface clear line (IFC) for at least 100 microseconds.
@@ -539,7 +555,7 @@ class GPIBInterface(_GPIBCommon, Session):
             self.controller.interface_clear()
             return StatusCode.success
         except gpib.GpibError as e:
-            return convert_gpib_error(e, self.interface.ibsta(), 'send IFC')
+            return convert_gpib_error(e, self.controller.ibsta(), 'send IFC')
 
     def gpib_control_atn(self, mode):
         """Specifies the state of the ATN line and the local active controller state.
