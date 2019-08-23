@@ -342,15 +342,19 @@ class SerialSession(Session):
             raise NotImplementedError
 
         elif attribute == constants.VI_ATTR_ASRL_STOP_BITS:
-            bits = self.interface.stopbits
-            if bits == serial.STOPBITS_ONE:
-                return constants.StopBits.one
-            elif bits == serial.STOPBITS_ONE_POINT_FIVE:
-                return constants.StopBits.one_and_a_half
-            elif bits == serial.STOPBITS_TWO:
-                return constants.StopBits.two
+            if attribute_state == constants.StopBits.one:
+                self.interface.stopbits = serial.STOPBITS_ONE
+                return StatusCode.success
 
-            raise Exception('Unknown bits value: %r' % bits)
+            if attribute_state == constants.StopBits.one_and_a_half:
+                self.interface.stopbits = serial.STOPBITS_ONE_POINT_FIVE
+                return StatusCode.success
+
+            if attribute_state == constants.StopBits.two:
+                self.interface.stopbits = serial.STOPBITS_TWO
+                return StatusCode.success
+
+            return StatusCode.error_nonsupported_attribute_state
 
         elif attribute == constants.VI_ATTR_ASRL_XOFF_CHAR:
             raise NotImplementedError
