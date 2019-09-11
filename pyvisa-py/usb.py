@@ -172,12 +172,29 @@ class USBSession(Session):
 
         raise UnknownAttribute(attribute)
 
+    def after_parsing(self):
+        self.interface = self._intf_cls(int(self.parsed.manufacturer_id, 0),
+                                        int(self.parsed.model_code, 0),
+                                        self.parsed.serial_number)
+
+        for name in ('SEND_END_EN', 'TERMCHAR', 'TERMCHAR_EN'):
+            attribute = getattr(constants, 'VI_ATTR_' + name)
+            self.attrs[attribute] = attributes.AttributesByID[attribute].default
+
+        # Force setting the timeout to get the proper value
+        attribute = constants.VI_ATTR_TMO_VALUE
+        self.set_attribute(attribute,
+                           attributes.AttributesByID[attribute].default)
+
 
 @Session.register(constants.InterfaceType.usb, 'INSTR')
 class USBInstrSession(USBSession):
     """Base class for drivers that communicate with instruments
     via usb port using pyUSB
     """
+
+    #: Class to use when instantiating the interface
+    _intf_cls = usbtmc.USBTMC
 
     @staticmethod
     def list_resources():
@@ -211,22 +228,15 @@ class USBInstrSession(USBSession):
                                   usb_interface_number=intfc))
         return out
 
-    def after_parsing(self):
-        self.interface = usbtmc.USBTMC(int(self.parsed.manufacturer_id, 0),
-                                       int(self.parsed.model_code, 0),
-                                       self.parsed.serial_number)
-
-        for name in ('SEND_END_EN', 'TERMCHAR', 'TERMCHAR_EN', 'TMO_VALUE'):
-            attribute = getattr(constants, 'VI_ATTR_' + name)
-            self.set_attribute(attribute,
-                               attributes.AttributesByID[attribute].default)
-
 
 @Session.register(constants.InterfaceType.usb, 'RAW')
 class USBRawSession(USBSession):
     """Base class for drivers that communicate with usb raw devices
     via usb port using pyUSB
     """
+
+    #: Class to use when instantiating the interface
+    _intf_cls = usbraw.USBRawDevice
 
     @staticmethod
     def list_resources():
@@ -258,13 +268,3 @@ class USBRawSession(USBSession):
                                   serial_number=serial,
                                   usb_interface_number=intfc))
         return out
-
-    def after_parsing(self):
-        self.interface = usbraw.USBRawDevice(int(self.parsed.manufacturer_id, 0),
-                                             int(self.parsed.model_code, 0),
-                                             self.parsed.serial_number)
-
-        for name in ('SEND_END_EN', 'TERMCHAR', 'TERMCHAR_EN', 'TMO_VALUE'):
-            attribute = getattr(constants, 'VI_ATTR_' + name)
-            self.set_attribute(attribute,
-                               attributes.AttributesByID[attribute].default)
