@@ -128,11 +128,13 @@ class BulkInMessage(namedtuple('BulkInMessage', 'msgid btag btaginverse '
 
     @classmethod
     def from_quirky(cls, data):
-        """Constructs a correct response for quirky devices"""
+        """Constructs a correct response for quirky devices.
+
+        """
         msgid, btag, btaginverse = struct.unpack_from('BBBx', data)
         data = data.rstrip(b'\x00')
         # check whether it contains a ';' and if throw away the first 12 bytes
-        if ';' in str(data):
+        if b';' in data:
             transfer_size, transfer_attributes = struct.unpack_from('<LBxxx', data, 4)
             data = data[12:]
         else:
