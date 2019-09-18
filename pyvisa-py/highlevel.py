@@ -211,7 +211,7 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
         return sess.clear()
 
     def flush(self, session, mask):
-        """ Flushes device buffers.
+        """Flushes device buffers.
 
         Corresponds to viFlush function of the VISA library. See:
         https://pyvisa.readthedocs.io/en/latest/api/visalibrarybase.html?highlight=flush#pyvisa.highlevel.VisaLibraryBase.flush

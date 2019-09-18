@@ -299,7 +299,7 @@ class Session(compat.with_metaclass(abc.ABCMeta)):
         return StatusCode.error_nonsupported_operation
 
     def flush(self, mask):
-        """ Flushes device buffers.
+        """Flushes device buffers.
 
         Corresponds to viFlush function of the VISA library. See:
         https://pyvisa.readthedocs.io/en/latest/api/visalibrarybase.html?highlight=flush#pyvisa.highlevel.VisaLibraryBase.flush
