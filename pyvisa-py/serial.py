@@ -163,6 +163,21 @@ class SerialSession(Session):
         except serial.SerialTimeoutException:
             return 0, StatusCode.error_timeout
 
+    def flush(self, mask):
+        if (mask & constants.VI_READ_BUF or
+                mask & constants.VI_READ_BUF_DISCARD or
+                mask & constants.VI_IO_IN_BUF or
+                mask & constants.VI_IO_IN_BUF_DISCARD):
+            self.interface.reset_input_buffer()
+        if (mask & constants.VI_WRITE_BUF or
+                mask & constants.VI_IO_OUT_BUF):
+            self.interface.flush()
+        if (mask & constants.VI_WRITE_BUF_DISCARD or
+                mask & constants.VI_IO_OUT_BUF_DISCARD):
+            self.interface.reset_output_buffer()
+
+        return StatusCode.success
+
     def _get_attribute(self, attribute):
         """Get the value for a given VISA attribute for this session.
 
