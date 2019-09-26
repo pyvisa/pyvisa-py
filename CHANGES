@@ -20,6 +20,7 @@ PyVISA-py Changelog
 - fix custom timeout for USB instruments. PR #179
 - fix triggering for all protocols. PR #180
 - add support for "quirky" devices made by Rigol. PR #186 PR #207
+- fix reading large amounts of data from some instruments when using VXI-11.
 
 0.3.1 (2018-09-12)
 ------------------
