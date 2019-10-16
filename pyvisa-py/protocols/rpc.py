@@ -345,26 +345,28 @@ def _recvrecord(sock, timeout, read_fun=None):
     finish_time = time.time() + timeout if timeout is not None else 0
     while True:
 
-        # use select to wait for read ready, max `select_timout` seconds
-        r, w, x = select.select([sock], [], [], select_timout)
-        read_data = b''
-        if sock in r:
-            read_data = read_fun(exp_length)
-            buffer.extend(read_data)
-        # Timeout was reached
-        elif timeout is not None and time.time() >= finish_time:
-            logger.debug(('Time out encountered in %s.'
-                          'Already receieved %d bytes. Last fragment is %d '
-                          'bytes long and we were expecting %d'),
-                         sock, len(record), len(buffer), exp_length)
-            msg = ("socket.timeout: The instrument seems to have stopped "
-                   "responding.")
-            raise socket.timeout(msg)
-        else:
-            # `select_timout` decreased to 50% of previous or
-            # min_select_timeout
-            select_timout = max(select_timout/2.0, min_select_timeout)
-            continue
+        # if more data for the current fragment is needed, use select
+        # to wait for read ready, max `select_timout` seconds
+        if len(buffer) < exp_length:
+            r, w, x = select.select([sock], [], [], select_timout)
+            read_data = b''
+            if sock in r:
+                read_data = read_fun(exp_length)
+                buffer.extend(read_data)
+            # Timeout was reached
+            elif timeout is not None and time.time() >= finish_time:
+                logger.debug(('Time out encountered in %s.'
+                              'Already receieved %d bytes. Last fragment is %d '
+                              'bytes long and we were expecting %d'),
+                             sock, len(record), len(buffer), exp_length)
+                msg = ("socket.timeout: The instrument seems to have stopped "
+                       "responding.")
+                raise socket.timeout(msg)
+            else:
+                # `select_timout` decreased to 50% of previous or
+                # min_select_timeout
+                select_timout = max(select_timout/2.0, min_select_timeout)
+                continue
 
         if wait_header:
             # need to find header
