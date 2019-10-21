@@ -163,6 +163,31 @@ class SerialSession(Session):
         except serial.SerialTimeoutException:
             return 0, StatusCode.error_timeout
 
+    def flush(self, mask):
+        """Flushes device buffers.
+
+        Corresponds to viFlush function of the VISA library. See:
+        https://pyvisa.readthedocs.io/en/latest/api/visalibrarybase.html?highlight=flush#pyvisa.highlevel.VisaLibraryBase.flush
+        for valid values of mask.
+
+        :param mask: which buffers to clear.
+        :return: return value of the library call.
+        :rtype: :class:`pyvisa.constants.StatusCode`
+        """
+        if (mask & constants.VI_READ_BUF or
+                mask & constants.VI_READ_BUF_DISCARD or
+                mask & constants.VI_IO_IN_BUF or
+                mask & constants.VI_IO_IN_BUF_DISCARD):
+            self.interface.reset_input_buffer()
+        if (mask & constants.VI_WRITE_BUF or
+                mask & constants.VI_IO_OUT_BUF):
+            self.interface.flush()
+        if (mask & constants.VI_WRITE_BUF_DISCARD or
+                mask & constants.VI_IO_OUT_BUF_DISCARD):
+            self.interface.reset_output_buffer()
+
+        return StatusCode.success
+
     def _get_attribute(self, attribute):
         """Get the value for a given VISA attribute for this session.
 

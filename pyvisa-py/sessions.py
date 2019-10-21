@@ -264,6 +264,19 @@ class Session(compat.with_metaclass(abc.ABCMeta)):
         """
         return StatusCode.error_nonsupported_operation
 
+    def flush(self, mask):
+        """Flushes device buffers.
+
+        Corresponds to viFlush function of the VISA library. See:
+        https://pyvisa.readthedocs.io/en/latest/api/visalibrarybase.html?highlight=flush#pyvisa.highlevel.VisaLibraryBase.flush
+        for valid values of mask.
+
+        :param mask: which buffers to clear.
+        :return: return value of the library call.
+        :rtype: :class:`pyvisa.constants.StatusCode`
+        """
+        raise NotImplementedError
+
     def read_stb(self):
         """Reads a status byte of the service request.
 

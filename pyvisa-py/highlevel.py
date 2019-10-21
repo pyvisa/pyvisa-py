@@ -210,6 +210,24 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
             return constants.StatusCode.error_invalid_object
         return sess.clear()
 
+    def flush(self, session, mask):
+        """Flushes device buffers.
+
+        Corresponds to viFlush function of the VISA library. See:
+        https://pyvisa.readthedocs.io/en/latest/api/visalibrarybase.html?highlight=flush#pyvisa.highlevel.VisaLibraryBase.flush
+        for valid values of mask.
+
+        :param session: Unique logical identifier to a session.
+        :param mask: which buffers to clear.
+        :return: return value of the library call.
+        :rtype: :class:`pyvisa.constants.StatusCode`
+        """
+        try:
+            sess = self.sessions[session]
+        except KeyError:
+            return constants.StatusCode.error_invalid_object
+        return sess.flush(mask)
+
     def gpib_command(self, session, command_byte):
         """Write GPIB command byte on the bus.
 
