@@ -537,3 +537,4 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
             return StatusCode.error_invalid_object
         
         return sess.control_transfer(request_type_bitmap_field, request_id, request_value, index, length)
+

@@ -457,3 +457,4 @@ class USBTMC(USBRaw):
         #TODO satisfy the second half of the problem -i.e. sending buffer the optional data stage
         # return self.read(length) does not work
         return bytes()
+
