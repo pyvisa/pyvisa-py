@@ -27,7 +27,7 @@ install:
   - pip install git+https://github.com/pyvisa/pyvisa.git#egg=pyvisa
 
 script:
-  - python -bb -m coverage run -p --source=pyvisa-py --omit="*test*" setup.py test
+  - python -bb -m coverage run -p --branch --source=pyvisa-py --omit="*test*" setup.py test
   - coverage combine
   - coverage report -m
 
