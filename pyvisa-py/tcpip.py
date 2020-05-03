@@ -166,11 +166,7 @@ class TCPIPInstrSession(Session):
         chunk_size = 1024
 
         try:
-            if send_end:
-                flags = vxi11.OP_FLAG_TERMCHAR_SET
-            else:
-                flags = 0
-
+            flags = 0
             num = len(data)
             offset = 0
 
