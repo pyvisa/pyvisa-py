@@ -4,6 +4,10 @@ PyVISA-py Changelog
 0.4.0 (unreleased)
 ------------------
 
+- support device lan name in TCPIP INSTR resources PR #226
+- fix handling of VXI11 flags in device_write PR #226
+- do not enforce 4 bytes padding RFC 1014 since some instrument do not respect
+  it (Issue # 225) PR #226
 - fix not setting stop bits with serial devices PR #205
 - fix improper wait time before a timeout in the TCPIP backend PR # 173
 - add GPIB support for proprietary device drivers on Windows and Linux
