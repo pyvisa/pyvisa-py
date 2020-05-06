@@ -22,7 +22,9 @@ __doc__ = long_description
 
 requirements = ['pyvisa>=1.8,<1.11']
 
-extras_requirements = {'gpib-ctypes': 'gpib-ctypes>=0.3.0'}
+extras_requirements = {'gpib-ctypes': 'gpib-ctypes>=0.3.0',
+                       "serial": "pyserial>=3.0",
+                       "usb": "pyusb"}
 
 
 setup(name='PyVISA-py',
@@ -38,7 +40,7 @@ setup(name='PyVISA-py',
       keywords='Remote VISA GPIB USB serial RS232 measurement acquisition',
       license='MIT License',
       install_requires=requirements,
-      extras_requires=extras_requirements,
+      extras_require=extras_requirements,
       classifiers=[
         'Development Status :: 4 - Beta',
         'Intended Audience :: Developers',
