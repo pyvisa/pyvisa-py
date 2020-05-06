@@ -58,7 +58,6 @@ class TCPIPInstrSession(Session):
 
     def after_parsing(self):
         # TODO: board_number not handled
-        # TODO: lan_device_name not handled
         # vx11 expect all timeouts to be expressed in ms and should be integers
         try:
             self.interface = vxi11.CoreClient(self.parsed.host_address,
@@ -166,11 +165,7 @@ class TCPIPInstrSession(Session):
         chunk_size = 1024
 
         try:
-            if send_end:
-                flags = vxi11.OP_FLAG_TERMCHAR_SET
-            else:
-                flags = 0
-
+            flags = 0
             num = len(data)
             offset = 0
 
