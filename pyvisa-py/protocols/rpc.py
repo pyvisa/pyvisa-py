@@ -336,37 +336,38 @@ def _recvrecord(sock, timeout, read_fun=None):
     # 1 sec
     min_select_timeout = (max(min(timeout/100.0, 0.1), 0.001)
                           if timeout is not None else 1.0)
-    # initial 'select_timout' is half of timeout or max 2 secs
+    # initial 'select_timeout' is half of timeout or max 2 secs
     # (max blocking time).
     # min is from 'min_select_timeout'
-    select_timout = (max(min(timeout/2.0, 2.0), min_select_timeout)
+    select_timeout = (max(min(timeout/2.0, 2.0), min_select_timeout)
                      if timeout is not None else 1.0)
     # time, when loop shall finish
     finish_time = time.time() + timeout if timeout is not None else 0
     while True:
 
         # if more data for the current fragment is needed, use select
-        # to wait for read ready, max `select_timout` seconds
+        # to wait for read ready, max `select_timeout` seconds
         if len(buffer) < exp_length:
-            r, w, x = select.select([sock], [], [], select_timout)
+            r, w, x = select.select([sock], [], [], select_timeout)
             read_data = b''
             if sock in r:
                 read_data = read_fun(exp_length)
                 buffer.extend(read_data)
             # Timeout was reached
-            elif timeout is not None and time.time() >= finish_time:
-                logger.debug(('Time out encountered in %s.'
-                              'Already receieved %d bytes. Last fragment is %d '
-                              'bytes long and we were expecting %d'),
-                             sock, len(record), len(buffer), exp_length)
-                msg = ("socket.timeout: The instrument seems to have stopped "
-                       "responding.")
-                raise socket.timeout(msg)
-            else:
-                # `select_timout` decreased to 50% of previous or
-                # min_select_timeout
-                select_timout = max(select_timout/2.0, min_select_timeout)
-                continue
+            if not read_data:  # no response or empty response
+                if timeout is not None and time.time() >= finish_time:
+                    logger.debug(('Time out encountered in %s.'
+                                  'Already received %d bytes. Last fragment is %d '
+                                  'bytes long and we were expecting %d'),
+                                 sock, len(record), len(buffer), exp_length)
+                    msg = ("socket.timeout: The instrument seems to have stopped "
+                           "responding.")
+                    raise socket.timeout(msg)
+                else:
+                    # `select_timeout` decreased to 50% of previous or
+                    # min_select_timeout
+                    select_timeout = max(select_timeout/2.0, min_select_timeout)
+                    continue
 
         if wait_header:
             # need to find header
