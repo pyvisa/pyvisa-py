@@ -20,14 +20,14 @@ long_description = '\n\n'.join([read('README.rst'),
 
 __doc__ = long_description
 
-requirements = ['pyvisa>=1.8']
+requirements = ['pyvisa>=1.8,<1.11']
 
 extras_requirements = {'gpib-ctypes': 'gpib-ctypes>=0.3.0'}
 
 
 setup(name='PyVISA-py',
       description='Python VISA bindings for GPIB, RS232, and USB instruments',
-      version='0.4.0.dev',
+      version='0.4.0',
       long_description=long_description,
       author='Hernan E. Grecco',
       author_email='hernan.grecco@gmail.com',

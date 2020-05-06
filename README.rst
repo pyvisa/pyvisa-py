@@ -45,14 +45,15 @@ Optionally
 - PySerial (to interface with Serial instruments)
 - PyUSB (to interface with USB instruments)
 - linux-gpib (to interface with gpib instruments, only on linux)
+- gpib-ctypes (to interface with GPIB instruments on Windows and Linux, warning: experimental)
 
 
 Python 2 support
 ----------------
 
-Python 2 EOL is now near (January 1st 2020), and given the limited time
-maintainers have, the next release of PyVISA-py (0.4) to be released around
-July 2019 will be the last version of PyVISA-py supporting Python 2.
+With Python 2 EOL behind us, and given the limited time maintainers have,
+the 0.4.0 release of PyVISA-py  will be the last version of PyVISA-py supporting
+Python 2.
 
 
 Installation
