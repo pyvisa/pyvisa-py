@@ -24,7 +24,7 @@ install:
   - python -m pip install --upgrade pip
   - pip install coverage
   - pip install coveralls
-  - pip install https://github.com/pyvisa/pyvisa/tarball/master
+  - pip install git+https://github.com/pyvisa/pyvisa.git#egg=pyvisa
 
 script:
   - python -bb -m coverage run -p --source=pyvisa-py --omit="*test*" setup.py test
