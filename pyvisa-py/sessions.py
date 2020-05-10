@@ -12,7 +12,7 @@
 import abc
 import time
 
-from pyvisa import logger, constants, attributes, compat, rname
+from pyvisa import logger, constants, attributes, rname
 
 from . import common
 
