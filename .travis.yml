@@ -16,18 +16,15 @@ branches:
 
 matrix:
   include:
-  - python: 2.7
-    dist: trusty
-  - python: 3.4
-    dist: trusty
-  - python: 3.5
-    dist: trusty
   - python: 3.6
   - python: 3.7
+  - python: 3.8
 
 install:
+  - python -m pip install --upgrade pip
   - pip install coverage
   - pip install coveralls
+  - pip install git+https://github.com/pyvisa/pyvisa.git#egg=pyvisa
 
 script:
   - python -bb -m coverage run -p --source=pyvisa-py --omit="*test*" setup.py test

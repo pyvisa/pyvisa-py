@@ -12,15 +12,11 @@
 
     This file is an offspring of the Lantz Project.
 
-    :copyright: 2014-2018 by PyVISA-py Authors, see AUTHORS for more details.
+    :copyright: 2014-2020 by PyVISA-py Authors, see AUTHORS for more details.
     :license: MIT, see LICENSE for more details.
 """
-
-from __future__ import (division, unicode_literals, print_function,
-                        absolute_import)
-
 import enum
-from pyvisa.compat import struct
+import struct
 import time
 from collections import namedtuple
 import warnings
@@ -29,15 +25,6 @@ import usb
 
 from .usbutil import (find_devices, find_interfaces, find_endpoint,
                       usb_find_desc)
-
-import sys
-
-if sys.version_info < (3, 2):
-    def array_to_bytes(arr):
-        return arr.tostring()
-else:
-    def array_to_bytes(arr):
-        return arr.tobytes()
 
 
 class MsgID(enum.IntEnum):
@@ -265,7 +252,7 @@ class USBRaw(object):
         if size <= 0:
             size = 1
 
-        data = array_to_bytes(self.usb_recv_ep.read(size, self.timeout))
+        data = self.usb_recv_ep.read(size, self.timeout).tobytes()
 
         return data
 

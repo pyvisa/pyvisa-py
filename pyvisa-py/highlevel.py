@@ -6,18 +6,14 @@
     Highlevel wrapper of the VISA Library.
 
 
-    :copyright: 2014 by PyVISA-py Authors, see AUTHORS for more details.
+    :copyright: 2014-2020 by PyVISA-py Authors, see AUTHORS for more details.
     :license: MIT, see LICENSE for more details.
 """
-
-from __future__ import division, unicode_literals, print_function, absolute_import
-
 import warnings
-
 import random
+from collections import OrderedDict
 
 from pyvisa import constants, errors, highlevel, rname
-from pyvisa.compat import integer_types, OrderedDict
 
 from . import sessions
 from .common import logger
@@ -145,7 +141,7 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
                 # noinspection PyProtectedMember
                 session = session._obj.value
 
-            if isinstance(session, integer_types):
+            if isinstance(session, int):
                 self._last_status_in_session[session] = ret_value
             else:
                 # Functions that might or might have a session in the first argument.

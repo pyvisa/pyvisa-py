@@ -6,15 +6,13 @@
     GPIB Session implementation using linux-gpib or gpib-ctypes.
 
 
-    :copyright: 2015-2019 by PyVISA-py Authors, see AUTHORS for more details.
+    :copyright: 2015-2020 by PyVISA-py Authors, see AUTHORS for more details.
     :license: MIT, see LICENSE for more details.
 """
-
-from __future__ import division, unicode_literals, print_function, absolute_import
+import ctypes  # Used for missing bindings not ideal
 from bisect import bisect
-import ctypes  # Used for ibln not ideal
 
-from pyvisa import constants, logger, attributes
+from pyvisa import attributes, constants, logger
 
 from .sessions import Session, UnknownAttribute
 
@@ -28,8 +26,6 @@ try:
     extra_funcs = [
         ("ibcac", [ctypes.c_int, ctypes.c_int], ctypes.c_int),
         ("ibgts", [ctypes.c_int, ctypes.c_int], ctypes.c_int),
-        ("ibln", [ctypes.c_int, ctypes.c_int, ctypes.c_int,
-                  ctypes.POINTER(ctypes.c_short)], ctypes.c_int),
         ("ibpct", [ctypes.c_int], ctypes.c_int),
     ]
     for name, argtypes, restype in extra_funcs:
@@ -362,11 +358,8 @@ class _GPIBCommon(object):
                 ifc.remote_enable(1)
                 if mode == constants.VI_GPIB_REN_ASSERT_ADDRESS:
                     # 0 for the secondary address means don't use it
-                    found_listener = ctypes.c_short()
-                    gpib_lib.ibln(self.parsed.board,
-                              self.parsed.primary_address,
-                              self.parsed.secondary_address,
-                              ctypes.byref(found_listener))
+                    ifc.listener(self.parsed.primary_address,
+                                 self.parsed.secondary_address)
         except GpibError as e:
             return convert_gpib_error(e,
                                       self.interface.ibsta(),

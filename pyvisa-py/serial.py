@@ -6,12 +6,9 @@
     Serial Session implementation using PySerial.
 
 
-    :copyright: 2014 by PyVISA-py Authors, see AUTHORS for more details.
+    :copyright: 2014-2020 by PyVISA-py Authors, see AUTHORS for more details.
     :license: MIT, see LICENSE for more details.
 """
-
-from __future__ import division, unicode_literals, print_function, absolute_import
-
 from pyvisa import constants, attributes, logger
 
 from .sessions import Session, UnknownAttribute
@@ -65,7 +62,7 @@ class SerialSession(Session):
         self.interface = cls(port=self.parsed.board, timeout=self.timeout, write_timeout=self.timeout)
 
         for name in ('ASRL_END_IN', 'ASRL_END_OUT', 'SEND_END_EN', 'TERMCHAR',
-                    'TERMCHAR_EN', 'SUPPRESS_END_EN'):
+                     'TERMCHAR_EN', 'SUPPRESS_END_EN'):
             attribute = getattr(constants, 'VI_ATTR_' + name)
             self.attrs[attribute] = attributes.AttributesByID[attribute].default
 

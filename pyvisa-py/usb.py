@@ -6,12 +6,9 @@
     Serial Session implementation using PyUSB.
 
 
-    :copyright: 2014-2018 by PyVISA-py Authors, see AUTHORS for more details.
+    :copyright: 2014-2020 by PyVISA-py Authors, see AUTHORS for more details.
     :license: MIT, see LICENSE for more details.
 """
-
-from __future__ import division, unicode_literals, print_function, absolute_import
-
 import errno
 
 from pyvisa import constants, attributes

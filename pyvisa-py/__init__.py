@@ -6,13 +6,9 @@
     Pure Python backend for PyVISA.
 
 
-    :copyright: 2014-2019 by PyVISA-py Authors, see AUTHORS for more details.
+    :copyright: 2014-2020 by PyVISA-py Authors, see AUTHORS for more details.
     :license: MIT, see LICENSE for more details.
 """
-
-from __future__ import division, unicode_literals, print_function, absolute_import
-
-
 import pkg_resources
 
 __version__ = "unknown"
