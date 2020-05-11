@@ -30,6 +30,3 @@ install:
 script:
   - pip install -e .
   - pytest pyvisa-py/testsuite --cov pyvisa-py --cov-report xml
-
-after_script:
-  - coveralls --verbose
