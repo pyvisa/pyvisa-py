@@ -1,25 +1,23 @@
 # -*- coding: utf-8 -*-
+"""Pure Python backend for PyVISA.
+
+
+:copyright: 2014-2020 by PyVISA-py Authors, see AUTHORS for more details.
+:license: MIT, see LICENSE for more details.
+
 """
-    pyvisa-py
-    ~~~~~~~~~
-
-    Pure Python backend for PyVISA.
-
-
-    :copyright: 2014-2020 by PyVISA-py Authors, see AUTHORS for more details.
-    :license: MIT, see LICENSE for more details.
-"""
-import pkg_resources
+try:
+    from importlib.metadata import version, PackageNotFoundError
+except ImportError:
+    from importlib_metadata import version, PackageNotFoundError  # type: ignore
 
 __version__ = "unknown"
-try:                # pragma: no cover
-    __version__ = pkg_resources.get_distribution('pyvisa-py').version
-except:             # pragma: no cover
-    pass    # we seem to have a local copy without any repository control or installed without setuptools
-            # so the reported version will be __unknown__
-
+try:
+    __version__ = version(__name__)
+except PackageNotFoundError:
+    # package is not installed
+    pass
 
 from .highlevel import PyVisaLibrary
 
 WRAPPER_CLASS = PyVisaLibrary
-
