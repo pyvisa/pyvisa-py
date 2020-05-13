@@ -70,6 +70,11 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
         return sessions.Session.iter_session_classes_issues()
 
     @staticmethod
+    def get_library_paths():
+        """List a dummy library path to allow to create the library."""
+        return ("py",)
+
+    @staticmethod
     def get_debug_info():
         """Return a list of lines with backend info.
         """

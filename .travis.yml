@@ -25,11 +25,8 @@ install:
   - pip install coverage
   - pip install coveralls
   - pip install git+https://github.com/pyvisa/pyvisa.git#egg=pyvisa
+  - pip install pytest pytest-cov
 
 script:
-  - python -bb -m coverage run -p --source=pyvisa-py --omit="*test*" setup.py test
-  - coverage combine
-  - coverage report -m
-
-after_script:
-  - coveralls --verbose
+  - pip install -e .
+  - pytest pyvisa-py/testsuite --cov pyvisa-py --cov-report xml
