@@ -27,7 +27,7 @@ import xdrlib
 import socket
 import select
 import time
-import struc
+import struct
 
 from ..common import logger
 
