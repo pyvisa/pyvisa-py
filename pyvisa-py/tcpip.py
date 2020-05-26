@@ -494,7 +494,7 @@ class TCPIPSocketSession(Session):
                     # expected
                     out = bytes(self._pending_buffer[:count])
                     self._pending_buffer = self._pending_buffer[count:]
-                    return out, StatusCode.succes
+                    return out, StatusCode.success
 
                 if finish_time and time.time() >= finish_time:
                     # reached timeout
@@ -548,14 +548,14 @@ class TCPIPSocketSession(Session):
             value = self.interface.getsockopt(socket.IPPROTO_TCP,
                                               socket.TCP_NODELAY)
             return (constants.VI_TRUE if value == 1 else
-                    constants.VI_FALSE, StatusCode.succes)
+                    constants.VI_FALSE, StatusCode.success)
         return 0, StatusCode.error_nonsupported_attribute
 
     def _set_tcpip_nodelay(self, attribute, attribute_state):
         if self.interface:
             self.interface.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY,
                                       1 if attribute_state else 0)
-            return StatusCode.succes
+            return StatusCode.success
         return 0, StatusCode.error_nonsupported_attribute
 
     def _get_tcpip_keepalive(self, attribute):
@@ -563,14 +563,14 @@ class TCPIPSocketSession(Session):
             value = self.interface.getsockopt(socket.SOL_SOCKET,
                                               socket.SO_KEEPALIVE)
             return (constants.VI_TRUE if value == 1 else
-                    constants.VI_FALSE, StatusCode.succes)
+                    constants.VI_FALSE, StatusCode.success)
         return 0, StatusCode.error_nonsupported_attribute
 
     def _set_tcpip_keepalive(self, attribute, attribute_state):
         if self.interface:
             self.interface.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE,
                                       1 if attribute_state else 0)
-            return StatusCode.succes
+            return StatusCode.success
         return 0, StatusCode.error_nonsupported_attribute
 
     def _get_attribute(self, attribute):
