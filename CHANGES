@@ -1,7 +1,12 @@
 PyVISA-py Changelog
 ===================
 
-0.4.0 (unreleased)
+0.4.1 (2020-05-27)
+------------------
+
+- fix typo in tcpip.py PR #233 (back-ported)
+
+0.4.0 (2020-05-06)
 ------------------
 
 - support device lan name in TCPIP INSTR resources PR #226

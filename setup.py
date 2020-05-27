@@ -29,7 +29,7 @@ extras_requirements = {'gpib-ctypes': 'gpib-ctypes>=0.3.0',
 
 setup(name='PyVISA-py',
       description='Python VISA bindings for GPIB, RS232, and USB instruments',
-      version='0.4.0',
+      version='0.4.1',
       long_description=long_description,
       author='Hernan E. Grecco',
       author_email='hernan.grecco@gmail.com',
