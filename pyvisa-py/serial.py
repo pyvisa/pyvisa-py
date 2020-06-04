@@ -9,10 +9,10 @@
     :copyright: 2014-2020 by PyVISA-py Authors, see AUTHORS for more details.
     :license: MIT, see LICENSE for more details.
 """
-from pyvisa import constants, attributes, logger
+from pyvisa import attributes, constants, logger
 
-from .sessions import Session, UnknownAttribute
 from . import common
+from .sessions import Session, UnknownAttribute
 
 try:
     import serial
@@ -359,7 +359,7 @@ class SerialSession(Session):
                 self.interface.rtscts = attribute_state & constants.VI_ASRL_FLOW_RTS_CTS
                 self.interface.dsrdtr = attribute_state & constants.VI_ASRL_FLOW_DTR_DSR
                 return StatusCode.success
-            except:
+            except Exception:
                 return StatusCode.error_nonsupported_attribute_state
 
         elif attribute == constants.VI_ATTR_ASRL_PARITY:

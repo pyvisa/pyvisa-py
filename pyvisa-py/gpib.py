@@ -33,7 +33,7 @@ try:
         libfunction.argtypes = argtypes
         libfunction.restype = restype
 
-except ImportError as e:
+except ImportError:
     GPIB_CTYPES = False
     try:
         import gpib
@@ -49,6 +49,7 @@ except ImportError as e:
             "broader range of funcionality.\n%s" % e,
         )
         raise
+
 
 # patch Gpib to avoid double closing of handles
 def _patch_Gpib():
@@ -434,7 +435,7 @@ class _GPIBCommon(object):
         elif attribute == constants.VI_ATTR_GPIB_SECONDARY_ADDR:
             # IbaSAD 0x2
             # Remove 0x60 because National Instruments.
-            sad = ifc.ask(2)
+            sad = ifc.ask(2)  # noqa
             if ifc.ask(2):
                 return ifc.ask(2) - 96, StatusCode.success
             else:
@@ -813,6 +814,6 @@ class GPIBInterface(_GPIBCommon, Session):
         # - VI_ATTR_DEV_STATUS_BYTE
 
         # INTFC don't have an interface so use the controller
-        ifc = self.controller
+        ifc = self.controller  # noqa
 
         return super(GPIBSession, self)._set_attribute(attribute, attribute_state)

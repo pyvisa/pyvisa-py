@@ -9,7 +9,6 @@
     :license: MIT, see LICENSE for more details.
 """
 import logging
-import sys
 
 from pyvisa import logger
 

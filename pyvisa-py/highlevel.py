@@ -9,7 +9,6 @@
     :copyright: 2014-2020 by PyVISA-py Authors, see AUTHORS for more details.
     :license: MIT, see LICENSE for more details.
 """
-import warnings
 import random
 from collections import OrderedDict
 
@@ -117,69 +116,6 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
 
         self.sessions[session] = obj
         return session
-
-    def _return_handler(self, ret_value, func, arguments):
-        """Check return values for errors and warnings.
-
-        TODO: THIS IS JUST COPIED PASTED FROM NIVisaLibrary.
-        Needs to be adapted.
-        """
-
-        logger.debug(
-            "%s%s -> %r",
-            func.__name__,
-            _args_to_str(arguments),
-            ret_value,
-            extra=self._logging_extra,
-        )
-
-        try:
-            ret_value = StatusCode(ret_value)
-        except ValueError:
-            pass
-
-        self._last_status = ret_value
-
-        # The first argument of almost all registered visa functions is a session.
-        # We store the error code per session
-        session = None
-        if func.__name__ not in ("viFindNext",):
-            try:
-                session = arguments[0]
-            except KeyError:
-                raise Exception(
-                    "Function %r does not seem to be a valid "
-                    "visa function (len args %d)" % (func, len(arguments))
-                )
-
-            # Functions that use the first parameter to get a session value.
-            if func.__name__ in ("viOpenDefaultRM",):
-                # noinspection PyProtectedMember
-                session = session._obj.value
-
-            if isinstance(session, int):
-                self._last_status_in_session[session] = ret_value
-            else:
-                # Functions that might or might have a session in the first argument.
-                if func.__name__ not in (
-                    "viClose",
-                    "viGetAttribute",
-                    "viSetAttribute",
-                    "viStatusDesc",
-                ):
-                    raise Exception(
-                        "Function %r does not seem to be a valid "
-                        "visa function (type args[0] %r)" % (func, type(session))
-                    )
-
-        if ret_value < 0:
-            raise errors.VisaIOError(ret_value)
-
-        if ret_value in self.issue_warning_on:
-            if session and ret_value not in self._ignore_warning_in_session[session]:
-                warnings.warn(errors.VisaIOWarning(ret_value), stacklevel=2)
-
-        return ret_value
 
     # noinspection PyShadowingBuiltins
     def open(

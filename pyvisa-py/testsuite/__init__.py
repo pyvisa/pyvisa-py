@@ -1,8 +1,6 @@
 # -*- coding: utf-8 -*-
 import os
-
 import unittest
-
 
 # Set the environment variable to use PyVISA-py as backend
 os.environ["PYVISA_LIBRARY"] = "@py"

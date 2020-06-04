@@ -18,12 +18,12 @@
 import enum
 import struct
 import time
-from collections import namedtuple
 import warnings
+from collections import namedtuple
 
 import usb
 
-from .usbutil import find_devices, find_interfaces, find_endpoint, usb_find_desc
+from .usbutil import find_devices, find_endpoint, find_interfaces, usb_find_desc
 
 
 class MsgID(enum.IntEnum):
@@ -208,7 +208,7 @@ class USBRaw(object):
         try:
             if self.usb_dev.is_kernel_driver_active(0):
                 self.usb_dev.detach_kernel_driver(0)
-        except (usb.core.USBError, NotImplementedError) as e:
+        except (usb.core.USBError, NotImplementedError):
             pass
 
         try:
@@ -218,7 +218,7 @@ class USBRaw(object):
 
         try:
             self.usb_dev.set_interface_altsetting()
-        except usb.core.USBError as e:
+        except usb.core.USBError:
             pass
 
         self.usb_intf = self._find_interface(self.usb_dev, self.INTERFACE)

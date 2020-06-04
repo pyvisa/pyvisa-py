@@ -17,8 +17,7 @@
 from fnmatch import fnmatch
 
 import usb
-from usb.util import get_string as usb_get_string, find_descriptor as usb_find_desc
-
+from usb.util import find_descriptor as usb_find_desc
 
 ClassCodes = {
     0x00: ("Device", "Use class information in the Interface Descriptors"),
@@ -226,9 +225,9 @@ def find_interfaces(device, **kwargs):
         for cfg in device:
             try:
                 interfaces.extend(usb_find_desc(cfg, find_all=True, **kwargs))
-            except:
+            except Exception:
                 pass
-    except:
+    except Exception:
         pass
     return interfaces
 

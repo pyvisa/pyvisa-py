@@ -11,7 +11,7 @@
 """
 import errno
 
-from pyvisa import constants, attributes
+from pyvisa import attributes, constants
 
 from .common import logger
 from .sessions import Session, UnknownAttribute

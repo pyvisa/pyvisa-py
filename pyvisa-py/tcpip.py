@@ -10,16 +10,15 @@
     :license: MIT, see LICENSE for more details.
 """
 import random
-import socket
 import select
+import socket
 import time
 
-from pyvisa import constants, attributes, errors
+from pyvisa import attributes, constants, errors
 
-from .sessions import Session, UnknownAttribute
-from .protocols import vxi11, rpc
 from . import common
-
+from .protocols import rpc, vxi11
+from .sessions import Session, UnknownAttribute
 
 StatusCode = constants.StatusCode
 
@@ -538,7 +537,7 @@ class TCPIPSocketSession(Session):
                 # use select to wait for write ready
                 select.select([], [self.interface], [])
                 size = self.interface.send(block)
-            except socket.timeout as e:
+            except socket.timeout:
                 return offset, StatusCode.error_io
 
             if size < len(block):

@@ -215,7 +215,7 @@ class CoreClient(rpc.TCPClient):
                 self.packer.pack_create_link_parms,
                 self.unpacker.unpack_create_link_resp,
             )
-        except socket.timeout as e:
+        except socket.timeout:
             return ErrorCodes.device_not_accessible, None, None, None
 
     def device_write(self, link, io_timeout, lock_timeout, flags, data):

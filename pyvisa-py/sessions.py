@@ -12,10 +12,9 @@
 import abc
 import time
 
-from pyvisa import logger, constants, attributes, rname
+from pyvisa import attributes, constants, logger, rname
 
 from . import common
-
 
 StatusCode = constants.StatusCode
 

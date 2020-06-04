@@ -21,13 +21,13 @@
     :license: MIT, see LICENSE for more details.
 """
 
-import sys
 import enum
-import xdrlib
-import socket
 import select
-import time
+import socket
 import struct
+import sys
+import time
+import xdrlib
 
 from ..common import logger
 
@@ -397,7 +397,7 @@ def _connect(sock, host, port, timeout=0):
     try:
         sock.setblocking(0)
         sock.connect_ex((host, port))
-    except Exception as e:
+    except Exception:
         sock.close()
         return False
     finally:
@@ -797,7 +797,7 @@ class BroadcastUDPClient(Client):
             self.unpack_func = unpack_func
         self.replies = []
         packed_args = self.packer.get_buf()
-        dummy_replies = self.pmap.Callit((self.prog, self.vers, proc, packed_args))
+        _ = self.pmap.Callit((self.prog, self.vers, proc, packed_args))
         return self.replies
 
 
@@ -865,8 +865,8 @@ class Server(object):
         except AttributeError:
             self.packer.pack_uint(AcceptStatus.procedure_unavailable)
             return self.packer.get_buf()
-        cred = self.unpacker.unpack_auth()
-        verf = self.unpacker.unpack_auth()
+        cred = self.unpacker.unpack_auth()  # noqa
+        verf = self.unpacker.unpack_auth()  # noqa
         try:
             meth()  # Unpack args, call turn_around(), pack reply
         except (EOFError, RPCGarbageArgs):
