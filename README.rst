@@ -2,22 +2,22 @@ PyVISA-py
 =========
 
 .. image:: https://github.com/pyvisa/pyvisa-py/workflows/Continuous%20Integration/badge.svg
-    :target: https://github.com/nucleic/atom/actions
+    :target: https://github.com/pyvisa/pyvisa-py/actions
     :alt: Continuous integration
 .. image:: https://github.com/pyvisa/pyvisa-py/workflows/Documentation%20building/badge.svg
-    :target: https://github.com/nucleic/atom/actions
+    :target: https://github.com/pyvisa/pyvisa-py/actions
     :alt: Documentation building
-.. image:: https://codecov.io/gh/pyvisa/pyvisa/branch/master/graph/badge.svg
-    :target: https://codecov.io/gh/pyvisa/pyvisa
+.. image:: https://codecov.io/gh/pyvisa/pyvisa-py/branch/master/graph/badge.svg
+    :target: https://codecov.io/gh/pyvisa/pyvisa-py
     :alt: Code Coverage
-.. image:: https://readthedocs.org/projects/pyvisa/badge/?version=latest
+.. image:: https://readthedocs.org/projects/pyvisa-py/badge/?version=latest
     :target: https://pyvisa.readthedocs.io/en/latest/?badge=latest
     :alt: Documentation Status
-.. image:: https://img.shields.io/pypi/l/PyVISA
-    :target: https://pypi.python.org/pypi/pyvisa
+.. image:: https://img.shields.io/pypi/l/PyVISA-py
+    :target: https://pypi.python.org/pypi/pyvisa-py
     :alt: PyPI - License
-.. image:: https://img.shields.io/pypi/v/PyVISA
-    :target: https://pypi.python.org/pypi/pyvisa
+.. image:: https://img.shields.io/pypi/v/PyVISA-py
+    :target: https://pypi.python.org/pypi/pyvisa-py
     :alt: PyPI
 
 A PyVISA backend that implements a large part of the "Virtual Instrument Software
