@@ -48,7 +48,7 @@ source_suffix = '.rst'
 master_doc = 'index'
 
 # General information about the project.
-project = 'PyVISA'
+project = 'PyVISA-Py'
 author = 'PyVISA Authors'
 
 # The version info for the project you're documenting, acts as replacement for
