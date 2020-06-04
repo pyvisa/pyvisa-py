@@ -1,10 +1,28 @@
 PyVISA-py
 =========
 
+.. image:: https://github.com/pyvisa/pyvisa-py/workflows/Continuous%20Integration/badge.svg
+    :target: https://github.com/nucleic/atom/actions
+    :alt: Continuous integration
+.. image:: https://github.com/pyvisa/pyvisa-py/workflows/Documentation%20building/badge.svg
+    :target: https://github.com/nucleic/atom/actions
+    :alt: Documentation building
+.. image:: https://codecov.io/gh/pyvisa/pyvisa/branch/master/graph/badge.svg
+    :target: https://codecov.io/gh/pyvisa/pyvisa
+    :alt: Code Coverage
+.. image:: https://readthedocs.org/projects/pyvisa/badge/?version=latest
+    :target: https://pyvisa.readthedocs.io/en/latest/?badge=latest
+    :alt: Documentation Status
+.. image:: https://img.shields.io/pypi/l/PyVISA
+    :target: https://pypi.python.org/pypi/pyvisa
+    :alt: PyPI - License
+.. image:: https://img.shields.io/pypi/v/PyVISA
+    :target: https://pypi.python.org/pypi/pyvisa
+    :alt: PyPI
+
 A PyVISA backend that implements a large part of the "Virtual Instrument Software
 Architecture" (VISA_) in pure Python (with the help of some nice cross platform
 libraries python packages!).
-
 
 Description
 -----------
