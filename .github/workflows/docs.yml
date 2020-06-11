@@ -5,11 +5,11 @@ on:
   push:
     branches:
       - master
+      - staging
+      - trying
   pull_request:
     branches:
       - master
-      - staging
-      - trying
     paths:
       - .github/workflows/docs.yml
       - pyvisa-py/*
