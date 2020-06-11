@@ -51,7 +51,7 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v1
+        uses: actions/setup-python@v2
         with:
           python-version: ${{ matrix.python-version }}
       - name: Install dependencies
@@ -72,23 +72,19 @@ jobs:
           flags: unittests
           name: codecov-umbrella
           fail_ci_if_error: true
+
   # Added to summarize the matrix (otherwise we would need to list every single
   # job in bors.toml)
-  tests-success:
+  tests-result:
     name: Tests result
-    if: github.event_name == 'push' && success()
+    if: always()
     needs:
       - tests
     runs-on: ubuntu-latest
     steps:
       - name: Mark the job as a success
+        if: needs.tests.result == "success"
         run: exit 0
-  test-failure:
-    name: Tests result
-    if: github.event_name == 'push' && !success()
-    needs:
-      - tests
-    runs-on: ubuntu-latest
-    steps:
       - name: Mark the job as a failure
+        if: needs.tests.result == "failure"
         run: exit 1
