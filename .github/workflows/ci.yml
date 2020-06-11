@@ -84,7 +84,7 @@ jobs:
       - name: Mark the job as a success
         run: exit 0
   test-failure:
-    name: Test result
+    name: Tests result
     if: github.event_name == 'push' && !success()
     needs:
       - tests
