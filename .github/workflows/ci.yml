@@ -72,3 +72,23 @@ jobs:
           flags: unittests
           name: codecov-umbrella
           fail_ci_if_error: true
+  # Added to summarize the matrix (otherwise we would need to list every single
+  # job in bors.toml)
+  tests-success:
+    name: Tests result
+    if: github.event_name == 'push' && success()
+    needs:
+      - tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Mark the job as a success
+        run: exit 0
+  test-failure:
+    name: Test result
+    if: github.event_name == 'push' && !success()
+    needs:
+      - tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Mark the job as a failure
+        run: exit 1
