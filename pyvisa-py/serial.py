@@ -9,17 +9,20 @@
     :copyright: 2014-2020 by PyVISA-py Authors, see AUTHORS for more details.
     :license: MIT, see LICENSE for more details.
 """
-from pyvisa import constants, attributes, logger
+from pyvisa import attributes, constants, logger
 
-from .sessions import Session, UnknownAttribute
 from . import common
+from .sessions import Session, UnknownAttribute
 
 try:
     import serial
     from serial.tools.list_ports import comports
 except ImportError as e:
-    Session.register_unavailable(constants.InterfaceType.asrl, 'INSTR',
-                                 'Please install PySerial (>=3.0) to use this resource type.\n%s' % e)
+    Session.register_unavailable(
+        constants.InterfaceType.asrl,
+        "INSTR",
+        "Please install PySerial (>=3.0) to use this resource type.\n%s" % e,
+    )
     raise
 
 
@@ -35,35 +38,43 @@ StatusCode = constants.StatusCode
 SerialTermination = constants.SerialTermination
 
 
-@Session.register(constants.InterfaceType.asrl, 'INSTR')
+@Session.register(constants.InterfaceType.asrl, "INSTR")
 class SerialSession(Session):
     """A serial Session that uses PySerial to do the low level communication.
     """
 
     @staticmethod
     def list_resources():
-        return ['ASRL%s::INSTR' % port[0] for port in comports()]
+        return ["ASRL%s::INSTR" % port[0] for port in comports()]
 
     @classmethod
     def get_low_level_info(cls):
         try:
             ver = serial.VERSION
         except AttributeError:
-            ver = 'N/A'
+            ver = "N/A"
 
-        return 'via PySerial (%s)' % ver
+        return "via PySerial (%s)" % ver
 
     def after_parsing(self):
-        if 'mock' in self.parsed:
+        if "mock" in self.parsed:
             cls = self.parsed.mock
         else:
             cls = serial.Serial
 
-        self.interface = cls(port=self.parsed.board, timeout=self.timeout, write_timeout=self.timeout)
+        self.interface = cls(
+            port=self.parsed.board, timeout=self.timeout, write_timeout=self.timeout
+        )
 
-        for name in ('ASRL_END_IN', 'ASRL_END_OUT', 'SEND_END_EN', 'TERMCHAR',
-                     'TERMCHAR_EN', 'SUPPRESS_END_EN'):
-            attribute = getattr(constants, 'VI_ATTR_' + name)
+        for name in (
+            "ASRL_END_IN",
+            "ASRL_END_OUT",
+            "SEND_END_EN",
+            "TERMCHAR",
+            "TERMCHAR_EN",
+            "SUPPRESS_END_EN",
+        ):
+            attribute = getattr(constants, "VI_ATTR_" + name)
             self.attrs[attribute] = attributes.AttributesByID[attribute].default
 
     def _get_timeout(self, attribute):
@@ -109,10 +120,17 @@ class SerialSession(Session):
             checker = lambda current: common.last_int(current) == end_char
 
         else:
-            raise ValueError('Unknown value for VI_ATTR_ASRL_END_IN: %s' % end_in)
+            raise ValueError("Unknown value for VI_ATTR_ASRL_END_IN: %s" % end_in)
 
-        return self._read(reader, count, checker, suppress_end_en, None, False,
-                          serial.SerialTimeoutException)
+        return self._read(
+            reader,
+            count,
+            checker,
+            suppress_end_en,
+            None,
+            False,
+            serial.SerialTimeoutException,
+        )
 
     def write(self, data):
         """Writes data to device or interface synchronously.
@@ -124,7 +142,7 @@ class SerialSession(Session):
         :return: Number of bytes actually transferred, return value of the library call.
         :rtype: int, VISAStatus
         """
-        logger.debug('Serial.write %r' % data)
+        logger.debug("Serial.write %r" % data)
         # TODO: How to deal with VI_ATTR_TERMCHAR_EN
         end_out, _ = self.get_attribute(constants.VI_ATTR_ASRL_END_OUT)
         send_end, _ = self.get_attribute(constants.VI_ATTR_SEND_END_EN)
@@ -145,14 +163,14 @@ class SerialSession(Session):
                 data = common.iter_bytes(data + common.int_to_byte(term_char))
 
             else:
-                raise ValueError('Unknown value for VI_ATTR_ASRL_END_OUT: %s' % end_out)
+                raise ValueError("Unknown value for VI_ATTR_ASRL_END_OUT: %s" % end_out)
 
             count = 0
             for d in data:
                 count += self.interface.write(d)
 
             if end_out == SerialTermination.termination_break:
-                logger.debug('Serial.sendBreak')
+                logger.debug("Serial.sendBreak")
                 self.interface.sendBreak()
 
             return count, StatusCode.success
@@ -171,16 +189,19 @@ class SerialSession(Session):
         :return: return value of the library call.
         :rtype: :class:`pyvisa.constants.StatusCode`
         """
-        if (mask & constants.VI_READ_BUF or
-                mask & constants.VI_READ_BUF_DISCARD or
-                mask & constants.VI_IO_IN_BUF or
-                mask & constants.VI_IO_IN_BUF_DISCARD):
+        if (
+            mask & constants.VI_READ_BUF
+            or mask & constants.VI_READ_BUF_DISCARD
+            or mask & constants.VI_IO_IN_BUF
+            or mask & constants.VI_IO_IN_BUF_DISCARD
+        ):
             self.interface.reset_input_buffer()
-        if (mask & constants.VI_WRITE_BUF or
-                mask & constants.VI_IO_OUT_BUF):
+        if mask & constants.VI_WRITE_BUF or mask & constants.VI_IO_OUT_BUF:
             self.interface.flush()
-        if (mask & constants.VI_WRITE_BUF_DISCARD or
-                mask & constants.VI_IO_OUT_BUF_DISCARD):
+        if (
+            mask & constants.VI_WRITE_BUF_DISCARD
+            or mask & constants.VI_IO_OUT_BUF_DISCARD
+        ):
             self.interface.reset_output_buffer()
 
         return StatusCode.success
@@ -232,9 +253,14 @@ class SerialSession(Session):
             raise NotImplementedError
 
         elif attribute == constants.VI_ATTR_ASRL_FLOW_CNTRL:
-            return (self.interface.xonxoff * constants.VI_ASRL_FLOW_XON_XOFF |
-                    self.interface.rtscts * constants.VI_ASRL_FLOW_RTS_CTS |
-                    self.interface.dsrdtr * constants.VI_ASRL_FLOW_DTR_DSR), StatusCode.success
+            return (
+                (
+                    self.interface.xonxoff * constants.VI_ASRL_FLOW_XON_XOFF
+                    | self.interface.rtscts * constants.VI_ASRL_FLOW_RTS_CTS
+                    | self.interface.dsrdtr * constants.VI_ASRL_FLOW_DTR_DSR
+                ),
+                StatusCode.success,
+            )
 
         elif attribute == constants.VI_ATTR_ASRL_PARITY:
             parity = self.interface.parity
@@ -249,7 +275,7 @@ class SerialSession(Session):
             elif parity == serial.PARITY_SPACE:
                 return constants.Parity.space, StatusCode.success
 
-            raise Exception('Unknown parity value: %r' % parity)
+            raise Exception("Unknown parity value: %r" % parity)
 
         elif attribute == constants.VI_ATTR_ASRL_RI_STATE:
             raise NotImplementedError
@@ -266,7 +292,7 @@ class SerialSession(Session):
             elif bits == serial.STOPBITS_TWO:
                 return constants.StopBits.two, StatusCode.success
 
-            raise Exception('Unknown bits value: %r' % bits)
+            raise Exception("Unknown bits value: %r" % bits)
 
         elif attribute == constants.VI_ATTR_ASRL_XOFF_CHAR:
             raise NotImplementedError
@@ -327,11 +353,13 @@ class SerialSession(Session):
                 return StatusCode.error_nonsupported_attribute_state
 
             try:
-                self.interface.xonxoff = attribute_state & constants.VI_ASRL_FLOW_XON_XOFF
+                self.interface.xonxoff = (
+                    attribute_state & constants.VI_ASRL_FLOW_XON_XOFF
+                )
                 self.interface.rtscts = attribute_state & constants.VI_ASRL_FLOW_RTS_CTS
                 self.interface.dsrdtr = attribute_state & constants.VI_ASRL_FLOW_DTR_DSR
                 return StatusCode.success
-            except:
+            except Exception:
                 return StatusCode.error_nonsupported_attribute_state
 
         elif attribute == constants.VI_ATTR_ASRL_PARITY:

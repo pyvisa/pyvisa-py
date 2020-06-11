@@ -21,13 +21,13 @@
     :license: MIT, see LICENSE for more details.
 """
 
-import sys
 import enum
-import xdrlib
-import socket
 import select
-import time
+import socket
 import struct
+import sys
+import time
+import xdrlib
 
 from ..common import logger
 
@@ -122,11 +122,10 @@ class RPCUnpackError(RPCError):
 
 
 def make_auth_null():
-    return b''
+    return b""
 
 
 class Packer(xdrlib.Packer):
-
     def pack_auth(self, auth):
         flavor, stuff = auth
         self.pack_enum(flavor)
@@ -162,7 +161,6 @@ class Packer(xdrlib.Packer):
 
 
 class Unpacker(xdrlib.Unpacker):
-
     def unpack_auth(self):
         flavor = self.unpack_enum()
         stuff = self.unpack_opaque()
@@ -172,10 +170,10 @@ class Unpacker(xdrlib.Unpacker):
         xid = self.unpack_uint()
         temp = self.unpack_enum()
         if temp != MessagegType.call:
-            raise RPCBadFormat('no CALL but %r' % (temp,))
+            raise RPCBadFormat("no CALL but %r" % (temp,))
         temp = self.unpack_uint()
         if temp != RPCVERSION:
-            raise RPCBadVersion('bad RPC version %r' % (temp,))
+            raise RPCBadVersion("bad RPC version %r" % (temp,))
         prog = self.unpack_uint()
         vers = self.unpack_uint()
         proc = self.unpack_uint()
@@ -188,36 +186,34 @@ class Unpacker(xdrlib.Unpacker):
         xid = self.unpack_uint()
         mtype = self.unpack_enum()
         if mtype != MessagegType.reply:
-            raise RPCUnpackError('no reply but %r' % (mtype,))
+            raise RPCUnpackError("no reply but %r" % (mtype,))
         stat = self.unpack_enum()
         if stat == ReplyStatus.denied:
             stat = self.unpack_enum()
             if stat == RejectStatus.rpc_mismatch:
                 low = self.unpack_uint()
                 high = self.unpack_uint()
-                raise RPCUnpackError('denied: rpc_mismatch: %r' %
-                                     ((low, high),))
+                raise RPCUnpackError("denied: rpc_mismatch: %r" % ((low, high),))
             if stat == RejectStatus.auth_error:
                 stat = self.unpack_uint()
-                raise RPCUnpackError('denied: auth_error: %r' % (stat,))
-            raise RPCUnpackError('denied: %r' % (stat,))
+                raise RPCUnpackError("denied: auth_error: %r" % (stat,))
+            raise RPCUnpackError("denied: %r" % (stat,))
         if stat != ReplyStatus.accepted:
-            raise RPCUnpackError('Neither denied nor accepted: %r' % (stat,))
+            raise RPCUnpackError("Neither denied nor accepted: %r" % (stat,))
         verf = self.unpack_auth()
         stat = self.unpack_enum()
         if stat == AcceptStatus.program_unavailable:
-            raise RPCUnpackError('call failed: program_unavailable')
+            raise RPCUnpackError("call failed: program_unavailable")
         if stat == AcceptStatus.program_mismatch:
             low = self.unpack_uint()
             high = self.unpack_uint()
-            raise RPCUnpackError('call failed: program_mismatch: %r' %
-                                 ((low, high),))
+            raise RPCUnpackError("call failed: program_mismatch: %r" % ((low, high),))
         if stat == AcceptStatus.procedure_unavailable:
-            raise RPCUnpackError('call failed: procedure_unavailable')
+            raise RPCUnpackError("call failed: procedure_unavailable")
         if stat == AcceptStatus.garbage_args:
             raise RPCGarbageArgs
         if stat != AcceptStatus.success:
-            raise RPCUnpackError('call failed: %r' % (stat,))
+            raise RPCUnpackError("call failed: %r" % (stat,))
         return xid, verf
         # Caller must get procedure-specific part of reply
 
@@ -237,11 +233,10 @@ class Client(object):
 
     def make_call(self, proc, args, pack_func, unpack_func):
         # Don't normally override this (but see Broadcast)
-        logger.debug('Make call %r, %r, %r, %r',
-                     proc, args, pack_func, unpack_func)
+        logger.debug("Make call %r, %r, %r, %r", proc, args, pack_func, unpack_func)
 
         if pack_func is None and args is not None:
-            raise TypeError('non-null args with null pack_func')
+            raise TypeError("non-null args with null pack_func")
         self.start_call(proc)
         if pack_func:
             pack_func(args)
@@ -266,7 +261,7 @@ class Client(object):
 
     def do_call(self):
         # This MUST be overridden
-        raise RPCError('do_call not defined')
+        raise RPCError("do_call not defined")
 
     def mkcred(self):
         # Override this to use more powerful credentials
@@ -287,6 +282,7 @@ class Client(object):
 
 # Record-Marking standard support
 
+
 def sendfrag(sock, last, frag):
     x = len(frag)
     if last:
@@ -296,17 +292,16 @@ def sendfrag(sock, last, frag):
 
 
 def _sendrecord(sock, record, fragsize=None, timeout=None):
-    logger.debug('Sending record through %s: %r', sock, record)
+    logger.debug("Sending record through %s: %r", sock, record)
     if timeout is not None:
         r, w, x = select.select([], [sock], [], timeout)
         if sock not in w:
-            msg = ("socket.timeout: The instrument seems to have stopped "
-                   "responding.")
+            msg = "socket.timeout: The instrument seems to have stopped " "responding."
             raise socket.timeout(msg)
 
     last = False
     if not fragsize:
-        fragsize = 0x7fffffff
+        fragsize = 0x7FFFFFFF
     while not last:
         record_len = len(record)
         if record_len <= fragsize:
@@ -332,13 +327,15 @@ def _recvrecord(sock, timeout, read_fun=None):
 
     # minimum is in interval 1 - 100ms based on timeout or for infinite it is
     # 1 sec
-    min_select_timeout = (max(min(timeout/100.0, 0.1), 0.001)
-                          if timeout is not None else 1.0)
+    min_select_timeout = (
+        max(min(timeout / 100.0, 0.1), 0.001) if timeout is not None else 1.0
+    )
     # initial 'select_timout' is half of timeout or max 2 secs
     # (max blocking time).
     # min is from 'min_select_timeout'
-    select_timout = (max(min(timeout/2.0, 2.0), min_select_timeout)
-                     if timeout is not None else 1.0)
+    select_timout = (
+        max(min(timeout / 2.0, 2.0), min_select_timeout) if timeout is not None else 1.0
+    )
     # time, when loop shall finish
     finish_time = time.time() + timeout if timeout is not None else 0
     while True:
@@ -347,23 +344,32 @@ def _recvrecord(sock, timeout, read_fun=None):
         # to wait for read ready, max `select_timout` seconds
         if len(buffer) < exp_length:
             r, w, x = select.select([sock], [], [], select_timout)
-            read_data = b''
+            read_data = b""
             if sock in r:
                 read_data = read_fun(exp_length)
                 buffer.extend(read_data)
             # Timeout was reached
             elif timeout is not None and time.time() >= finish_time:
-                logger.debug(('Time out encountered in %s.'
-                              'Already receieved %d bytes. Last fragment is %d '
-                              'bytes long and we were expecting %d'),
-                             sock, len(record), len(buffer), exp_length)
-                msg = ("socket.timeout: The instrument seems to have stopped "
-                       "responding.")
+                logger.debug(
+                    (
+                        "Time out encountered in %s."
+                        "Already receieved %d bytes. Last fragment is %d "
+                        "bytes long and we were expecting %d"
+                    ),
+                    sock,
+                    len(record),
+                    len(buffer),
+                    exp_length,
+                )
+                msg = (
+                    "socket.timeout: The instrument seems to have stopped "
+                    "responding."
+                )
                 raise socket.timeout(msg)
             else:
                 # `select_timout` decreased to 50% of previous or
                 # min_select_timeout
-                select_timout = max(select_timout/2.0, min_select_timeout)
+                select_timout = max(select_timout / 2.0, min_select_timeout)
                 continue
 
         if wait_header:
@@ -372,16 +378,15 @@ def _recvrecord(sock, timeout, read_fun=None):
                 header = buffer[:exp_length]
                 buffer = buffer[exp_length:]
                 x = struct.unpack(">I", header)[0]
-                last = ((x & 0x80000000) != 0)
-                exp_length = int(x & 0x7fffffff)
+                last = (x & 0x80000000) != 0
+                exp_length = int(x & 0x7FFFFFFF)
                 wait_header = False
         else:
             if len(buffer) >= exp_length:
                 record.extend(buffer[:exp_length])
                 buffer = buffer[exp_length:]
                 if last:
-                    logger.debug('Received record through %s: %r',
-                                 sock, record)
+                    logger.debug("Received record through %s: %r", sock, record)
                     return bytes(record)
                 else:
                     wait_header = True
@@ -392,18 +397,18 @@ def _connect(sock, host, port, timeout=0):
     try:
         sock.setblocking(0)
         sock.connect_ex((host, port))
-    except Exception as e:
+    except Exception:
         sock.close()
         return False
     finally:
         sock.setblocking(1)
 
     # minimum is in interval 100 - 500ms based on timeout
-    min_select_timeout = max(min(timeout/10.0, 0.5), 0.1)
+    min_select_timeout = max(min(timeout / 10.0, 0.5), 0.1)
     # initial 'select_timout' is half of timeout or max 2 secs
     # (max blocking time).
     # min is from 'min_select_timeout'
-    select_timout = max(min(timeout/2.0, 2.0), min_select_timeout)
+    select_timout = max(min(timeout / 2.0, 2.0), min_select_timeout)
     # time, when loop shall finish
     finish_time = time.time() + timeout
     while True:
@@ -417,13 +422,14 @@ def _connect(sock, host, port, timeout=0):
             return False
 
         # `select_timout` decreased to 50% of previous or min_select_timeout
-        select_timout = max(select_timout/2.0, min_select_timeout)
+        select_timout = max(select_timout / 2.0, min_select_timeout)
 
 
 class RawTCPClient(Client):
     """Client using TCP to a specific port.
 
     """
+
     def __init__(self, host, prog, vers, port, open_timeout=5000):
         Client.__init__(self, host, prog, vers, port)
         self.connect((open_timeout / 1000.0) + 1.0)
@@ -437,14 +443,14 @@ class RawTCPClient(Client):
         """
         if proc == 11:
             # vxi11.DEVICE_WRITE
-            self.timeout = (args[1] / 1000.0)
+            self.timeout = args[1] / 1000.0
         elif proc in (12, 22):
             # vxi11.DEVICE_READ or vxi11.DEVICE_DOCMD
-            self.timeout = (args[2] / 1000.0)
+            self.timeout = args[2] / 1000.0
         elif proc in (13, 14, 15, 16, 17):
             # vxi11.DEVICE_READSTB, vxi11.DEVICE_TRIGGER, vxi11.DEVICE_CLEAR,
             # vxi11.DEVICE_REMOTE, or vxi11.DEVICE_LOCAL
-            self.timeout = (args[3] / 1000.0)
+            self.timeout = args[3] / 1000.0
         else:
             self.timeout = 4.0
 
@@ -454,18 +460,18 @@ class RawTCPClient(Client):
         # unplugged).
         self.timeout += 1.0
 
-        return super(RawTCPClient, self).make_call(proc, args, pack_func,
-                                                   unpack_func)
+        return super(RawTCPClient, self).make_call(proc, args, pack_func, unpack_func)
 
     def connect(self, timeout=5.0):
-        logger.debug('RawTCPClient: connecting to socket at (%s, %s)',
-                     self.host, self.port)
+        logger.debug(
+            "RawTCPClient: connecting to socket at (%s, %s)", self.host, self.port
+        )
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         if not _connect(self.sock, self.host, self.port, timeout):
-            raise RPCError('can\'t connect to server')
+            raise RPCError("can't connect to server")
 
     def close(self):
-        logger.debug('RawTCPClient: closing socket')
+        logger.debug("RawTCPClient: closing socket")
         self.sock.close()
 
     def do_call(self):
@@ -479,7 +485,7 @@ class RawTCPClient(Client):
         xid, verf = u.unpack_replyheader()
         if xid != self.lastxid:
             # Can't really happen since this is TCP...
-            msg = 'wrong xid in reply {0} instead of {1}'
+            msg = "wrong xid in reply {0} instead of {1}"
             raise RPCError(msg.format(xid, self.lastxid))
 
 
@@ -487,18 +493,20 @@ class RawUDPClient(Client):
     """Client using UDP to a specific port.
 
     """
+
     def __init__(self, host, prog, vers, port):
         Client.__init__(self, host, prog, vers, port)
         self.connect()
 
     def connect(self):
-        logger.debug('RawTCPClient: connecting to socket at (%s, %s)',
-                     self.host, self.port)
+        logger.debug(
+            "RawTCPClient: connecting to socket at (%s, %s)", self.host, self.port
+        )
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.sock.connect((self.host, self.port))
 
     def close(self):
-        logger.debug('RawTCPClient: closing socket')
+        logger.debug("RawTCPClient: closing socket")
         self.sock.close()
 
     def do_call(self):
@@ -515,7 +523,7 @@ class RawUDPClient(Client):
             if self.sock not in r:
                 count = count - 1
                 if count < 0:
-                    raise RPCError('timeout')
+                    raise RPCError("timeout")
                 if timeout < 25:
                     timeout = timeout * 2
                 self.sock.send(call)
@@ -550,7 +558,7 @@ class RawBroadcastUDPClient(RawUDPClient):
 
     def make_call(self, proc, args, pack_func, unpack_func):
         if pack_func is None and args is not None:
-            raise TypeError('non-null args with null pack_func')
+            raise TypeError("non-null args with null pack_func")
         self.start_call(proc)
         if pack_func:
             pack_func(args)
@@ -560,8 +568,10 @@ class RawBroadcastUDPClient(RawUDPClient):
         BUFSIZE = 8192  # Max UDP buffer size (for reply)
         replies = []
         if unpack_func is None:
+
             def dummy():
                 pass
+
             unpack_func = dummy
         while 1:
             r, w, x = [self.sock], [], []
@@ -621,7 +631,6 @@ IPPROTO_UDP = 17
 
 
 class PortMapperPacker(Packer):
-
     def pack_mapping(self, mapping):
         prog, vers, prot, port = mapping
         self.pack_uint(prog)
@@ -641,7 +650,6 @@ class PortMapperPacker(Packer):
 
 
 class PortMapperUnpacker(Unpacker):
-
     def unpack_mapping(self):
         prog = self.unpack_uint()
         vers = self.unpack_uint()
@@ -659,82 +667,89 @@ class PortMapperUnpacker(Unpacker):
 
 
 class PartialPortMapperClient(object):
-
     def __init__(self):
         self.packer = PortMapperPacker()
-        self.unpacker = PortMapperUnpacker('')
+        self.unpacker = PortMapperUnpacker("")
 
     def set(self, mapping):
-        return self.make_call(PortMapperVersion.set, mapping,
-                              self.packer.pack_mapping,
-                              self.unpacker.unpack_uint)
+        return self.make_call(
+            PortMapperVersion.set,
+            mapping,
+            self.packer.pack_mapping,
+            self.unpacker.unpack_uint,
+        )
 
     def unset(self, mapping):
-        return self.make_call(PortMapperVersion.unset, mapping,
-                              self.packer.pack_mapping,
-                              self.unpacker.unpack_uint)
+        return self.make_call(
+            PortMapperVersion.unset,
+            mapping,
+            self.packer.pack_mapping,
+            self.unpacker.unpack_uint,
+        )
 
     def get_port(self, mapping):
-        return self.make_call(PortMapperVersion.get_port, mapping,
-                              self.packer.pack_mapping,
-                              self.unpacker.unpack_uint)
+        return self.make_call(
+            PortMapperVersion.get_port,
+            mapping,
+            self.packer.pack_mapping,
+            self.unpacker.unpack_uint,
+        )
 
     def dump(self):
-        return self.make_call(PortMapperVersion.dump, None,
-                              None,
-                              self.unpacker.unpack_pmaplist)
+        return self.make_call(
+            PortMapperVersion.dump, None, None, self.unpacker.unpack_pmaplist
+        )
 
     def callit(self, ca):
-        return self.make_call(PortMapperVersion.call_it, ca,
-                              self.packer.pack_call_args,
-                              self.unpacker.unpack_call_result)
+        return self.make_call(
+            PortMapperVersion.call_it,
+            ca,
+            self.packer.pack_call_args,
+            self.unpacker.unpack_call_result,
+        )
 
 
 class TCPPortMapperClient(PartialPortMapperClient, RawTCPClient):
-
     def __init__(self, host, open_timeout=5000):
-        RawTCPClient.__init__(self, host, PMAP_PROG, PMAP_VERS, PMAP_PORT,
-                              open_timeout)
+        RawTCPClient.__init__(self, host, PMAP_PROG, PMAP_VERS, PMAP_PORT, open_timeout)
         PartialPortMapperClient.__init__(self)
 
 
 class UDPPortMapperClient(PartialPortMapperClient, RawUDPClient):
-
     def __init__(self, host):
         RawUDPClient.__init__(self, host, PMAP_PROG, PMAP_VERS, PMAP_PORT)
         PartialPortMapperClient.__init__(self)
 
 
-class BroadcastUDPPortMapperClient(PartialPortMapperClient,
-                                   RawBroadcastUDPClient):
-
+class BroadcastUDPPortMapperClient(PartialPortMapperClient, RawBroadcastUDPClient):
     def __init__(self, bcastaddr):
-        RawBroadcastUDPClient.__init__(self, bcastaddr, PMAP_PROG, PMAP_VERS,
-                                       PMAP_PORT)
+        RawBroadcastUDPClient.__init__(self, bcastaddr, PMAP_PROG, PMAP_VERS, PMAP_PORT)
         PartialPortMapperClient.__init__(self)
 
 
 class TCPClient(RawTCPClient):
     """A TCP Client that find their server through the Port mapper
     """
+
     def __init__(self, host, prog, vers, open_timeout=5000):
         pmap = TCPPortMapperClient(host, open_timeout)
         port = pmap.get_port((prog, vers, IPPROTO_TCP, 0))
         pmap.close()
         if port == 0:
-            raise RPCError('program not registered')
+            raise RPCError("program not registered")
         RawTCPClient.__init__(self, host, prog, vers, port, open_timeout)
 
 
 class UDPClient(RawUDPClient):
     """A UDP Client that find their server through the Port mapper
     """
+
     def __init__(self, host, prog, vers):
         pmap = UDPPortMapperClient(host)
         port = pmap.get_port((prog, vers, IPPROTO_UDP, 0))
         pmap.close()
         if port == 0:
-            raise RPCError('program not registered')
+            raise RPCError("program not registered")
         RawUDPClient.__init__(self, host, prog, vers, port)
 
 
@@ -773,14 +788,16 @@ class BroadcastUDPClient(Client):
         if pack_func:
             pack_func(args)
         if unpack_func is None:
-            def dummy(): pass
+
+            def dummy():
+                pass
+
             self.unpack_func = dummy
         else:
             self.unpack_func = unpack_func
         self.replies = []
         packed_args = self.packer.get_buf()
-        dummy_replies = self.pmap.Callit((self.prog, self.vers, proc,
-                                          packed_args))
+        _ = self.pmap.Callit((self.prog, self.vers, proc, packed_args))
         return self.replies
 
 
@@ -789,8 +806,8 @@ class BroadcastUDPClient(Client):
 # These are not symmetric to the Client classes
 # XXX No attempt is made to provide authorization hooks yet
 
-class Server(object):
 
+class Server(object):
     def __init__(self, host, prog, vers, port):
         self.host = host  # Should normally be '' for default interface
         self.prog = prog
@@ -803,13 +820,13 @@ class Server(object):
         mapping = self.prog, self.vers, self.prot, self.port
         p = TCPPortMapperClient(self.host)
         if not p.set(mapping):
-            raise RPCError('register failed')
+            raise RPCError("register failed")
 
     def unregister(self):
         mapping = self.prog, self.vers, self.prot, self.port
         p = TCPPortMapperClient(self.host)
         if not p.unset(mapping):
-            raise RPCError('unregister failed')
+            raise RPCError("unregister failed")
 
     def handle(self, call):
         # Don't use unpack_header but parse the header piecewise
@@ -842,14 +859,14 @@ class Server(object):
             self.packer.pack_uint(self.vers)
             return self.packer.get_buf()
         proc = self.unpacker.unpack_uint()
-        methname = 'handle_' + repr(proc)
+        methname = "handle_" + repr(proc)
         try:
             meth = getattr(self, methname)
         except AttributeError:
             self.packer.pack_uint(AcceptStatus.procedure_unavailable)
             return self.packer.get_buf()
-        cred = self.unpacker.unpack_auth()
-        verf = self.unpacker.unpack_auth()
+        cred = self.unpacker.unpack_auth()  # noqa
+        verf = self.unpacker.unpack_auth()  # noqa
         try:
             meth()  # Unpack args, call turn_around(), pack reply
         except (EOFError, RPCGarbageArgs):
@@ -876,11 +893,10 @@ class Server(object):
     def addpackers(self):
         # Override this to use derived classes from Packer/Unpacker
         self.packer = Packer()
-        self.unpacker = Unpacker('')
+        self.unpacker = Unpacker("")
 
 
 class TCPServer(Server):
-
     def __init__(self, host, prog, vers, port):
         Server.__init__(self, host, prog, vers, port)
         self.connect()
@@ -903,7 +919,7 @@ class TCPServer(Server):
             except EOFError:
                 break
             except socket.error:
-                logger.exception('socket error: %r', sys.exc_info()[0])
+                logger.exception("socket error: %r", sys.exc_info()[0])
                 break
             reply = self.handle(call)
             if reply is not None:
@@ -918,6 +934,7 @@ class TCPServer(Server):
     def forksession(self, connection):
         # Like session but forks off a subprocess
         import os
+
         # Wait for deceased children
         try:
             while 1:
@@ -939,7 +956,6 @@ class TCPServer(Server):
 
 
 class UDPServer(Server):
-
     def __init__(self, host, prog, vers, port):
         Server.__init__(self, host, prog, vers, port)
         self.connect()

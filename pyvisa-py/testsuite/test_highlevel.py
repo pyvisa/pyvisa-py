@@ -7,6 +7,7 @@
 
 """
 import importlib
+
 from pyvisa.testsuite import BaseTestCase
 
 highlevel = importlib.import_module("pyvisa-py.highlevel")

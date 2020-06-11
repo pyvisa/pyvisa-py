@@ -1,10 +1,28 @@
 PyVISA-py
 =========
 
+.. image:: https://github.com/pyvisa/pyvisa-py/workflows/Continuous%20Integration/badge.svg
+    :target: https://github.com/pyvisa/pyvisa-py/actions
+    :alt: Continuous integration
+.. image:: https://github.com/pyvisa/pyvisa-py/workflows/Documentation%20building/badge.svg
+    :target: https://github.com/pyvisa/pyvisa-py/actions
+    :alt: Documentation building
+.. image:: https://codecov.io/gh/pyvisa/pyvisa-py/branch/master/graph/badge.svg
+    :target: https://codecov.io/gh/pyvisa/pyvisa-py
+    :alt: Code Coverage
+.. image:: https://readthedocs.org/projects/pyvisa-py/badge/?version=latest
+    :target: https://pyvisa.readthedocs.io/en/latest/?badge=latest
+    :alt: Documentation Status
+.. image:: https://img.shields.io/pypi/l/PyVISA-py
+    :target: https://pypi.python.org/pypi/pyvisa-py
+    :alt: PyPI - License
+.. image:: https://img.shields.io/pypi/v/PyVISA-py
+    :target: https://pypi.python.org/pypi/pyvisa-py
+    :alt: PyPI
+
 A PyVISA backend that implements a large part of the "Virtual Instrument Software
 Architecture" (VISA_) in pure Python (with the help of some nice cross platform
 libraries python packages!).
-
 
 Description
 -----------
@@ -38,22 +56,14 @@ Python has a couple of features that make it very interesting for measurement co
 Requirements
 ------------
 
-- Python (tested with 2.7, 3.4+)
-- PyVISA 1.6+
+- Python (tested with 3.6+)
+- PyVISA 1.11+
 
 Optionally
 - PySerial (to interface with Serial instruments)
 - PyUSB (to interface with USB instruments)
 - linux-gpib (to interface with gpib instruments, only on linux)
 - gpib-ctypes (to interface with GPIB instruments on Windows and Linux, warning: experimental)
-
-
-Python 2 support
-----------------
-
-With Python 2 EOL behind us, and given the limited time maintainers have,
-the 0.4.0 release of PyVISA-py  will be the last version of PyVISA-py supporting
-Python 2.
 
 
 Installation

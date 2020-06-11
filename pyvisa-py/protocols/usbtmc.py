@@ -18,18 +18,18 @@
 import enum
 import struct
 import time
-from collections import namedtuple
 import warnings
+from collections import namedtuple
 
 import usb
 
-from .usbutil import (find_devices, find_interfaces, find_endpoint,
-                      usb_find_desc)
+from .usbutil import find_devices, find_endpoint, find_interfaces, usb_find_desc
 
 
 class MsgID(enum.IntEnum):
     """From USB-TMC table2
     """
+
     dev_dep_msg_out = 1
     request_dev_dep_msg_in = 2
     dev_dep_msg_in = 2
@@ -59,16 +59,17 @@ class UsbTmcStatus(enum.IntEnum):
     split_in_progress = 0x83
 
 
-def find_tmc_devices(vendor=None, product=None, serial_number=None,
-                     custom_match=None, **kwargs):
+def find_tmc_devices(
+    vendor=None, product=None, serial_number=None, custom_match=None, **kwargs
+):
     """Find connected USBTMC devices. See usbutil.find_devices for more info.
 
     """
+
     def is_usbtmc(dev):
         if custom_match and not custom_match(dev):
             return False
-        return bool(find_interfaces(dev, bInterfaceClass=0xfe,
-                                    bInterfaceSubClass=3))
+        return bool(find_interfaces(dev, bInterfaceClass=0xFE, bInterfaceSubClass=3))
 
     return find_devices(vendor, product, serial_number, is_usbtmc, **kwargs)
 
@@ -82,15 +83,20 @@ class BulkOutMessage(object):
     @staticmethod
     def build_array(btag, eom, chunk):
         size = len(chunk)
-        return (struct.pack('BBBx', MsgID.dev_dep_msg_out, btag,
-                            ~btag & 0xFF) +
-                struct.pack("<LBxxx", size, eom) +
-                chunk +
-                b'\0' * ((4 - size) % 4))
+        return (
+            struct.pack("BBBx", MsgID.dev_dep_msg_out, btag, ~btag & 0xFF)
+            + struct.pack("<LBxxx", size, eom)
+            + chunk
+            + b"\0" * ((4 - size) % 4)
+        )
 
 
-class BulkInMessage(namedtuple('BulkInMessage', 'msgid btag btaginverse '
-                               'transfer_size transfer_attributes data')):
+class BulkInMessage(
+    namedtuple(
+        "BulkInMessage",
+        "msgid btag btaginverse " "transfer_size transfer_attributes data",
+    )
+):
     """The Host uses the Bulk-IN endpoint to read USBTMC response messages from
     the device.
 
@@ -101,28 +107,29 @@ class BulkInMessage(namedtuple('BulkInMessage', 'msgid btag btaginverse '
 
     @classmethod
     def from_bytes(cls, data):
-        msgid, btag, btaginverse = struct.unpack_from('BBBx', data)
+        msgid, btag, btaginverse = struct.unpack_from("BBBx", data)
         if msgid != MsgID.dev_dep_msg_in:
-            warnings.warn('Unexpected MsgID format. Consider updating the device\'s firmware. See https://github.com/pyvisa/pyvisa-py/issues/20')
+            warnings.warn(
+                "Unexpected MsgID format. Consider updating the device's firmware. See https://github.com/pyvisa/pyvisa-py/issues/20"
+            )
             return BulkInMessage.from_quirky(data)
 
-        transfer_size, transfer_attributes = struct.unpack_from('<LBxxx', data, 4)
+        transfer_size, transfer_attributes = struct.unpack_from("<LBxxx", data, 4)
 
         # Truncate data to the specified length (discard padding).
-        data = data[12:12+transfer_size]
-        return cls(msgid, btag, btaginverse, transfer_size,
-                   transfer_attributes, data)
+        data = data[12 : 12 + transfer_size]
+        return cls(msgid, btag, btaginverse, transfer_size, transfer_attributes, data)
 
     @classmethod
     def from_quirky(cls, data):
         """Constructs a correct response for quirky devices.
 
         """
-        msgid, btag, btaginverse = struct.unpack_from('BBBx', data)
-        data = data.rstrip(b'\x00')
+        msgid, btag, btaginverse = struct.unpack_from("BBBx", data)
+        data = data.rstrip(b"\x00")
         # check whether it contains a ';' and if throw away the first 12 bytes
-        if b';' in data:
-            transfer_size, transfer_attributes = struct.unpack_from('<LBxxx', data, 4)
+        if b";" in data:
+            transfer_size, transfer_attributes = struct.unpack_from("<LBxxx", data, 4)
             data = data[12:]
         else:
             transfer_size = 0
@@ -145,10 +152,9 @@ class BulkInMessage(namedtuple('BulkInMessage', 'msgid btag btaginverse '
         else:
             transfer_attributes = 2
 
-        return (struct.pack('BBBx', MsgID.request_dev_dep_msg_in, btag,
-                            ~btag & 0xFF) +
-                struct.pack("<LBBxx", transfer_size, transfer_attributes,
-                            term_char))
+        return struct.pack(
+            "BBBx", MsgID.request_dev_dep_msg_in, btag, ~btag & 0xFF
+        ) + struct.pack("<LBBxx", transfer_size, transfer_attributes, term_char)
 
 
 class USBRaw(object):
@@ -168,8 +174,15 @@ class USBRaw(object):
 
     find_devices = staticmethod(find_devices)
 
-    def __init__(self, vendor=None, product=None, serial_number=None,
-                 device_filters=None, timeout=None, **kwargs):
+    def __init__(
+        self,
+        vendor=None,
+        product=None,
+        serial_number=None,
+        device_filters=None,
+        timeout=None,
+        **kwargs
+    ):
         super(USBRaw, self).__init__()
 
         # Timeout expressed in ms as an integer and limited to 2**32-1
@@ -177,38 +190,42 @@ class USBRaw(object):
         self.timeout = timeout
 
         device_filters = device_filters or {}
-        devices = list(self.find_devices(vendor, product, serial_number, None,
-                                         **device_filters))
+        devices = list(
+            self.find_devices(vendor, product, serial_number, None, **device_filters)
+        )
 
         if not devices:
-            raise ValueError('No device found.')
+            raise ValueError("No device found.")
         elif len(devices) > 1:
-            desc = '\n'.join(str(dev) for dev in devices)
-            raise ValueError('{} devices found:\n{}\nPlease narrow the search'
-                             ' criteria'.format(len(devices), desc))
+            desc = "\n".join(str(dev) for dev in devices)
+            raise ValueError(
+                "{} devices found:\n{}\nPlease narrow the search"
+                " criteria".format(len(devices), desc)
+            )
 
         self.usb_dev = devices[0]
 
         try:
             if self.usb_dev.is_kernel_driver_active(0):
-                    self.usb_dev.detach_kernel_driver(0)
-        except (usb.core.USBError, NotImplementedError) as e:
+                self.usb_dev.detach_kernel_driver(0)
+        except (usb.core.USBError, NotImplementedError):
             pass
 
         try:
             self.usb_dev.set_configuration()
         except usb.core.USBError as e:
-            raise Exception('failed to set configuration\n %s' % e)
+            raise Exception("failed to set configuration\n %s" % e)
 
         try:
             self.usb_dev.set_interface_altsetting()
-        except usb.core.USBError as e:
+        except usb.core.USBError:
             pass
 
         self.usb_intf = self._find_interface(self.usb_dev, self.INTERFACE)
 
-        self.usb_recv_ep, self.usb_send_ep =\
-            self._find_endpoints(self.usb_intf, self.ENDPOINTS)
+        self.usb_recv_ep, self.usb_send_ep = self._find_endpoints(
+            self.usb_intf, self.ENDPOINTS
+        )
 
     def _find_interface(self, dev, setting):
         return self.usb_dev.get_active_configuration()[self.INTERFACE]
@@ -216,14 +233,12 @@ class USBRaw(object):
     def _find_endpoints(self, interface, setting):
         recv, send = setting
         if recv is None:
-            recv = find_endpoint(interface, usb.ENDPOINT_IN,
-                                 usb.ENDPOINT_TYPE_BULK)
+            recv = find_endpoint(interface, usb.ENDPOINT_IN, usb.ENDPOINT_TYPE_BULK)
         else:
             recv = usb_find_desc(interface, bEndpointAddress=recv)
 
         if send is None:
-            send = find_endpoint(interface, usb.ENDPOINT_OUT,
-                                 usb.ENDPOINT_TYPE_BULK)
+            send = find_endpoint(interface, usb.ENDPOINT_OUT, usb.ENDPOINT_TYPE_BULK)
         else:
             send = usb_find_desc(interface, bEndpointAddress=send)
 
@@ -267,11 +282,11 @@ class USBTMC(USBRaw):
 
     find_devices = staticmethod(find_tmc_devices)
 
-    def __init__(self, vendor=None, product=None, serial_number=None,
-                 **kwargs):
+    def __init__(self, vendor=None, product=None, serial_number=None, **kwargs):
         super(USBTMC, self).__init__(vendor, product, serial_number, **kwargs)
-        self.usb_intr_in = find_endpoint(self.usb_intf, usb.ENDPOINT_IN,
-                                         usb.ENDPOINT_TYPE_INTERRUPT)
+        self.usb_intr_in = find_endpoint(
+            self.usb_intf, usb.ENDPOINT_IN, usb.ENDPOINT_TYPE_INTERRUPT
+        )
 
         self.usb_dev.reset()
         self.usb_dev.set_configuration()
@@ -288,20 +303,22 @@ class USBTMC(USBRaw):
 
     def _get_capabilities(self):
         self.usb_dev.ctrl_transfer(
-            usb.util.build_request_type(usb.util.CTRL_IN,
-                                        usb.util.CTRL_TYPE_CLASS,
-                                        usb.util.CTRL_RECIPIENT_INTERFACE),
+            usb.util.build_request_type(
+                usb.util.CTRL_IN,
+                usb.util.CTRL_TYPE_CLASS,
+                usb.util.CTRL_RECIPIENT_INTERFACE,
+            ),
             Request.get_capabilities,
             0x0000,
             self.usb_intf.index,
             0x0018,
-            timeout=self.timeout)
+            timeout=self.timeout,
+        )
 
     def _find_interface(self, dev, setting):
-        interfaces = find_interfaces(dev, bInterfaceClass=0xFE,
-                                     bInterfaceSubClass=3)
+        interfaces = find_interfaces(dev, bInterfaceClass=0xFE, bInterfaceSubClass=3)
         if not interfaces:
-            raise ValueError('USB TMC interface not found.')
+            raise ValueError("USB TMC interface not found.")
         elif len(interfaces) > 1:
             pass
 
@@ -318,14 +335,17 @@ class USBTMC(USBRaw):
         #   wIndex = Bulk-IN endpoint
         #   wLength = 0x0002 (length of device response)
         data = self.usb_dev.ctrl_transfer(
-            usb.util.build_request_type(usb.util.CTRL_IN,
-                                        usb.util.CTRL_TYPE_CLASS,
-                                        usb.util.CTRL_RECIPIENT_ENDPOINT),
+            usb.util.build_request_type(
+                usb.util.CTRL_IN,
+                usb.util.CTRL_TYPE_CLASS,
+                usb.util.CTRL_RECIPIENT_ENDPOINT,
+            ),
             Request.initiate_abort_bulk_in,
             btag,
             self.usb_recv_ep.bEndpointAddress,
             0x0002,
-            timeout=abort_timeout_ms)
+            timeout=abort_timeout_ms,
+        )
 
         if data[0] != UsbTmcStatus.success:
             # Abort Bulk-IN failed. Ignore it.
@@ -341,14 +361,17 @@ class USBTMC(USBRaw):
         #   wLength = 0x0008 (length of device response)
         for retry in range(100):
             data = self.usb_dev.ctrl_transfer(
-                usb.util.build_request_type(usb.util.CTRL_IN,
-                                            usb.util.CTRL_TYPE_CLASS,
-                                            usb.util.CTRL_RECIPIENT_ENDPOINT),
+                usb.util.build_request_type(
+                    usb.util.CTRL_IN,
+                    usb.util.CTRL_TYPE_CLASS,
+                    usb.util.CTRL_RECIPIENT_ENDPOINT,
+                ),
                 Request.check_abort_bulk_in_status,
                 0x0000,
                 self.usb_recv_ep.bEndpointAddress,
                 0x0008,
-                timeout=abort_timeout_ms)
+                timeout=abort_timeout_ms,
+            )
             if data[0] != UsbTmcStatus.pending:
                 break
             time.sleep(0.05)
@@ -373,7 +396,7 @@ class USBTMC(USBRaw):
 
             self._btag = (self._btag % 255) + 1
 
-            eom = (end >= size)
+            eom = end >= size
             data = BulkOutMessage.build_array(self._btag, eom, data[begin:end])
 
             bytes_sent += raw_write(data)

@@ -14,19 +14,19 @@
     :license: MIT, see LICENSE for more details.
 """
 from .usbtmc import USBRaw as USBRaw
-
 from .usbutil import find_devices, find_interfaces
 
 
-def find_raw_devices(vendor=None, product=None, serial_number=None,
-                     custom_match=None, **kwargs):
+def find_raw_devices(
+    vendor=None, product=None, serial_number=None, custom_match=None, **kwargs
+):
     """Find connected USB RAW devices. See usbutil.find_devices for more info.
     """
+
     def is_usbraw(dev):
         if custom_match and not custom_match(dev):
             return False
-        return bool(find_interfaces(dev, bInterfaceClass=0xFF,
-                                    bInterfaceSubClass=0xFF))
+        return bool(find_interfaces(dev, bInterfaceClass=0xFF, bInterfaceSubClass=0xFF))
 
     return find_devices(vendor, product, serial_number, is_usbraw, **kwargs)
 
@@ -37,12 +37,13 @@ class USBRawDevice(USBRaw):
 
     find_devices = staticmethod(find_raw_devices)
 
-
     def __init__(self, vendor=None, product=None, serial_number=None, **kwargs):
         super(USBRawDevice, self).__init__(vendor, product, serial_number, **kwargs)
 
         if not (self.usb_recv_ep and self.usb_send_ep):
-            raise ValueError("USBRAW device must have both Bulk-In and Bulk-out endpoints.")
+            raise ValueError(
+                "USBRAW device must have both Bulk-In and Bulk-out endpoints."
+            )
 
     def write(self, data):
         """Send raw bytes to the instrument.

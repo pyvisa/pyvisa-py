@@ -9,7 +9,7 @@ Pyvisa-py is available on PyPI_ and can be easily installed using pip:
     pip install pyvisa-py
 
 
-Pyvisa-py runs on Python 2.7 and 3.4+.
+Pyvisa-py runs on Python 3.6+.
 
 If you do not install any extra library pyvisa-py will only be able to access
 tcpip resources. The following sections will describe what extra libraries you
@@ -82,7 +82,7 @@ Using the development version
 You can install the latest development version (at your own risk) directly
 form GitHub_::
 
-    $ pip install -U https://github.com/pyvisa/pyvisa/zipball/master
+    $ pip install -U git+https://github.com/pyvisa/pyvisa-py.git
 
 
 .. _PySerial: https://pythonhosted.org/pyserial/

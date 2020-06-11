@@ -11,7 +11,7 @@
 """
 import errno
 
-from pyvisa import constants, attributes
+from pyvisa import attributes, constants
 
 from .common import logger
 from .sessions import Session, UnknownAttribute
@@ -20,23 +20,23 @@ try:
     import usb
     from .protocols import usbtmc, usbutil, usbraw
 except ImportError as e:
-    msg = 'Please install PyUSB to use this resource type.\n%s'
-    Session.register_unavailable(constants.InterfaceType.usb,
-                                 'INSTR', msg % e)
-    Session.register_unavailable(constants.InterfaceType.usb,
-                                 'RAW', msg % e)
+    msg = "Please install PyUSB to use this resource type.\n%s"
+    Session.register_unavailable(constants.InterfaceType.usb, "INSTR", msg % e)
+    Session.register_unavailable(constants.InterfaceType.usb, "RAW", msg % e)
     raise
 
 try:
     _ = usb.core.find()
 except Exception as e:
-    msg = 'PyUSB does not seem to be properly installed.\n' \
-          'Please refer to PyUSB documentation and \n' \
-          'install a suitable backend like \n' \
-          'libusb 0.1, libusb 1.0, libusbx, \n' \
-          'libusb-win32 or OpenUSB.\n%s' % e
-    Session.register_unavailable(constants.InterfaceType.usb, 'INSTR', msg)
-    Session.register_unavailable(constants.InterfaceType.usb, 'RAW', msg)
+    msg = (
+        "PyUSB does not seem to be properly installed.\n"
+        "Please refer to PyUSB documentation and \n"
+        "install a suitable backend like \n"
+        "libusb 0.1, libusb 1.0, libusbx, \n"
+        "libusb-win32 or OpenUSB.\n%s" % e
+    )
+    Session.register_unavailable(constants.InterfaceType.usb, "INSTR", msg)
+    Session.register_unavailable(constants.InterfaceType.usb, "RAW", msg)
     raise
 
 
@@ -45,6 +45,7 @@ StatusCode = constants.StatusCode
 
 class USBTimeoutException(Exception):
     """Exception used internally to indicate USB timeout."""
+
     pass
 
 
@@ -63,19 +64,19 @@ class USBSession(Session):
         try:
             ver = usb.__version__
         except AttributeError:
-            ver = 'N/A'
+            ver = "N/A"
 
         try:
             # noinspection PyProtectedMember
-            backend = usb.core.find()._ctx.backend.__class__.__module__.split('.')[-1]
+            backend = usb.core.find()._ctx.backend.__class__.__module__.split(".")[-1]
         except Exception:
-            backend = 'N/A'
+            backend = "N/A"
 
-        return 'via PyUSB (%s). Backend: %s' % (ver, backend)
+        return "via PyUSB (%s). Backend: %s" % (ver, backend)
 
     def _get_timeout(self, attribute):
         if self.interface:
-            if self.interface.timeout == 2**32-1:
+            if self.interface.timeout == 2 ** 32 - 1:
                 self.timeout = None
             else:
                 self.timeout = self.interface.timeout / 1000
@@ -83,8 +84,8 @@ class USBSession(Session):
 
     def _set_timeout(self, attribute, value):
         status = super(USBSession, self)._set_timeout(attribute, value)
-        timeout = int(self.timeout*1000) if self.timeout else 2**32-1
-        timeout = min(timeout, 2**32-1)
+        timeout = int(self.timeout * 1000) if self.timeout else 2 ** 32 - 1
+        timeout = min(timeout, 2 ** 32 - 1)
         if self.interface:
             self.interface.timeout = timeout
         return status
@@ -111,18 +112,22 @@ class USBSession(Session):
         supress_end_en, _ = self.get_attribute(constants.VI_ATTR_SUPPRESS_END_EN)
 
         if supress_end_en:
-            raise ValueError('VI_ATTR_SUPPRESS_END_EN == True is currently unsupported by pyvisa-py')
+            raise ValueError(
+                "VI_ATTR_SUPPRESS_END_EN == True is currently unsupported by pyvisa-py"
+            )
 
         term_char, _ = self.get_attribute(constants.VI_ATTR_TERMCHAR)
         term_char_en, _ = self.get_attribute(constants.VI_ATTR_TERMCHAR_EN)
 
-        return self._read(_usb_reader,
-                          count,
-                          lambda current: True, # USB always returns a complete message
-                          supress_end_en,
-                          term_char,
-                          term_char_en,
-                          USBTimeoutException)
+        return self._read(
+            _usb_reader,
+            count,
+            lambda current: True,  # USB always returns a complete message
+            supress_end_en,
+            term_char,
+            term_char_en,
+            USBTimeoutException,
+        )
 
     def write(self, data):
         """Writes data to device or interface synchronously.
@@ -170,21 +175,22 @@ class USBSession(Session):
         raise UnknownAttribute(attribute)
 
     def after_parsing(self):
-        self.interface = self._intf_cls(int(self.parsed.manufacturer_id, 0),
-                                        int(self.parsed.model_code, 0),
-                                        self.parsed.serial_number)
+        self.interface = self._intf_cls(
+            int(self.parsed.manufacturer_id, 0),
+            int(self.parsed.model_code, 0),
+            self.parsed.serial_number,
+        )
 
-        for name in ('SEND_END_EN', 'TERMCHAR', 'TERMCHAR_EN'):
-            attribute = getattr(constants, 'VI_ATTR_' + name)
+        for name in ("SEND_END_EN", "TERMCHAR", "TERMCHAR_EN"):
+            attribute = getattr(constants, "VI_ATTR_" + name)
             self.attrs[attribute] = attributes.AttributesByID[attribute].default
 
         # Force setting the timeout to get the proper value
         attribute = constants.VI_ATTR_TMO_VALUE
-        self.set_attribute(attribute,
-                           attributes.AttributesByID[attribute].default)
+        self.set_attribute(attribute, attributes.AttributesByID[attribute].default)
 
 
-@Session.register(constants.InterfaceType.usb, 'INSTR')
+@Session.register(constants.InterfaceType.usb, "INSTR")
 class USBInstrSession(USBSession):
     """Base class for drivers that communicate with instruments
     via usb port using pyUSB
@@ -196,11 +202,14 @@ class USBInstrSession(USBSession):
     @staticmethod
     def list_resources():
         out = []
-        fmt = 'USB%(board)s::%(manufacturer_id)s::%(model_code)s::' \
-              '%(serial_number)s::%(usb_interface_number)s::INSTR'
+        fmt = (
+            "USB%(board)s::%(manufacturer_id)s::%(model_code)s::"
+            "%(serial_number)s::%(usb_interface_number)s::INSTR"
+        )
         for dev in usbtmc.find_tmc_devices():
-            intfc = usbutil.find_interfaces(dev, bInterfaceClass=0xfe,
-                                            bInterfaceSubClass=3)
+            intfc = usbutil.find_interfaces(
+                dev, bInterfaceClass=0xFE, bInterfaceSubClass=3
+            )
             try:
                 intfc = intfc[0].index
             except (IndexError, AttributeError):
@@ -209,24 +218,36 @@ class USBInstrSession(USBSession):
             try:
                 serial = dev.serial_number
             except (NotImplementedError, ValueError):
-                msg = ('Found a device whose serial number cannot be read.'
-                       ' The partial VISA resource name is: ' + fmt)
-                logger.warning(msg, dict(board=0,
-                                         manufacturer_id=dev.idVendor,
-                                         model_code=dev.idProduct,
-                                         serial_number='???',
-                                         usb_interface_number=intfc))
+                msg = (
+                    "Found a device whose serial number cannot be read."
+                    " The partial VISA resource name is: " + fmt
+                )
+                logger.warning(
+                    msg,
+                    dict(
+                        board=0,
+                        manufacturer_id=dev.idVendor,
+                        model_code=dev.idProduct,
+                        serial_number="???",
+                        usb_interface_number=intfc,
+                    ),
+                )
                 continue
 
-            out.append(fmt % dict(board=0,
-                                  manufacturer_id=dev.idVendor,
-                                  model_code=dev.idProduct,
-                                  serial_number=serial,
-                                  usb_interface_number=intfc))
+            out.append(
+                fmt
+                % dict(
+                    board=0,
+                    manufacturer_id=dev.idVendor,
+                    model_code=dev.idProduct,
+                    serial_number=serial,
+                    usb_interface_number=intfc,
+                )
+            )
         return out
 
 
-@Session.register(constants.InterfaceType.usb, 'RAW')
+@Session.register(constants.InterfaceType.usb, "RAW")
 class USBRawSession(USBSession):
     """Base class for drivers that communicate with usb raw devices
     via usb port using pyUSB
@@ -238,8 +259,10 @@ class USBRawSession(USBSession):
     @staticmethod
     def list_resources():
         out = []
-        fmt = 'USB%(board)s::%(manufacturer_id)s::%(model_code)s::' \
-              '%(serial_number)s::%(usb_interface_number)s::RAW'
+        fmt = (
+            "USB%(board)s::%(manufacturer_id)s::%(model_code)s::"
+            "%(serial_number)s::%(usb_interface_number)s::RAW"
+        )
         for dev in usbraw.find_raw_devices():
             intfc = usbutil.find_interfaces(dev, bInterfaceClass=0xFF)
             try:
@@ -250,18 +273,30 @@ class USBRawSession(USBSession):
             try:
                 serial = dev.serial_number
             except (NotImplementedError, ValueError):
-                msg = ('Found a device whose serial number cannot be read.'
-                       ' The partial VISA resource name is: ' + fmt)
-                logger.warning(msg, dict(board=0,
-                                         manufacturer_id=dev.idVendor,
-                                         model_code=dev.idProduct,
-                                         serial_number='???',
-                                         usb_interface_number=intfc))
+                msg = (
+                    "Found a device whose serial number cannot be read."
+                    " The partial VISA resource name is: " + fmt
+                )
+                logger.warning(
+                    msg,
+                    dict(
+                        board=0,
+                        manufacturer_id=dev.idVendor,
+                        model_code=dev.idProduct,
+                        serial_number="???",
+                        usb_interface_number=intfc,
+                    ),
+                )
                 continue
 
-            out.append(fmt % dict(board=0,
-                                  manufacturer_id=dev.idVendor,
-                                  model_code=dev.idProduct,
-                                  serial_number=serial,
-                                  usb_interface_number=intfc))
+            out.append(
+                fmt
+                % dict(
+                    board=0,
+                    manufacturer_id=dev.idVendor,
+                    model_code=dev.idProduct,
+                    serial_number=serial,
+                    usb_interface_number=intfc,
+                )
+            )
         return out

@@ -9,15 +9,13 @@
     :license: MIT, see LICENSE for more details.
 """
 import logging
-import sys
 
 from pyvisa import logger
 
-logger = logging.LoggerAdapter(logger, {'backend': 'py'})
+logger = logging.LoggerAdapter(logger, {"backend": "py"})
 
 
 class MockInterface(object):
-
     def __init__(self, resource_name):
         self.resource_name = resource_name
 
@@ -30,7 +28,7 @@ class NamedObject(object):
         self.name = name
 
     def __repr__(self):
-        return '<%s>' % self.name
+        return "<%s>" % self.name
 
     __str__ = __repr__
 
@@ -38,7 +36,7 @@ class NamedObject(object):
 def iter_bytes(data, mask=None, send_end=False):
 
     if send_end and mask is None:
-        raise ValueError('send_end requires a valid mask.')
+        raise ValueError("send_end requires a valid mask.")
 
     if mask is None:
         for d in data[:]:
@@ -52,6 +50,7 @@ def iter_bytes(data, mask=None, send_end=False):
             yield bytes([data[-1] | ~mask])
         else:
             yield bytes([data[-1] & ~mask])
+
 
 int_to_byte = lambda val: bytes([val])
 last_int = lambda val: val[-1]
