@@ -43,7 +43,7 @@ jobs:
           flake8 pyvisa-py;
       - name: Mypy
         run: |
-          mypy pyvisa;
+          mypy pyvisa-py;
   tests:
     name: Unit tests
     runs-on: ${{ matrix.os }}
