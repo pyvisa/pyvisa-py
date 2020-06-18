@@ -11,10 +11,9 @@ from bisect import bisect
 from typing import Any, Iterator, List, Optional, Tuple
 
 from pyvisa import attributes, constants, logger
-from pyvisa.constants import StatusCode, ResourceAttribute
+from pyvisa.constants import ResourceAttribute, StatusCode
 
 from .sessions import Session, UnknownAttribute
-
 
 try:
     GPIB_CTYPES = True
