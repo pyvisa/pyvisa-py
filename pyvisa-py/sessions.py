@@ -15,7 +15,7 @@ from pyvisa.constants import ResourceAttribute, StatusCode
 from pyvisa.typing import VISARMSession
 
 #: Type var used when typing register.
-T = TypeVar("T", bounds="Session")
+T = TypeVar("T", bound="Session")
 
 
 class UnknownAttribute(Exception):
