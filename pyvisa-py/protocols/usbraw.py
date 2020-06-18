@@ -1,17 +1,14 @@
 # -*- coding: utf-8 -*-
-"""
-    pyvisa-py.protocols.usbraw
-    ~~~~~~~~~~~~~~~~~~~~~~~~~~
+"""Implements Session to control USB Raw devices
 
-    Implements Session to control USB Raw devices
+Loosely based on PyUSBTMC:python module to handle
+USB-TMC(Test and Measurement class) devices. by Noboru Yamamot, Accl. Lab, KEK, JAPAN
 
-    Loosely based on PyUSBTMC:python module to handle USB-TMC(Test and Measurement class)　devices.
-    by Noboru Yamamot, Accl. Lab, KEK, JAPAN
+This file is an offspring of the Lantz Project.
 
-    This file is an offspring of the Lantz Project.
+:copyright: 2014-2020 by PyVISA-py Authors, see AUTHORS for more details.
+:license: MIT, see LICENSE for more details.
 
-    :copyright: 2014-2020 by PyVISA-py Authors, see AUTHORS for more details.
-    :license: MIT, see LICENSE for more details.
 """
 from .usbtmc import USBRaw as USBRaw
 from .usbutil import find_devices, find_interfaces

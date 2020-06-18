@@ -1,18 +1,15 @@
 # -*- coding: utf-8 -*-
-"""
-    pyvisa-py.usb
-    ~~~~~~~~~~~~~
+"""Serial Session implementation using PyUSB.
 
-    Serial Session implementation using PyUSB.
+See the following link for more information about USB.
 
-    See the following link for more information about USB.
+http://www.beyondlogic.org/usbnutshell/usb5.shtml
 
-    http://www.beyondlogic.org/usbnutshell/usb5.shtml
+This file is an offspring of the Lantz Project.
 
-    This file is an offspring of the Lantz Project.
+:copyright: 2014-2020 by PyVISA-py Authors, see AUTHORS for more details.
+:license: MIT, see LICENSE for more details.
 
-    :copyright: 2014-2020 by PyVISA-py Authors, see AUTHORS for more details.
-    :license: MIT, see LICENSE for more details.
 """
 from fnmatch import fnmatch
 

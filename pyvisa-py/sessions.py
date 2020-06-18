@@ -1,29 +1,30 @@
 # -*- coding: utf-8 -*-
-"""
-    pyvisa-py.session
-    ~~~~~~~~~~~~~~~~~
-
-    Base Session class.
+"""Base Session class.
 
 
-    :copyright: 2014-2020 by PyVISA-py Authors, see AUTHORS for more details.
-    :license: MIT, see LICENSE for more details.
+:copyright: 2014-2020 by PyVISA-py Authors, see AUTHORS for more details.
+:license: MIT, see LICENSE for more details.
+
 """
 import abc
 import time
+from typing import Any, Callable, Dict, Iterator, Optional, Tuple, Type, TypeVar
 
 from pyvisa import attributes, constants, logger, rname
+from pyvisa.constants import ResourceAttribute, StatusCode
+from pyvisa.typing import VISARMSession
 
-from . import common
-
-StatusCode = constants.StatusCode
+#: Type var used when typing register.
+T = TypeVar("T", bounds="Session")
 
 
 class UnknownAttribute(Exception):
-    def __init__(self, attribute):
+    """Custom exception signaling a VISA attribute is not supported."""
+
+    def __init__(self, attribute: constants.ResourceAttribute) -> None:
         self.attribute = attribute
 
-    def __str__(self):
+    def __str__(self) -> str:
         attr = self.attribute
         if isinstance(attr, int):
             try:
@@ -43,69 +44,121 @@ class Session(metaclass=abc.ABCMeta):
 
     Just makes sure that common methods are defined and information is stored.
 
-    :param resource_manager_session: The session handle of the parent Resource
-        Manager
-    :param resource_name: The resource name.
-    :param parsed: the parsed resource name (optional).
-                   If not provided, the resource_name will be parsed.
+    Parameters
+    ----------
+    resource_manager_session : VISARMSession
+        Session handle of the parent Resource Manager
+    resource_name : str
+        Name of the resource this session is communicating with
+    parsed : rname.ResourceName, optional
+        Parsed representation of the resource name. The default is False meaning
+        that the provided resource name will be parsed.
+
     """
 
     @abc.abstractmethod
-    def _get_attribute(self, attribute):
+    def _get_attribute(
+        self, attribute: constants.ResourceAttribute
+    ) -> Tuple[Any, StatusCode]:
         """Get the value for a given VISA attribute for this session.
 
         Use to implement custom logic for attributes.
 
-        :param attribute: Resource attribute for which the state query is made
-        :return: The state of the queried attribute for a specified resource,
-            return value of the library call.
-        :rtype: (unicode | str | list | int, VISAStatus)
+        Parameters
+        ----------
+        attribute : constants.ResourceAttribute
+            Resource attribute for which the state query is made
+
+        Returns
+        -------
+        Any
+            State of the queried attribute for a specified resource
+        constants.StatusCode
+            Return value of the library call.
+
         """
 
     @abc.abstractmethod
-    def _set_attribute(self, attribute, attribute_state):
+    def _set_attribute(
+        self, attribute: constants.ResourceAttribute, attribute_state: Any
+    ) -> StatusCode:
         """Set the attribute_state value for a given VISA attribute for this session.
 
         Use to implement custom logic for attributes.
 
-        :param attribute: Resource attribute for which the state query is made.
-        :param attribute_state: value.
-        :return: The return value of the library call.
-        :rtype: VISAStatus
+        Parameters
+        ----------
+        attribute : constants.ResourceAttribute
+            Resource attribute for which the state query is made.
+        attribute_state : Any
+            Value to which to set the attribute.
+
+        Returns
+        -------
+        StatusCode
+            The return value of the library call.
+
         """
 
     @abc.abstractmethod
-    def close(self):
-        """Close the session. Use it to do final clean ups.
+    def close(self) -> None:
+        """Close the session.
+
+        Use it to do final clean ups.
+
         """
+
+    #: Session handle of the parent Resource Manager
+    resource_manager_session: VISARMSession
+
+    #: Name of the resource this session is communicating with
+    resource_name: str
+
+    #: Parsed representation of the resource name.
+    parsed: rname.ResourceName
+
+    #: Session type as (Interface Type, Resource Class)
+    session_type: Optional[Tuple[constants.InterfaceType, str]] = None
+
+    #: Timeout in seconds to use when opening the resource.
+    open_timeout: float
+
+    #: Value of the timeout in seconds used for general operation
+    timeout: Optional[float]
+
+    #: Used as a place holder for the object doing the lowlevel communication.
+    interface: Any
+
+    #: Used for attributes not handled by the underlying interface.
+    #: Values are get or set automatically by get_attribute and set_attribute
+    attrs: Dict[constants.ResourceAttribute, Any]
 
     #: Maps (Interface Type, Resource Class) to Python class encapsulating that
     #: resource.
     #: dict[(Interface Type, Resource Class) , Session]
-    _session_classes = dict()
-
-    #: Session type as (Interface Type, Resource Class)
-    session_type = None
+    _session_classes: Dict[
+        Tuple[constants.InterfaceType, str], Type["Session"]
+    ] = dict()
 
     @classmethod
-    def get_low_level_info(cls):
+    def get_low_level_info(cls) -> str:
+        """Get info about the backend used by the session."""
         return ""
 
     @classmethod
-    def iter_valid_session_classes(cls):
-        """Yield (Interface Type, Resource Class), Session class pair for
-        valid sessions classes.
-        """
-
+    def iter_valid_session_classes(
+        cls,
+    ) -> Iterator[Tuple[constants.InterfaceType, str], Type["Session"]]:
+        """Iterator over valid sessions classes infos."""
         for key, val in cls._session_classes.items():
             if issubclass(val, Session):
                 yield key, val
 
     @classmethod
-    def iter_session_classes_issues(cls):
-        """Yield (Interface Type, Resource Class), Issues class pair for
-        invalid sessions classes (i.e. those with import errors).
-        """
+    def iter_session_classes_issues(
+        cls,
+    ) -> Iterator[Tuple[constants.InterfaceType, str], str]:
+        """Iterator over invalid sessions classes (i.e. those with import errors)."""
         for key, val in cls._session_classes.items():
             try:
                 yield key, getattr(val, "session_issue")
@@ -113,12 +166,23 @@ class Session(metaclass=abc.ABCMeta):
                 pass
 
     @classmethod
-    def get_session_class(cls, interface_type, resource_class):
-        """Return the session class for a given interface type and resource class.
+    def get_session_class(
+        cls, interface_type: constants.InterfaceType, resource_class: str
+    ) -> Type["Session"]:
+        """Get the session class for a given interface type and resource class.
 
-        :type interface_type: constants.InterfaceType
-        :type resource_class: str
-        :return: Session
+        Parameters
+        ----------
+        interface_type : constants.InterfaceType
+            Type of interface.
+        resource_class : str
+            Class of resource.
+
+        Returns
+        -------
+        Sessions
+            Session subclass the most appropriate for the resource.
+
         """
         try:
             return cls._session_classes[(interface_type, resource_class)]
@@ -128,11 +192,23 @@ class Session(metaclass=abc.ABCMeta):
             )
 
     @classmethod
-    def register(cls, interface_type, resource_class):
+    def register(
+        cls, interface_type: constants.InterfaceType, resource_class: str
+    ) -> Callable[[T], T]:
         """Register a session class for a given interface type and resource class.
 
-        :type interface_type: constants.InterfaceType
-        :type resource_class: str
+        Parameters
+        ----------
+        interface_type : constants.InterfaceType
+            Type of interface.
+        resource_class : str
+            Class of the resource
+
+        Returns
+        -------
+        Callable[[T], T]
+            Decorator function to register a session subclass.
+
         """
 
         def _internal(python_class):
@@ -150,23 +226,37 @@ class Session(metaclass=abc.ABCMeta):
         return _internal
 
     @classmethod
-    def register_unavailable(cls, interface_type, resource_class, msg):
-        """Register an unavailable session class for a given interface type and
-        resource class.
+    def register_unavailable(
+        cls, interface_type: constants.InterfaceType, resource_class: str, msg: str
+    ) -> Type[object]:
+        """Register that no session class exists.
 
-        raising a ValueError if called.
+        This creates a fake session that will raise a ValueError if called.
 
-        :type interface_type: constants.InterfaceType
-        :type resource_class: str
+        Parameters
+        ----------
+        interface_type : constants.InterfaceType
+            Type of interface.
+        resource_class : str
+            Class of the resource
+        msg : str
+            Message detailing why no session class exists for this particular
+            interface type, resource class pair.
+
+        Returns
+        -------
+        Type[object]
+            Fake session.
+
         """
-        # noinspection PyUnusedLocal
+
         class _internal(object):
-            session_issue = msg
 
-            def __init__(self, *args, **kwargs):
+            #: Message detailing why no session is available.
+            session_issue: str = msg
+
+            def __init__(self, *args, **kwargs) -> None:
                 raise ValueError(msg)
-
-        _internal.session_issue = msg
 
         if (interface_type, resource_class) in cls._session_classes:
             logger.warning(
@@ -178,20 +268,19 @@ class Session(metaclass=abc.ABCMeta):
         cls._session_classes[(interface_type, resource_class)] = _internal
 
     def __init__(
-        self, resource_manager_session, resource_name, parsed=None, open_timeout=None
-    ):
-        if isinstance(resource_name, common.MockInterface):
-            parsed = rname.parse_resource_name(resource_name.resource_name)
-            parsed["mock"] = resource_name
-
-        elif parsed is None:
+        self,
+        resource_manager_session: VISARMSession,
+        resource_name: str,
+        parsed: Optional[rname.ResourceName] = None,
+        open_timeout: Optional[int] = None,
+    ) -> None:
+        if parsed is None:
             parsed = rname.parse_resource_name(resource_name)
 
         self.parsed = parsed
         self.open_timeout = open_timeout
 
-        #: Used as a place holder for the object doing the lowlevel
-        #: communication.
+        #: Used as a place holder for the object doing the lowlevel communication.
         self.interface = None
 
         #: Used for attributes not handled by the underlying interface.
@@ -199,26 +288,25 @@ class Session(metaclass=abc.ABCMeta):
         #: set_attribute
         #: Add your own by overriding after_parsing.
         self.attrs = {
-            constants.VI_ATTR_RM_SESSION: resource_manager_session,
-            constants.VI_ATTR_RSRC_NAME: str(parsed),
-            constants.VI_ATTR_RSRC_CLASS: parsed.resource_class,
-            constants.VI_ATTR_INTF_TYPE: parsed.interface_type,
-            constants.VI_ATTR_TMO_VALUE: (self._get_timeout, self._set_timeout),
+            ResourceAttribute.resource_manager_session: resource_manager_session,
+            ResourceAttribute.resource_name: str(parsed),
+            ResourceAttribute.resource_class: parsed.resource_class,
+            ResourceAttribute.interface_type: parsed.interface_type,
+            ResourceAttribute.timeout_value: (self._get_timeout, self._set_timeout),
         }
 
         #: Timeout expressed in second or None for the absence of a timeout.
-        #: The default value is set when calling
-        #: self.set_attribute(attr, default_timeout)
+        #: The default value is set when calling self.set_attribute(attr, default_timeout)
         self.timeout = None
 
         #: Set the default timeout from constants
-        attr = constants.VI_ATTR_TMO_VALUE
+        attr = ResourceAttribute.timeout_value
         default_timeout = attributes.AttributesByID[attr].default
         self.set_attribute(attr, default_timeout)
 
         self.after_parsing()
 
-    def after_parsing(self):
+    def after_parsing(self) -> None:
         """Override this method to provide custom initialization code, to be
         called after the resourcename is properly parsed
 
@@ -242,7 +330,7 @@ class Session(metaclass=abc.ABCMeta):
         Getter has same signature as see Session._get_attribute and setter has
         same signature as see Session._set_attribute. (It is possible to
         register also see Session._get_attribute and see Session._set_attribute
-        as getter/setter). Getter and Setter are registered as tupple.
+        as getter/setter). Getter and Setter are registered as tuple.
         For readwrite attribute:
         `    self.attrs[constants.VI_ATTR_<NAME>] = (<getter_name>,
                                                      <setter_name>)`
@@ -252,151 +340,243 @@ class Session(metaclass=abc.ABCMeta):
         Session._set_attribute
         `    self.attrs[constants.VI_ATTR_<NAME>] = (self._get_attribute,
                                                      self._set_attribute)`
+
         """
         pass
 
-    def clear(self):
+    def clear(self) -> StatusCode:
         """Clears a device.
 
         Corresponds to viClear function of the VISA library.
 
-        :return: return value of the library call.
-        :rtype: :class:`pyvisa.constants.StatusCode`
+        Returns
+        -------
+        StatusCode
+            Return value of the library call.
+
         """
         return StatusCode.error_nonsupported_operation
 
-    def flush(self, mask):
-        """Flushes device buffers.
+    def flush(self, mask: constants.BufferOperation) -> StatusCode:
+        """Flush the specified buffers.
 
-        Corresponds to viFlush function of the VISA library. See:
-        https://pyvisa.readthedocs.io/en/latest/api/visalibrarybase.html?highlight=flush#pyvisa.highlevel.VisaLibraryBase.flush
-        for valid values of mask.
+        The buffers can be associated with formatted I/O operations and/or
+        serial communication.
 
-        :param mask: which buffers to clear.
-        :return: return value of the library call.
-        :rtype: :class:`pyvisa.constants.StatusCode`
+        Corresponds to viFlush function of the VISA library.
+
+        Parameters
+        ----------
+        mask : constants.BufferOperation
+            Specifies the action to be taken with flushing the buffer.
+            The values can be combined using the | operator. However multiple
+            operations on a single buffer cannot be combined.
+
+        Returns
+        -------
+        constants.StatusCode
+            Return value of the library call.
+
         """
         raise NotImplementedError
 
-    def read_stb(self):
+    def read_stb(self) -> Tuple[int, StatusCode]:
         """Reads a status byte of the service request.
 
         Corresponds to viReadSTB function of the VISA library.
 
-        :return: Service request status byte, return value of the library call.
-        :rtype: int, :class:`pyvisa.constants.StatusCode`
+        Returns
+        -------
+        int
+            Service request status byte
+        StatusCode
+            Return value of the library call.
+
         """
         return 0, StatusCode.error_nonsupported_operation
 
-    def lock(self, session, lock_type, timeout, requested_key=None):
+    def lock(
+        self,
+        lock_type: constants.Lock,
+        timeout: int,
+        requested_key: Optional[str] = None,
+    ):
         """Establishes an access mode to the specified resources.
 
         Corresponds to viLock function of the VISA library.
 
-        :param session: Unique logical identifier to a session.
-        :param lock_type: Specifies the type of lock requested, either Constants.EXCLUSIVE_LOCK or Constants.SHARED_LOCK.
-        :param timeout: Absolute time period (in milliseconds) that a resource waits to get unlocked by the
-                        locking session before returning an error.
-        :param requested_key: This parameter is not used and should be set to VI_NULL when lockType is VI_EXCLUSIVE_LOCK.
-        :return: access_key that can then be passed to other sessions to share the lock, return value of the library call.
-        :rtype: str, :class:`pyvisa.constants.StatusCode`
+        Parameters
+        ----------
+        lock_type : constants.Lock
+            Specifies the type of lock requested.
+        timeout : int
+            Absolute time period (in milliseconds) that a resource waits to get
+            unlocked by the locking session before returning an error.
+        requested_key : Optional[str], optional
+            Requested locking key in the case of a shared lock. For an exclusive
+            lock it should be None.
+
+        Returns
+        -------
+        Optional[str]
+            Key that can then be passed to other sessions to share the lock, or
+            None for an exclusive lock.
+        constants.StatusCode
+            Return value of the library call.
+
         """
         return "", StatusCode.error_nonsupported_operation
 
-    def unlock(self, session):
+    def unlock(self) -> StatusCode:
         """Relinquishes a lock for the specified resource.
 
         Corresponds to viUnlock function of the VISA library.
 
-        :param session: Unique logical identifier to a session.
-        :return: return value of the library call.
-        :rtype: :class:`pyvisa.constants.StatusCode`
+        Returns
+        -------
+        StatusCode
+            Return value of the library call.
+
         """
         return StatusCode.error_nonsupported_operation
 
-    def gpib_command(self, command_byte):
-        """Write GPIB command byte on the bus.
+    def gpib_command(self, command_byte: bytes) -> Tuple[int, StatusCode]:
+        """Write GPIB command bytes on the bus.
 
         Corresponds to viGpibCommand function of the VISA library.
-        See: https://linux-gpib.sourceforge.io/doc_html/gpib-protocol.html#REFERENCE-COMMAND-BYTES
 
-        :param command_byte: command byte to send
-        :type command_byte: int, must be [0 255]
-        :return: Number of written bytes, return value of the library call.
-        :rtype: int, :class:`pyvisa.constants.StatusCode`
+        Parameters
+        ----------
+        data : bytes
+            Data to write.
+
+        Returns
+        -------
+        int
+            Number of written bytes
+        constants.StatusCode
+            Return value of the library call.
+
         """
         return 0, StatusCode.error_nonsupported_operation
 
-    def assert_trigger(self, protocol):
-        """Asserts software or hardware trigger.
+    def assert_trigger(self, protocol: constants.TriggerProtocol) -> StatusCode:
+        """Assert software or hardware trigger.
 
         Corresponds to viAssertTrigger function of the VISA library.
 
-        :param protocol: Trigger protocol to use during assertion. (Constants.PROT*)
-        :return: return value of the library call.
-        :rtype: :class:`pyvisa.constants.StatusCode`
+        Parameters
+        ----------
+        protocol : constants.TriggerProtocol
+            Trigger protocol to use during assertion.
+
+        Returns
+        -------
+        constants.StatusCode
+            Return value of the library call.
+
         """
         raise NotImplementedError
 
-    def gpib_send_ifc(self):
+    def gpib_send_ifc(self) -> StatusCode:
         """Pulse the interface clear line (IFC) for at least 100 microseconds.
 
         Corresponds to viGpibSendIFC function of the VISA library.
 
-        :return: return value of the library call.
-        :rtype: :class:`pyvisa.constants.StatusCode`
+        Returns
+        -------
+        constants.StatusCode
+            Return value of the library call.
+
         """
         return StatusCode.error_nonsupported_operation
 
-    def gpib_control_ren(self, mode):
-        """Controls the state of the GPIB Remote Enable (REN) interface line, and optionally the remote/local
-        state of the device.
+    def gpib_control_ren(
+        self, mode: constants.RENLineOperation
+    ) -> constants.StatusCode:
+        """Controls the state of the GPIB Remote Enable (REN) interface line.
+
+        Optionally the remote/local state of the device can also be set.
 
         Corresponds to viGpibControlREN function of the VISA library.
 
-        :param mode: Specifies the state of the REN line and optionally the device remote/local state.
-                     (Constants.VI_GPIB_REN*)
-        :return: return value of the library call.
-        :rtype: :class:`pyvisa.constants.StatusCode`
+        Parameters
+        ----------
+        mode : constants.RENLineOperation
+            State of the REN line and optionally the device remote/local state.
+
+        Returns
+        -------
+        constants.StatusCode
+            Return value of the library call.
+
         """
         return StatusCode.error_nonsupported_operation
 
-    def gpib_control_atn(self, mode):
+    def gpib_control_atn(self, mode: constants.ATNLineOperation) -> StatusCode:
         """Specifies the state of the ATN line and the local active controller state.
 
         Corresponds to viGpibControlATN function of the VISA library.
 
-        :param mode: Specifies the state of the ATN line and optionally the local active controller state.
-                     (Constants.VI_GPIB_ATN*)
-        :return: return value of the library call.
-        :rtype: :class:`pyvisa.constants.StatusCode`
+        Parameters
+        ----------
+        session : VISASession
+            Unique logical identifier to a session.
+        mode : constants.ATNLineOperation
+            State of the ATN line and optionally the local active controller state.
+
+        Returns
+        -------
+        constants.StatusCode
+            Return value of the library call.
+
         """
         return StatusCode.error_nonsupported_operation
 
-    def gpib_pass_control(self, primary_address, secondary_address):
-        """Tell the GPIB device at the specified address to become controller in charge (CIC).
+    def gpib_pass_control(
+        self, primary_address: int, secondary_address: int
+    ) -> StatusCode:
+        """Tell a GPIB device to become controller in charge (CIC).
 
         Corresponds to viGpibPassControl function of the VISA library.
 
-        :param primary_address: Primary address of the GPIB device to which you want to pass control.
-        :param secondary_address: Secondary address of the targeted GPIB device.
-                                  If the targeted device does not have a secondary address,
-                                  this parameter should contain the value Constants.VI_NO_SEC_ADDR.
-        :return: return value of the library call.
-        :rtype: :class:`pyvisa.constants.StatusCode`
+        Parameters
+        ----------
+        session : VISASession
+            Unique logical identifier to a session.
+        primary_address : int
+            Primary address of the GPIB device to which you want to pass control.
+        secondary_address : int
+            Secondary address of the targeted GPIB device.
+            If the targeted device does not have a secondary address, this parameter
+            should contain the value Constants.VI_NO_SEC_ADDR.
+
+        Returns
+        -------
+        constants.StatusCode
+            Return value of the library call.
+
         """
         return StatusCode.error_nonsupported_operation
 
-    def get_attribute(self, attribute):
+    def get_attribute(self, attribute: ResourceAttribute) -> Tuple[Any, StatusCode]:
         """Get the value for a given VISA attribute for this session.
 
         Does a few checks before and calls before dispatching to
         `_get_attribute`.
 
-        :param attribute: Resource attribute for which the state query is made
-        :return: The state of the queried attribute for a specified resource,
-            return value of the library call.
-        :rtype: (unicode | str | list | int, VISAStatus)
+        Parameters
+        ----------
+        attribute : ResourceAttribute
+            Resource attribute for which the state query is made
+
+        Returns
+        -------
+        Any
+            The state of the queried attribute for a specified resource.
+        StatusCode
+            Return value of the library call.
+
         """
 
         # Check if the attribute value is defined.
@@ -435,19 +615,28 @@ class Session(metaclass=abc.ABCMeta):
             logger.exception(str(e))
             return 0, StatusCode.error_nonsupported_attribute
 
-    def set_attribute(self, attribute, attribute_state):
+    def set_attribute(
+        self, attribute: ResourceAttribute, attribute_state: Any
+    ) -> StatusCode:
         """Set the attribute_state value for a given VISA attribute for this
         session.
 
         Does a few checks before and calls before dispatching to
         `_gst_attribute`.
 
-        :param attribute: Resource attribute for which the state query is made.
-        :param attribute_state: value.
-        :return: The return value of the library call.
-        :rtype: VISAStatus
-        """
+        Parameters
+        ----------
+        attribute : ResourceAttribute
+            Resource attribute for which the state query is made.
+        attribute_state : Any
+            Value.
 
+        Returns
+        -------
+        StatusCode
+            The return value of the library call.
+
+        """
         # Check if the attribute value is defined.
         try:
             attr = attributes.AttributesByID[attribute]
@@ -494,38 +683,43 @@ class Session(metaclass=abc.ABCMeta):
 
     def _read(
         self,
-        reader,
-        count,
-        end_indicator_checker,
-        suppress_end_en,
-        termination_char,
-        termination_char_en,
-        timeout_exception,
-    ):
+        reader: Callable[[], bytes],
+        count: int,
+        end_indicator_checker: Callable[[bytes], bool],
+        suppress_end_en: bool,
+        termination_char: str,
+        termination_char_en: bool,
+        timeout_exception: Type[Exception],
+    ) -> Tuple[bytes, StatusCode]:
         """Reads data from device or interface synchronously.
 
         Corresponds to viRead function of the VISA library.
 
-        :param reader: Function to read one or more bytes.
-        :type reader: () -> bytes
-        :param count: Number of bytes to be read.
-        :type count: int
-        :param end_indicator_checker: Function to check if the message is
-            complete.
-        :type end_indicator_checker: (bytes) -> boolean
-        :param suppress_end_en: suppress end.
-        :type suppress_end_en: bool
-        :param termination_char: Stop reading if this character is received.
-        :type suppress_end_en: int or str
-        :param termination_char_en: termination char enabled.
-        :type termination_char_en: boolean
-        :param: timeout_exception: Exception to capture time out for the given
-            interface.
-        :type: Exception
-        :return: data read, return value of the library call.
-        :rtype: bytes, constants.StatusCode
-        """
+        Parameters
+        ----------
+        reader : Callable[[], bytes]
+            Function to read one or more bytes.
+        count : int
+            Number of bytes to be read.
+        end_indicator_checker : Callable[[bytes], bool]
+            Function to check if the message is complete.
+        suppress_end_en : bool
+            Suppress end.
+        termination_char : str
+            Stop reading if this character is received.
+        termination_char_en : bool
+            Is termination char enabled.
+        timeout_exception : Type[Exception]
+            Exception to capture time out for the given interface.
 
+        Returns
+        -------
+        bytes
+            Data read from the resource.
+        StatusCode
+            Return value of the library call.
+
+        """
         # NOTE: Some interfaces return not only a single byte but a complete
         # block for each read therefore we must handle the case that the
         # termination character is in the middle of the  block or that the
@@ -569,7 +763,7 @@ class Session(metaclass=abc.ABCMeta):
             if finish_time and time.time() > finish_time:
                 return bytes(out), StatusCode.error_timeout
 
-    def _get_timeout(self, attribute):
+    def _get_timeout(self, attribute: ResourceAttribute) -> Tuple[int, StatusCode]:
         """ Returns timeout calculated value from python way to VI_ way
 
         In VISA, the timeout is expressed in milliseconds or using the
@@ -587,7 +781,7 @@ class Session(metaclass=abc.ABCMeta):
             ret_value = int(self.timeout * 1000.0)
         return ret_value, StatusCode.success
 
-    def _set_timeout(self, attribute, value):
+    def _set_timeout(self, attribute: ResourceAttribute, value: Optional[int]):
         """ Sets timeout calculated value from python way to VI_ way
 
         In VISA, the timeout is expressed in milliseconds or using the

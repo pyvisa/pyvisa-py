@@ -1,20 +1,20 @@
 # -*- coding: utf-8 -*-
-"""
-    pyvisa-py.gpib
-    ~~~~~~~~~~~~~~
-
-    GPIB Session implementation using linux-gpib or gpib-ctypes.
+"""GPIB Session implementation using linux-gpib or gpib-ctypes.
 
 
-    :copyright: 2015-2020 by PyVISA-py Authors, see AUTHORS for more details.
-    :license: MIT, see LICENSE for more details.
+:copyright: 2015-2020 by PyVISA-py Authors, see AUTHORS for more details.
+:license: MIT, see LICENSE for more details.
+
 """
 import ctypes  # Used for missing bindings not ideal
 from bisect import bisect
+from typing import Any, Iterator, List, Optional, Tuple
 
 from pyvisa import attributes, constants, logger
+from pyvisa.constants import StatusCode, ResourceAttribute
 
 from .sessions import Session, UnknownAttribute
+
 
 try:
     GPIB_CTYPES = True
@@ -52,7 +52,7 @@ except ImportError:
 
 
 # patch Gpib to avoid double closing of handles
-def _patch_Gpib():
+def _patch_Gpib() -> None:
     if not hasattr(Gpib, "close"):
         _old_del = Gpib.__del__
 
@@ -67,9 +67,8 @@ def _patch_Gpib():
 _patch_Gpib()
 
 
-def _find_boards():
-    """Find GPIB board addresses.
-    """
+def _find_boards() -> Iterator[Tuple[int, int]]:
+    """Find GPIB board addresses."""
     for board in range(16):
         try:
             yield board, gpib.ask(board, 1)
@@ -77,9 +76,8 @@ def _find_boards():
             logger.debug("GPIB board %i error in _find_boards(): %s", board, repr(e))
 
 
-def _find_listeners():
-    """Find GPIB listeners.
-    """
+def _find_listeners() -> Iterator[Tuple[int, int]]:
+    """Find GPIB listeners."""
     for board, boardpad in _find_boards():
         for i in range(31):
             try:
@@ -94,8 +92,23 @@ def _find_listeners():
                 )
 
 
-def _analyse_lines_value(value, line):
+def _analyse_lines_value(value: int, line: int):
     """Determine the state of a GPIB line based on the iblines byte.
+
+    Parameters
+    ----------
+    value : int
+        Value returned by iblines.
+    line : int
+        One of constants.VI_ATTR_GPIB_***_STATE where the *** can be REN, ATN,
+        NDAC, or SRQ
+
+    Returns
+    -------
+    constants.LineState
+        State of the line
+    StatusCode
+        Library StatusCode for the operation.
 
     """
     if line == constants.VI_ATTR_GPIB_REN_STATE:
@@ -116,15 +129,13 @@ def _analyse_lines_value(value, line):
         value_mask = 0x2000
 
     if not value & validity_mask:
-        return constants.VI_STATE_UNKNOWN, StatusCode.success
+        return constants.LineState.unknown, StatusCode.success
     else:
         if value & value_mask:
-            return constants.VI_STATE_ASSERTED, StatusCode.success
+            return constants.LineState.asserted, StatusCode.success
         else:
-            return constants.VI_STATE_UNASSERTED, StatusCode.success
+            return constants.LineState.unasserted, StatusCode.success
 
-
-StatusCode = constants.StatusCode
 
 # linux-gpib timeout constants, in seconds. See GPIBSession._set_timeout.
 TIMETABLE = (
@@ -149,22 +160,29 @@ TIMETABLE = (
 )
 
 
-def convert_gpib_error(error, status, operation):
+def convert_gpib_error(
+    error: gpib.GpibError, status: int, operation: str
+) -> StatusCode:
     """Convert a GPIB error to a VISA StatusCode.
 
-    :param error: Error to use to determine the proper status code.
-    :type error: gpib.GpibError
-    :param status: Status byte of the GPIB library.
-    :type status: int
-    :param operation: Name of the operation that caused an exception. Used in logging.
-    :type operation: str
-    :return: Status code matching the GPIB error.
-    :rtype: constants.StatusCode
+    Parameters
+    ----------
+    error : gpib.GpibError
+        Error to use to determine the proper status code.
+    status : int
+        Status byte of the GPIB library.
+    operation : str
+        Name of the operation that caused an exception. Used in logging.
+
+    Returns
+    -------
+    StatusCode
+        Status code matching the GPIB error.
 
     """
     # First check the imeout condition in the status byte
     if status & 0x4000:
-        return constants.StatusCode.error_timeout
+        return StatusCode.error_timeout
     # All other cases are hard errors.
     # In particular linux-gpib simply gives a string we could parse but that
     # feels brittle. As a consequence we only try to be smart when using
@@ -172,33 +190,33 @@ def convert_gpib_error(error, status, operation):
     else:
         logger.debug("Failed to %s.", exc_info=error)
         if not GPIB_CTYPES:
-            return constants.StatusCode.error_system_error
+            return StatusCode.error_system_error
         if error.code == 1:
-            return constants.StatusCode.error_not_cic
+            return StatusCode.error_not_cic
         elif error.code == 2:
-            return constants.StatusCode.error_no_listeners
+            return StatusCode.error_no_listeners
         elif error.code == 4:
-            return constants.StatusCode.error_invalid_mode
+            return StatusCode.error_invalid_mode
         elif error.code == 11:
-            return constants.StatusCode.error_nonsupported_operation
+            return StatusCode.error_nonsupported_operation
         elif error.code == 1:
-            return constants.StatusCode.error_not_cic
+            return StatusCode.error_not_cic
         elif error.code == 21:
-            return constants.StatusCode.error_resource_locked
+            return StatusCode.error_resource_locked
         else:
-            return constants.StatusCode.error_system_error
+            return StatusCode.error_system_error
 
 
-def convert_gpib_status(status):
+def convert_gpib_status(status: int) -> StatusCode:
     if status & 0x4000:
-        return constants.StatusCode.error_timeout
+        return StatusCode.error_timeout
     elif status & 0x8000:
-        return constants.StatusCode.error_system_error
+        return StatusCode.error_system_error
     else:
-        return constants.StatusCode.success
+        return StatusCode.success
 
 
-class _GPIBCommon(object):
+class _GPIBCommon:
     """Common base class for GPIB sessions.
 
     Both INSTR and INTFC resources share the following attributes:
@@ -219,8 +237,11 @@ class _GPIBCommon(object):
 
     """
 
+    #: Bus wide controller.
+    controller: Gpib
+
     @classmethod
-    def get_low_level_info(cls):
+    def get_low_level_info(cls) -> str:
         try:
             ver = gpib.version()
         except AttributeError:
@@ -228,7 +249,7 @@ class _GPIBCommon(object):
 
         return "via Linux GPIB (%s)" % ver
 
-    def after_parsing(self):
+    def after_parsing(self) -> None:
         minor = int(self.parsed.board)
         sad = 0
         timeout = 13
@@ -259,7 +280,7 @@ class _GPIBCommon(object):
             attribute = getattr(constants, "VI_ATTR_" + name)
             self.attrs[attribute] = attributes.AttributesByID[attribute].default
 
-    def _get_timeout(self, attribute):
+    def _get_timeout(self, attribute: constants.ResourceAttribute) -> Optional[int]:
         if self.interface:
             # 0x3 is the hexadecimal reference to the IbaTMO (timeout) configuration
             # option in linux-gpib.
@@ -271,8 +292,11 @@ class _GPIBCommon(object):
                 self.timeout = None
         return super(_GPIBCommon, self)._get_timeout(attribute)
 
-    def _set_timeout(self, attribute, value):
-        """
+    def _set_timeout(
+        self, attribute: constants.ResourceAttribute, value: Optional[int]
+    ):
+        """Set the timeout value.
+
         linux-gpib only supports 18 discrete timeout values. If a timeout
         value other than these is requested, it will be rounded up to the closest
         available value. Values greater than the largest available timout value
@@ -295,6 +319,7 @@ class _GPIBCommon(object):
         15  100 seconds
         16  300 seconds
         17  1000 seconds
+
         """
         status = super(_GPIBCommon, self)._set_timeout(attribute, value)
         if self.interface:
@@ -307,19 +332,28 @@ class _GPIBCommon(object):
             self.interface.timeout(gpib_timeout)
         return status
 
-    def close(self):
+    def close(self) -> None:
         if self.interface:
             self.interface.close()
         self.controller.close()
 
-    def read(self, count):
+    def read(self, count: int) -> bytes:
         """Reads data from device or interface synchronously.
 
         Corresponds to viRead function of the VISA library.
 
-        :param count: Number of bytes to be read.
-        :return: data read, return value of the library call.
-        :rtype: bytes, constants.StatusCode
+        Parameters
+        ----------
+        count : int
+            Number of bytes to be read.
+
+        Returns
+        -------
+        bytes
+            Data read from the interface.
+        StatusCode
+            Return value of the library call.
+
         """
         # INTFC don't have an interface so use the controller
         ifc = self.interface or self.controller
@@ -331,15 +365,23 @@ class _GPIBCommon(object):
 
         return self._read(reader, count, checker, False, None, False, gpib.GpibError)
 
-    def write(self, data):
+    def write(self, data: bytes) -> Tuple[int, StatusCode]:
         """Writes data to device or interface synchronously.
 
         Corresponds to viWrite function of the VISA library.
 
-        :param data: data to be written.
-        :type data: bytes
-        :return: Number of bytes actually transferred, return value of the library call.
-        :rtype: int, VISAStatus
+        Parameters
+        ----------
+        data : bytes
+            Data to be written.
+
+        Returns
+        -------
+        int
+            Number of bytes actually transferred
+        StatusCode
+            Return value of the library call.
+
         """
         logger.debug("GPIB.write %r" % data)
 
@@ -354,17 +396,24 @@ class _GPIBCommon(object):
         except gpib.GpibError as e:
             return 0, convert_gpib_error(e, ifc.ibsta(), "write")
 
-    def gpib_control_ren(self, mode):
-        """Controls the state of the GPIB Remote Enable (REN) interface line, and optionally the remote/local
-        state of the device.
+    def gpib_control_ren(self, mode: constants.RENLineOperation) -> StatusCode:
+        """Controls the state of the GPIB Remote Enable (REN) interface line.
+
+        Optionally the remote/local state of the device is also controlled.
 
         Corresponds to viGpibControlREN function of the VISA library.
 
-        :param session: Unique logical identifier to a session.
-        :param mode: Specifies the state of the REN line and optionally the device remote/local state.
-                     (Constants.VI_GPIB_REN*)
-        :return: return value of the library call.
-        :rtype: :class:`pyvisa.constants.StatusCode`
+        Parameters
+        ----------
+        mode : constants.RENLineOperation
+            Specifies the state of the REN line and optionally the device
+            remote/local state.
+
+        Returns
+        -------
+        StatusCode
+            Return value of the library call.
+
         """
         if self.parsed.interface_type == "INTFC":
             if mode not in (
@@ -409,14 +458,23 @@ class _GPIBCommon(object):
 
         return constants.StatusCode.success
 
-    def _get_attribute(self, attribute):
+    def _get_attribute(self, attribute: ResourceAttribute) -> Tuple[Any, StatusCode]:
         """Get the value for a given VISA attribute for this session.
 
         Use to implement custom logic for attributes.
 
-        :param attribute: Resource attribute for which the state query is made
-        :return: The state of the queried attribute for a specified resource, return value of the library call.
-        :rtype: (unicode | str | list | int, VISAStatus)
+        Parameters
+        ----------
+        attribute : ResourceAttribute
+            Attribute for which the state query is made
+
+        Returns
+        -------
+        Any
+            The state of the queried attribute for a specified resource
+        StatusCode
+            Return value of the library call.
+
         """
         # TODO implement the following attributes
         # - VI_ATTR_INTF_INST_NAME RO
@@ -428,20 +486,20 @@ class _GPIBCommon(object):
         # INTFC don't have an interface so use the controller
         ifc = self.interface or self.controller
 
-        if attribute == constants.VI_ATTR_GPIB_PRIMARY_ADDR:
+        if attribute == ResourceAttribute.gpib_primary_address:
             # IbaPAD 0x1
             return ifc.ask(1), StatusCode.success
 
-        elif attribute == constants.VI_ATTR_GPIB_SECONDARY_ADDR:
+        elif attribute == ResourceAttribute.gpib_secondary_address:
             # IbaSAD 0x2
             # Remove 0x60 because National Instruments.
-            sad = ifc.ask(2)  # noqa
+            _ = ifc.ask(2)
             if ifc.ask(2):
                 return ifc.ask(2) - 96, StatusCode.success
             else:
                 return constants.VI_NO_SEC_ADDR, StatusCode.success
 
-        elif attribute == constants.VI_ATTR_GPIB_REN_STATE:
+        elif attribute == ResourceAttribute.gpib_ren_state:
             try:
                 lines = self.controller.lines()
                 return _analyse_lines_value(lines, attribute)
@@ -449,7 +507,7 @@ class _GPIBCommon(object):
                 # some versions of linux-gpib do not expose Gpib.lines()
                 return constants.VI_STATE_UNKNOWN, StatusCode.success
 
-        elif attribute == constants.VI_ATTR_SEND_END_EN:
+        elif attribute == ResourceAttribute.send_end_enabled:
             # Do not use IbaEndBitIsNormal 0x1a which relates to EOI on read()
             # not write(). see issue #196
             # IbcEOT 0x4
@@ -458,24 +516,34 @@ class _GPIBCommon(object):
             else:
                 return constants.VI_FALSE, StatusCode.success
 
-        elif attribute == constants.VI_ATTR_INTF_NUM:
+        elif attribute == ResourceAttribute.interface_number:
             # IbaBNA 0x200
             return ifc.ask(512), StatusCode.success
 
-        elif attribute == constants.VI_ATTR_INTF_TYPE:
+        elif attribute == ResourceAttribute.interface_type:
             return constants.InterfaceType.gpib, StatusCode.success
 
         raise UnknownAttribute(attribute)
 
-    def _set_attribute(self, attribute, attribute_state):
+    def _set_attribute(
+        self, attribute: constants.ResourceAttribute, attribute_state: Any
+    ) -> StatusCode:
         """Sets the state of an attribute.
 
         Corresponds to viSetAttribute function of the VISA library.
 
-        :param attribute: Attribute for which the state is to be modified. (Attributes.*)
-        :param attribute_state: The state of the attribute to be set for the specified object.
-        :return: return value of the library call.
-        :rtype: VISAStatus
+        Parameters
+        ----------
+        attribute : constants.ResourceAttribute
+            Attribute for which the state is to be modified. (Attributes.*)
+        attribute_state : Any
+            The state of the attribute to be set for the specified object.
+
+        Returns
+        -------
+        StatusCode
+            Return value of the library call.
+
         """
         # TODO implement the following attributes
         # - VI_ATTR_DMA_ALLOW_EN RW
@@ -486,7 +554,7 @@ class _GPIBCommon(object):
         # INTFC don't have an interface so use the controller
         ifc = self.interface or self.controller
 
-        if attribute == constants.VI_ATTR_GPIB_READDR_EN:
+        if attribute == ResourceAttribute.gpib_readdress_enabled:
             # IbcREADDR 0x6
             # Setting has no effect in linux-gpib.
             if isinstance(attribute_state, int):
@@ -495,7 +563,7 @@ class _GPIBCommon(object):
             else:
                 return StatusCode.error_nonsupported_attribute_state
 
-        elif attribute == constants.VI_ATTR_GPIB_PRIMARY_ADDR:
+        elif attribute == ResourceAttribute.gpib_primary_address:
             # IbcPAD 0x1
             if isinstance(attribute_state, int) and 0 <= attribute_state <= 30:
                 ifc.config(1, attribute_state)
@@ -503,7 +571,7 @@ class _GPIBCommon(object):
             else:
                 return StatusCode.error_nonsupported_attribute_state
 
-        elif attribute == constants.VI_ATTR_GPIB_SECONDARY_ADDR:
+        elif attribute == ResourceAttribute.gpib_secondary_address:
             # IbcSAD 0x2
             # Add 0x60 because National Instruments.
             if isinstance(attribute_state, int) and 0 <= attribute_state <= 30:
@@ -515,7 +583,7 @@ class _GPIBCommon(object):
             else:
                 return StatusCode.error_nonsupported_attribute_state
 
-        elif attribute == constants.VI_ATTR_GPIB_UNADDR_EN:
+        elif attribute == ResourceAttribute.gpib_unadress_enable:
             # IbcUnAddr 0x1b
             try:
                 ifc.config(27, attribute_state)
@@ -523,7 +591,7 @@ class _GPIBCommon(object):
             except gpib.GpibError:
                 return StatusCode.error_nonsupported_attribute_state
 
-        elif attribute == constants.VI_ATTR_SEND_END_EN:
+        elif attribute == ResourceAttribute.send_end_enabled:
             # Do not use IbaEndBitIsNormal 0x1a which relates to EOI on read()
             # not write(). see issue #196
             # IbcEOT 0x4
@@ -539,23 +607,23 @@ class _GPIBCommon(object):
 # TODO: Check secondary addresses.
 @Session.register(constants.InterfaceType.gpib, "INSTR")
 class GPIBSession(_GPIBCommon, Session):
-    """A GPIB Session that uses linux-gpib to do the low level communication.
-    """
+    """A GPIB Session that uses linux-gpib to do the low level communication."""
 
     @staticmethod
-    def list_resources():
+    def list_resources() -> List[str]:
         return ["GPIB%d::%d::INSTR" % (board, pad) for board, pad in _find_listeners()]
 
-    def clear(self):
+    def clear(self) -> StatusCode:
         """Clears a device.
 
         Corresponds to viClear function of the VISA library.
 
-        :param session: Unique logical identifier to a session.
-        :return: return value of the library call.
-        :rtype: :class:`pyvisa.constants.StatusCode`
-        """
+        Returns
+        -------
+        StatusCode
+            Return value of the library call.
 
+        """
         logger.debug("GPIB.device clear")
         try:
             self.interface.clear()
@@ -563,14 +631,21 @@ class GPIBSession(_GPIBCommon, Session):
         except gpib.GpibError as e:
             return convert_gpib_error(e, self.interface.ibsta(), "clear")
 
-    def assert_trigger(self, protocol):
+    def assert_trigger(self, protocol: constants.TriggerProtocol) -> StatusCode:
         """Asserts hardware trigger.
-        Only supports protocol = constants.VI_TRIG_PROT_DEFAULT
 
-        :return: return value of the library call.
-        :rtype: :class:`pyvisa.constants.StatusCode`
+        Parameters
+        ----------
+        protocol : constants.TriggerProtocol
+            Triggering protocol to use.
+            Only supports constants.TriggerProtocol.default
+
+        Returns
+        -------
+        StatusCode
+            Return value of the library call.
+
         """
-
         logger.debug("GPIB.device assert hardware trigger")
 
         try:
@@ -582,13 +657,16 @@ class GPIBSession(_GPIBCommon, Session):
         except gpib.GpibError as e:
             return convert_gpib_error(e, self.interface.ibsta(), "assert trigger")
 
-    def read_stb(self):
+    def read_stb(self) -> Tuple[int, StatusCode]:
+        """Read the device status byte."""
         try:
             return self.interface.serial_poll(), StatusCode.success
         except gpib.GpibError as e:
             return 0, convert_gpib_error(e, self.interface.ibsta(), "read STB")
 
-    def _get_attribute(self, attribute):
+    def _get_attribute(
+        self, attribute: constants.ResourceAttribute
+    ) -> Tuple[Any, StatusCode]:
         """Get the value for a given VISA attribute for this session.
 
         Use to implement custom logic for attributes. GPIB::INSTR have the
@@ -600,9 +678,18 @@ class GPIBSession(_GPIBCommon, Session):
         - VI_ATTR_GPIB_READDR_EN
         - VI_ATTR_GPIB_UNADDR_EN
 
-        :param attribute: Resource attribute for which the state query is made
-        :return: The state of the queried attribute for a specified resource, return value of the library call.
-        :rtype: (unicode | str | list | int, VISAStatus)
+        Parameters
+        ----------
+        attribute : constants.ResourceAttribute
+            Resource attribute for which the state query is made
+
+        Returns
+        -------
+        Any
+            State of the queried attribute for a specified resource
+        StatusCode
+            Return value of the library call.
+
         """
         # TODO implement the following attributes
         # - VI_ATTR_TRIG_ID RW or RO see specs
@@ -624,15 +711,25 @@ class GPIBSession(_GPIBCommon, Session):
 
         return super(GPIBSession, self)._get_attribute(attribute)
 
-    def _set_attribute(self, attribute, attribute_state):
+    def _set_attribute(
+        self, attribute: ResourceAttribute, attribute_state: Any
+    ) -> StatusCode:
         """Sets the state of an attribute.
 
         Corresponds to viSetAttribute function of the VISA library.
 
-        :param attribute: Attribute for which the state is to be modified. (Attributes.*)
-        :param attribute_state: The state of the attribute to be set for the specified object.
-        :return: return value of the library call.
-        :rtype: VISAStatus
+        Parameters
+        ----------
+        attribute : ResourceAttribute
+            Attribute for which the state is to be modified. (Attributes.*)
+        attribute_state : Any
+            The state of the attribute to be set for the specified object.
+
+        Returns
+        -------
+        StatusCode
+            Return value of the library call.
+
         """
         # TODO implement the following attributes
         # - VI_ATTR_TRIG_ID RW or RO see specs
@@ -666,33 +763,38 @@ class GPIBInterface(_GPIBCommon, Session):
     """
 
     @staticmethod
-    def list_resources():
+    def list_resources() -> List[str]:
         return ["GPIB%d::INTFC" % board for board, pad in _find_boards()]
 
-    def gpib_command(self, command_bytes):
+    def gpib_command(self, command_bytes: bytes) -> Tuple[int, StatusCode]:
         """Write GPIB command byte on the bus.
 
         Corresponds to viGpibCommand function of the VISA library.
         See: https://linux-gpib.sourceforge.io/doc_html/gpib-protocol.html#REFERENCE-COMMAND-BYTES
 
-        :param command_bytes: command bytes to send
-        :type command_bytes: bytes
-        :return: Number of written bytes, return value of the library call.
-        :rtype: int, :class:`pyvisa.constants.StatusCode`
+        Parameters
+        ----------
+        command_bytes : bytes
+            Command bytes to send
+
+        Returns
+        -------
+        int
+            Number of written bytes,
+        StatusCode
+            Return value of the library call.
+
         """
         try:
             return self.controller.command(command_bytes), StatusCode.success
         except gpib.GpibError as e:
             return convert_gpib_error(e, self.controller.ibsta(), "gpib command")
 
-    def gpib_send_ifc(self):
+    def gpib_send_ifc(self) -> StatusCode:
         """Pulse the interface clear line (IFC) for at least 100 microseconds.
 
         Corresponds to viGpibSendIFC function of the VISA library.
 
-        :param session: Unique logical identifier to a session.
-        :return: return value of the library call.
-        :rtype: :class:`pyvisa.constants.StatusCode`
         """
         logger.debug("GPIB.interface clear")
         try:
@@ -701,16 +803,22 @@ class GPIBInterface(_GPIBCommon, Session):
         except gpib.GpibError as e:
             return convert_gpib_error(e, self.controller.ibsta(), "send IFC")
 
-    def gpib_control_atn(self, mode):
+    def gpib_control_atn(self, mode: constants.ATNLineOperation) -> StatusCode:
         """Specifies the state of the ATN line and the local active controller state.
 
         Corresponds to viGpibControlATN function of the VISA library.
 
-        :param session: Unique logical identifier to a session.
-        :param mode: Specifies the state of the ATN line and optionally the local active controller state.
-                     (Constants.VI_GPIB_ATN*)
-        :return: return value of the library call.
-        :rtype: :class:`pyvisa.constants.StatusCode`
+        Parameters
+        ----------
+        mode : constants.ATNLineOperation
+            Specifies the state of the ATN line and optionally the local active
+             controller state.
+
+        Returns
+        -------
+        StatusCode
+            Return value of the library call.
+
         """
         logger.debug("GPIB.control atn")
         if mode == constants.VI_GPIB_ATN_ASSERT:
@@ -726,18 +834,27 @@ class GPIBInterface(_GPIBCommon, Session):
             return constants.StatusCode.error_invalid_mode
         return convert_gpib_status(status)
 
-    def gpib_pass_control(self, primary_address, secondary_address):
-        """Tell the GPIB device at the specified address to become controller in charge (CIC).
+    def gpib_pass_control(
+        self, primary_address: int, secondary_address: int
+    ) -> StatusCode:
+        """Tell a GPIB device to become controller in charge (CIC).
 
         Corresponds to viGpibPassControl function of the VISA library.
 
-        :param session: Unique logical identifier to a session.
-        :param primary_address: Primary address of the GPIB device to which you want to pass control.
-        :param secondary_address: Secondary address of the targeted GPIB device.
-                                  If the targeted device does not have a secondary address,
-                                  this parameter should contain the value Constants.VI_NO_SEC_ADDR.
-        :return: return value of the library call.
-        :rtype: :class:`pyvisa.constants.StatusCode`
+        Parameters
+        ----------
+        primary_address : int
+            Primary address of the GPIB device to which you want to pass control.
+        secondary_address : int
+            Secondary address of the targeted GPIB device.
+            If the targeted device does not have a secondary address,
+            this parameter should contain the value Constants.VI_NO_SEC_ADDR.
+
+        Returns
+        -------
+        StatusCode
+            Return value of the library call.
+
         """
         # ibpct need to get the device id matching the primary and secondary address
         logger.debug("GPIB.pass control")
@@ -752,7 +869,7 @@ class GPIBInterface(_GPIBCommon, Session):
         status = gpib_lib.ibpct(did)
         return convert_gpib_status(status)
 
-    def _get_attribute(self, attribute):
+    def _get_attribute(self, attribute: ResourceAttribute) -> Tuple[Any, StatusCode]:
         """Get the value for a given VISA attribute for this session.
 
         Use to implement custom logic for attributes. GPIB::INTFC have the
@@ -767,9 +884,18 @@ class GPIBInterface(_GPIBCommon, Session):
         - VI_ATTR_GPIB_HS488_CBL_LEN
         - VI_ATTR_GPIB_ADDR_STATE
 
-        :param attribute: Resource attribute for which the state query is made
-        :return: The state of the queried attribute for a specified resource, return value of the library call.
-        :rtype: (unicode | str | list | int, VISAStatus)
+        Parameters
+        ----------
+        attribute: ResourceAttribute
+            Resource attribute for which the state query is made.
+
+        Returns
+        -------
+        Any
+            The state of the queried attribute for a specified resource,
+        StatusCode
+            Return value of the library call.
+
         """
         # TODO implement the following attributes
         # - VI_ATTR_DEV_STATUS_BYTE RW
@@ -799,21 +925,31 @@ class GPIBInterface(_GPIBCommon, Session):
 
         return super(GPIBSession, self)._get_attribute(attribute)
 
-    def _set_attribute(self, attribute, attribute_state):
+    def _set_attribute(
+        self, attribute: ResourceAttribute, attribute_state: Any
+    ) -> StatusCode:
         """Sets the state of an attribute.
 
         Corresponds to viSetAttribute function of the VISA library.
 
-        :param attribute: Attribute for which the state is to be modified. (Attributes.*)
-        :param attribute_state: The state of the attribute to be set for the specified object.
-        :return: return value of the library call.
-        :rtype: VISAStatus
+        Parameters
+        ----------
+        attribute : ResourceAttribute
+            Attribute for which the state is to be modified.
+        attribute_state : Any
+            The state of the attribute to be set for the specified object.
+
+        Returns
+        -------
+        StatusCode
+            Return value of the library call.
+
         """
         # TODO implement the following attributes
         # - VI_ATTR_GPIB_SYS_CNTRL_STATE
         # - VI_ATTR_DEV_STATUS_BYTE
 
         # INTFC don't have an interface so use the controller
-        ifc = self.controller  # noqa
+        _ = self.controller
 
         return super(GPIBSession, self)._set_attribute(attribute, attribute_state)

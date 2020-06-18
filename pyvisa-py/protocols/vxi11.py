@@ -1,16 +1,13 @@
 # -*- coding: utf-8 -*-
-"""
-    pyvisa-py.protocols.vxi11
-    ~~~~~~~~~~~~~~~~~~~~~~~~~
+"""Implements a VX11 Session using Python Standard Library.
 
-    Implements a VX11 Session using Python Standard Library.
+Based on Python Sun RPC Demo and Alex Forencich python-vx11
 
-    Based on Python Sun RPC Demo and Alex Forencich python-vx11
+This file is an offspring of the Lantz project.
 
-    This file is an offspring of the Lantz project.
+:copyright: 2014-2020 by PyVISA-py Authors, see AUTHORS for more details.
+:license: MIT, see LICENSE for more details.
 
-    :copyright: 2014-2020 by PyVISA-py Authors, see AUTHORS for more details.
-    :license: MIT, see LICENSE for more details.
 """
 import enum
 import socket

@@ -1,15 +1,20 @@
 # -*- coding: utf-8 -*-
+"""Serial Session implementation using PySerial.
+
+
+:copyright: 2014-2020 by PyVISA-py Authors, see AUTHORS for more details.
+:license: MIT, see LICENSE for more details.
+
 """
-    pyvisa-py.serial
-    ~~~~~~~~~~~~~~~~
+from typing import Any, List, Tuple
 
-    Serial Session implementation using PySerial.
-
-
-    :copyright: 2014-2020 by PyVISA-py Authors, see AUTHORS for more details.
-    :license: MIT, see LICENSE for more details.
-"""
 from pyvisa import attributes, constants, logger
+from pyvisa.constants import (
+    BufferOperation,
+    ResourceAttribute,
+    SerialTermination,
+    StatusCode,
+)
 
 from . import common
 from .sessions import Session, UnknownAttribute
@@ -26,29 +31,23 @@ except ImportError as e:
     raise
 
 
-def to_state(boolean_input):
-    """Convert a boolean input into a LineState value
-    """
+def to_state(boolean_input: bool) -> constants.LineState:
+    """Convert a boolean input into a LineState value."""
     if boolean_input:
         return constants.LineState.asserted
     return constants.LineState.unasserted
 
 
-StatusCode = constants.StatusCode
-SerialTermination = constants.SerialTermination
-
-
 @Session.register(constants.InterfaceType.asrl, "INSTR")
 class SerialSession(Session):
-    """A serial Session that uses PySerial to do the low level communication.
-    """
+    """A serial Session that uses PySerial to do the low level communication."""
 
     @staticmethod
-    def list_resources():
+    def list_resources() -> List[str]:
         return ["ASRL%s::INSTR" % port[0] for port in comports()]
 
     @classmethod
-    def get_low_level_info(cls):
+    def get_low_level_info(cls) -> str:
         try:
             ver = serial.VERSION
         except AttributeError:
@@ -56,11 +55,8 @@ class SerialSession(Session):
 
         return "via PySerial (%s)" % ver
 
-    def after_parsing(self):
-        if "mock" in self.parsed:
-            cls = self.parsed.mock
-        else:
-            cls = serial.Serial
+    def after_parsing(self) -> None:
+        cls = serial.Serial
 
         self.interface = cls(
             port=self.parsed.board, timeout=self.timeout, write_timeout=self.timeout
@@ -77,33 +73,41 @@ class SerialSession(Session):
             attribute = getattr(constants, "VI_ATTR_" + name)
             self.attrs[attribute] = attributes.AttributesByID[attribute].default
 
-    def _get_timeout(self, attribute):
+    def _get_timeout(self, attribute: ResourceAttribute) -> Tuple[int, StatusCode]:
         if self.interface:
             self.timeout = self.interface.timeout
         return super(SerialSession, self)._get_timeout(attribute)
 
-    def _set_timeout(self, attribute, value):
+    def _set_timeout(self, attribute: ResourceAttribute, value: int) -> StatusCode:
         status = super(SerialSession, self)._set_timeout(attribute, value)
         if self.interface:
             self.interface.timeout = self.timeout
             self.interface.write_timeout = self.timeout
         return status
 
-    def close(self):
+    def close(self) -> None:
         self.interface.close()
 
-    def read(self, count):
+    def read(self, count: int) -> Tuple[bytes, StatusCode]:
         """Reads data from device or interface synchronously.
 
         Corresponds to viRead function of the VISA library.
 
-        :param count: Number of bytes to be read.
-        :return: data read, return value of the library call.
-        :rtype: bytes, constants.StatusCode
-        """
+        Parameters
+        -----------
+        count : int
+            Number of bytes to be read.
 
-        end_in, _ = self.get_attribute(constants.VI_ATTR_ASRL_END_IN)
-        suppress_end_en, _ = self.get_attribute(constants.VI_ATTR_SUPPRESS_END_EN)
+        Returns
+        -------
+        bytes
+            Data read from the device
+        StatusCode
+            Return value of the library call.
+
+        """
+        end_in, _ = self.get_attribute(ResourceAttribute.asrl_end_in)
+        suppress_end_en, _ = self.get_attribute(ResourceAttribute.suppress_end_enabled)
 
         reader = lambda: self.interface.read(1)
 
@@ -115,7 +119,7 @@ class SerialSession(Session):
             checker = lambda current: bool(common.last_int(current) & mask)
 
         elif end_in == SerialTermination.termination_char:
-            end_char, _ = self.get_attribute(constants.VI_ATTR_TERMCHAR)
+            end_char, _ = self.get_attribute(ResourceAttribute.termchar)
 
             checker = lambda current: common.last_int(current) == end_char
 
@@ -132,20 +136,28 @@ class SerialSession(Session):
             serial.SerialTimeoutException,
         )
 
-    def write(self, data):
+    def write(self, data: bytes) -> Tuple[int, StatusCode]:
         """Writes data to device or interface synchronously.
 
         Corresponds to viWrite function of the VISA library.
 
-        :param data: data to be written.
-        :type data: bytes
-        :return: Number of bytes actually transferred, return value of the library call.
-        :rtype: int, VISAStatus
+        Parameters
+        ----------
+        data : bytes
+            Data to be written.
+
+        Returns
+        -------
+        int
+            Number of bytes actually transferred
+        StatusCode
+            Return value of the library call.
+
         """
         logger.debug("Serial.write %r" % data)
         # TODO: How to deal with VI_ATTR_TERMCHAR_EN
-        end_out, _ = self.get_attribute(constants.VI_ATTR_ASRL_END_OUT)
-        send_end, _ = self.get_attribute(constants.VI_ATTR_SEND_END_EN)
+        end_out, _ = self.get_attribute(ResourceAttribute.asrl_end_out)
+        send_end, _ = self.get_attribute(ResourceAttribute.send_end_enabled)
 
         try:
             # We need to wrap data in common.iter_bytes to Provide Python 2 and 3 compatibility
@@ -178,44 +190,67 @@ class SerialSession(Session):
         except serial.SerialTimeoutException:
             return 0, StatusCode.error_timeout
 
-    def flush(self, mask):
-        """Flushes device buffers.
+    def flush(self, mask: BufferOperation) -> StatusCode:
+        """Flush the specified buffers.
 
-        Corresponds to viFlush function of the VISA library. See:
-        https://pyvisa.readthedocs.io/en/latest/api/visalibrarybase.html?highlight=flush#pyvisa.highlevel.VisaLibraryBase.flush
-        for valid values of mask.
+        The buffers can be associated with formatted I/O operations and/or
+        serial communication.
 
-        :param mask: which buffers to clear.
-        :return: return value of the library call.
-        :rtype: :class:`pyvisa.constants.StatusCode`
+        Corresponds to viFlush function of the VISA library.
+
+        Parameters
+        ----------
+        mask : constants.BufferOperation
+            Specifies the action to be taken with flushing the buffer.
+            The values can be combined using the | operator. However multiple
+            operations on a single buffer cannot be combined.
+
+        Returns
+        -------
+        constants.StatusCode
+            Return value of the library call.
+
         """
         if (
-            mask & constants.VI_READ_BUF
-            or mask & constants.VI_READ_BUF_DISCARD
-            or mask & constants.VI_IO_IN_BUF
-            or mask & constants.VI_IO_IN_BUF_DISCARD
+            mask & BufferOperation.discard_read_buffer
+            or mask & BufferOperation.discard_read_buffer_no_io
+            or mask & BufferOperation.discard_receive_buffer
+            or mask & BufferOperation.discard_receive_buffer2
         ):
             self.interface.reset_input_buffer()
-        if mask & constants.VI_WRITE_BUF or mask & constants.VI_IO_OUT_BUF:
+        if (
+            mask & BufferOperation.flush_write_buffer
+            or mask & BufferOperation.flush_transmit_buffer
+        ):
             self.interface.flush()
         if (
-            mask & constants.VI_WRITE_BUF_DISCARD
-            or mask & constants.VI_IO_OUT_BUF_DISCARD
+            mask & BufferOperation.discard_write_buffer
+            or mask & BufferOperation.discard_transmit_buffer
         ):
             self.interface.reset_output_buffer()
 
         return StatusCode.success
 
-    def _get_attribute(self, attribute):
+    def _get_attribute(
+        self, attribute: constants.ResourceAttribute
+    ) -> Tuple[Any, StatusCode]:
         """Get the value for a given VISA attribute for this session.
 
         Use to implement custom logic for attributes.
 
-        :param attribute: Resource attribute for which the state query is made
-        :return: The state of the queried attribute for a specified resource, return value of the library call.
-        :rtype: (unicode | str | list | int, VISAStatus)
-        """
+        Parameters
+        ----------
+        attribute : ResourceAttribute
+            Attribute for which the state query is made
 
+        Returns
+        -------
+        Any
+            State of the queried attribute for a specified resource
+        StatusCode
+            Return value of the library call.
+
+        """
         if attribute == constants.VI_ATTR_ASRL_ALLOW_TRANSMIT:
             raise NotImplementedError
 
@@ -302,17 +337,26 @@ class SerialSession(Session):
 
         raise UnknownAttribute(attribute)
 
-    def _set_attribute(self, attribute, attribute_state):
+    def _set_attribute(
+        self, attribute: constants.ResourceAttribute, attribute_state: Any
+    ) -> StatusCode:
         """Sets the state of an attribute.
 
         Corresponds to viSetAttribute function of the VISA library.
 
-        :param attribute: Attribute for which the state is to be modified. (Attributes.*)
-        :param attribute_state: The state of the attribute to be set for the specified object.
-        :return: return value of the library call.
-        :rtype: VISAStatus
-        """
+        Parameters
+        ----------
+        attribute : constants.ResourceAttribute
+            Attribute for which the state is to be modified. (Attributes.*)
+        attribute_state : Any
+            The state of the attribute to be set for the specified object.
 
+        Returns
+        -------
+        StatusCode
+            Return value of the library call.
+
+        """
         if attribute == constants.VI_ATTR_ASRL_ALLOW_TRANSMIT:
             raise NotImplementedError
 

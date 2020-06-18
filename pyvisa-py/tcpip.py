@@ -1,26 +1,23 @@
 # -*- coding: utf-8 -*-
-"""
-    pyvisa-py.tcpip
-    ~~~~~~~~~~~~~~~
-
-    TCPIP Session implementation using Python Standard library.
+"""TCPIP Session implementation using Python Standard library.
 
 
-    :copyright: 2014-2020 by PyVISA-py Authors, see AUTHORS for more details.
-    :license: MIT, see LICENSE for more details.
+:copyright: 2014-2020 by PyVISA-py Authors, see AUTHORS for more details.
+:license: MIT, see LICENSE for more details.
+
 """
 import random
 import select
 import socket
 import time
+from typing import Any, List, Optional, Tuple
 
 from pyvisa import attributes, constants, errors
+from pyvisa.constants import ResourceAttribute, StatusCode
 
 from . import common
 from .protocols import rpc, vxi11
 from .sessions import Session, UnknownAttribute
-
-StatusCode = constants.StatusCode
 
 # Conversion between VXI11 error codes and VISA status
 # TODO this is so far a best guess, in particular 6 and 29 are likely wrong
@@ -44,17 +41,26 @@ VXI11_ERRORS_TO_VISA = {
 
 @Session.register(constants.InterfaceType.tcpip, "INSTR")
 class TCPIPInstrSession(Session):
-    """A TCPIP Session that uses the network standard library to do the low
-    level communication using VXI-11
+    """A TCPIP Session built on socket standard library using VXI-11 protocol."""
 
-    """
+    #: Maximum size of a chunk of data in bytes.
+    max_recv_size: int
+
+    #: Time to wait before erroring with a timeout when trying to acquire a lock
+    lock_timeout: int
+
+    #: Unique ID of the client used to authenticate messages.
+    client_id: int
+
+    #: ID of the link used for VXI-11 communication
+    link: int
 
     @staticmethod
-    def list_resources():
+    def list_resources() -> List[str]:
         # TODO: is there a way to get this?
         return []
 
-    def after_parsing(self):
+    def after_parsing(self) -> None:
         # TODO: board_number not handled
         # vx11 expect all timeouts to be expressed in ms and should be integers
         try:
@@ -64,7 +70,6 @@ class TCPIPInstrSession(Session):
         except rpc.RPCError:
             raise errors.VisaIOError(constants.VI_ERROR_RSRC_NFOUND)
 
-        self.max_recv_size = 1024
         self.lock_timeout = 10000
         self.client_id = random.getrandbits(31)
 
@@ -82,7 +87,7 @@ class TCPIPInstrSession(Session):
             attribute = getattr(constants, "VI_ATTR_" + name)
             self.attrs[attribute] = attributes.AttributesByID[attribute].default
 
-    def close(self):
+    def close(self) -> None:
         try:
             self.interface.destroy_link(self.link)
         except (errors.VisaIOError, socket.error, rpc.RPCError) as e:
@@ -92,14 +97,23 @@ class TCPIPInstrSession(Session):
         self.link = None
         self.interface = None
 
-    def read(self, count):
+    def read(self, count: int) -> Tuple[bytes, StatusCode]:
         """Reads data from device or interface synchronously.
 
         Corresponds to viRead function of the VISA library.
 
-        :param count: Number of bytes to be read.
-        :return: data read, return value of the library call.
-        :rtype: bytes, VISAStatus
+        Parameters
+        ----------
+        count : int
+            Number of bytes to be read.
+
+        Returns
+        -------
+        bytes
+            Data read
+        StatusCode
+            Return value of the library call.
+
         """
         if count < self.max_recv_size:
             chunk_length = count
@@ -146,18 +160,24 @@ class TCPIPInstrSession(Session):
 
         return bytes(read_data), status
 
-    def write(self, data):
+    def write(self, data: bytes) -> Tuple[int, StatusCode]:
         """Writes data to device or interface synchronously.
 
         Corresponds to viWrite function of the VISA library.
 
-        :param data: data to be written.
-        :type data: str
-        :return: Number of bytes actually transferred, return value of the
-            library call.
-        :rtype: int, VISAStatus
-        """
+        Parameters
+        ----------
+        data : bytes
+            Data to be written.
 
+        Returns
+        -------
+        int
+            Number of bytes actually transferred
+        StatusCode
+            Return value of the library call.
+
+        """
         send_end, _ = self.get_attribute(constants.VI_ATTR_SEND_END_EN)
         chunk_size = 1024
 
@@ -190,17 +210,24 @@ class TCPIPInstrSession(Session):
         except vxi11.Vxi11Error:
             return 0, StatusCode.error_timeout
 
-    def _get_attribute(self, attribute):
+    def _get_attribute(self, attribute: ResourceAttribute) -> Tuple[Any, StatusCode]:
         """Get the value for a given VISA attribute for this session.
 
         Use to implement custom logic for attributes.
 
-        :param attribute: Resource attribute for which the state query is made
-        :return: The state of the queried attribute for a specified resource,
-            return value of the library call.
-        :rtype: (unicode | str | list | int, VISAStatus)
-        """
+        Parameters
+        ----------
+        attribute :
+            Resource attribute for which the state query is made
 
+        Returns
+        -------
+        Any
+            The state of the queried attribute for a specified resource
+        StatusCode
+            Return value of the library call.
+
+        """
         if attribute == constants.VI_ATTR_TCPIP_ADDR:
             return self.parsed.host_address, StatusCode.success
 
@@ -224,85 +251,114 @@ class TCPIPInstrSession(Session):
 
         raise UnknownAttribute(attribute)
 
-    def _set_attribute(self, attribute, attribute_state):
+    def _set_attribute(
+        self, attribute: ResourceAttribute, attribute_state: Any
+    ) -> StatusCode:
         """Sets the state of an attribute.
 
         Corresponds to viSetAttribute function of the VISA library.
 
-        :param attribute: Attribute for which the state is to be modified.
-            (Attributes.*)
-        :param attribute_state: The state of the attribute to be set for the
-            specified object.
-        :return: return value of the library call.
-        :rtype: VISAStatus
-        """
+        Parameters
+        ----------
+        attribute : ResourceAttribute
+             Attribute for which the state is to be modified.
+        attribute_state : Any
+            The state of the attribute to be set for the specified object.
 
+        Returns
+        -------
+        StatusCode
+            Return value of the library call.
+
+        """
         raise UnknownAttribute(attribute)
 
-    def assert_trigger(self, protocol):
+    def assert_trigger(self, protocol: constants.TriggerProtocol):
         """Asserts software or hardware trigger.
 
         Corresponds to viAssertTrigger function of the VISA library.
 
-        :param protocol: Trigger protocol to use during assertion.
-            (Constants.PROT*)
-        :return: return value of the library call.
-        :rtype: VISAStatus
-        """
+        Parameters
+        ----------
+        protocol : constants.TriggerProtocol
+            Trigger protocol to use during assertion. Only default is supported.
 
+        Returns
+        -------
+        StatusCode
+            Return value of the library call.
+
+        """
+        # XXX make this nicer (either validate protocol or pass it)
         error = self.interface.device_trigger(
-            self.link, 0, self.lock_timeout, self._io_timeout
+            self.link, 0, self.lock_timeout, self._io_timeout,
         )
 
         return VXI11_ERRORS_TO_VISA[error]
 
-    def clear(self):
+    def clear(self) -> StatusCode:
         """Clears a device.
 
         Corresponds to viClear function of the VISA library.
 
-        :return: return value of the library call.
-        :rtype: VISAStatus
         """
-
         error = self.interface.device_clear(
             self.link, 0, self.lock_timeout, self._io_timeout
         )
 
         return VXI11_ERRORS_TO_VISA[error]
 
-    def read_stb(self):
+    def read_stb(self) -> Tuple[int, StatusCode]:
         """Reads a status byte of the service request.
 
         Corresponds to viReadSTB function of the VISA library.
 
-        :return: Service request status byte, return value of the library call.
-        :rtype: int, :class:`pyvisa.constants.StatusCode`
-        """
+        Returns
+        -------
+        int
+            Service request status byte
+        StatusCode
+            Return value of the library call.
 
+        """
         error, stb = self.interface.device_read_stb(
             self.link, 0, self.lock_timeout, self._io_timeout
         )
 
         return stb, VXI11_ERRORS_TO_VISA[error]
 
-    def lock(self, lock_type, timeout, requested_key=None):
+    def lock(
+        self,
+        lock_type: constants.Lock,
+        timeout: int,
+        requested_key: Optional[str] = None,
+    ) -> Tuple[str, constants.StatusCode]:
         """Establishes an access mode to the specified resources.
 
         Corresponds to viLock function of the VISA library.
 
-        :param lock_type: Specifies the type of lock requested, either
-            Constants.EXCLUSIVE_LOCK or Constants.SHARED_LOCK.
-        :param timeout: Absolute time period (in milliseconds) that a resource
-            waits to get unlocked by the locking session before returning an
-            error.
-        :param requested_key: This parameter is not used and should be set to
-            VI_NULL when lockType is VI_EXCLUSIVE_LOCK.
-        :return: access_key that can then be passed to other sessions to share
-            the lock, return value of the library call.
-        :rtype: str, VISAStatus
-        """
+        Parameters
+        ----------
+        session : VISASession
+            Unique logical identifier to a session.
+        lock_type : constants.Lock
+            Specifies the type of lock requested.
+        timeout : int
+            Absolute time period (in milliseconds) that a resource waits to get
+            unlocked by the locking session before returning an error.
+        requested_key : Optional[str], optional
+            Requested locking key in the case of a shared lock. For an exclusive
+            lock it should be None.
 
+        Returns
+        -------
+        Optional[str]
+            Key that can then be passed to other sessions to share the lock, or
+            None for an exclusive lock.
+        StatusCode
+            Return value of the library call.
+
+        """
         #  TODO: lock type not implemented
         flags = 0
 
@@ -310,19 +366,24 @@ class TCPIPInstrSession(Session):
 
         return "", VXI11_ERRORS_TO_VISA[error]
 
-    def unlock(self):
-        """Relinquishes a lock for the specified resource.
+    def unlock(self) -> constants.StatusCode:
+        """Relinquish a lock for the specified resource.
 
         Corresponds to viUnlock function of the VISA library.
 
-        :return: return value of the library call.
-        :rtype: VISAStatus
+        Returns
+        -------
+        StatusCode
+            Return value of the library call.
+
         """
         error = self.interface.device_unlock(self.link)
 
         return VXI11_ERRORS_TO_VISA[error]
 
-    def _set_timeout(self, attribute, value):
+    def _set_timeout(
+        self, attribute: ResourceAttribute, value: Optional[int]
+    ) -> StatusCode:
         """ Sets timeout calculated value from python way to VI_ way
 
         """
@@ -353,12 +414,15 @@ class TCPIPSocketSession(Session):
     # timeout. The absolute minimum is 1 ms as a consequence.
     # This is valid for connect and read operations
 
+    #: Maximum size of a chunk of data in bytes.
+    max_recv_size: int
+
     @staticmethod
-    def list_resources():
+    def list_resources() -> List[str]:
         # TODO: is there a way to get this?
         return []
 
-    def after_parsing(self):
+    def after_parsing(self) -> None:
         # TODO: board_number not handled
 
         ret_status = self._connect()
@@ -390,7 +454,7 @@ class TCPIPSocketSession(Session):
             attribute = getattr(constants, "VI_ATTR_" + name)
             self.attrs[attribute] = attributes.AttributesByID[attribute].default
 
-    def _connect(self):
+    def _connect(self) -> None:
         timeout = self.open_timeout / 1000.0 if self.open_timeout else 10.0
         try:
             self.interface = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -424,18 +488,27 @@ class TCPIPSocketSession(Session):
             # min_select_timeout
             select_timout = max(select_timout / 2.0, min_select_timeout)
 
-    def close(self):
+    def close(self) -> None:
         self.interface.close()
         self.interface = None
 
-    def read(self, count):
+    def read(self, count: int) -> Tuple[bytes, StatusCode]:
         """Reads data from device or interface synchronously.
 
         Corresponds to viRead function of the VISA library.
 
-        :param count: Number of bytes to be read.
-        :return: data read, return value of the library call.
-        :rtype: bytes, VISAStatus
+         Parameters
+        -----------
+        count : int
+            Number of bytes to be read.
+
+        Returns
+        -------
+        bytes
+            Data read from the device
+        StatusCode
+            Return value of the library call.
+
         """
         if count < self.max_recv_size:
             chunk_length = count
@@ -511,18 +584,24 @@ class TCPIPSocketSession(Session):
                 # min_select_timeout
                 select_timout = max(select_timout / 2.0, min_select_timeout)
 
-    def write(self, data):
+    def write(self, data: bytes) -> Tuple[int, StatusCode]:
         """Writes data to device or interface synchronously.
 
         Corresponds to viWrite function of the VISA library.
 
-        :param data: data to be written.
-        :type data: str
-        :return: Number of bytes actually transferred, return value of the
-            library call.
-        :rtype: int, VISAStatus
-        """
+        Parameters
+        ----------
+        data : bytes
+            Data to be written.
 
+        Returns
+        -------
+        int
+            Number of bytes actually transferred
+        StatusCode
+            Return value of the library call.
+
+        """
         chunk_size = 4096
 
         num = sz = len(data)
@@ -548,63 +627,90 @@ class TCPIPSocketSession(Session):
 
         return offset, StatusCode.success
 
-    def _get_tcpip_nodelay(self, attribute):
+    def _get_tcpip_nodelay(
+        self, attribute: ResourceAttribute
+    ) -> Tuple[constants.VisaBoolean, StatusCode]:
         if self.interface:
             value = self.interface.getsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY)
             return (
-                constants.VI_TRUE if value == 1 else constants.VI_FALSE,
+                constants.VisaBoolean.true
+                if value == 1
+                else constants.VisaBoolean.false,
                 StatusCode.success,
             )
-        return 0, StatusCode.error_nonsupported_attribute
+        return constants.VisaBoolean.false, StatusCode.error_nonsupported_attribute
 
-    def _set_tcpip_nodelay(self, attribute, attribute_state):
+    def _set_tcpip_nodelay(
+        self, attribute: ResourceAttribute, attribute_state: bool
+    ) -> StatusCode:
         if self.interface:
             self.interface.setsockopt(
                 socket.IPPROTO_TCP, socket.TCP_NODELAY, 1 if attribute_state else 0
             )
             return StatusCode.success
-        return 0, StatusCode.error_nonsupported_attribute
+        return StatusCode.error_nonsupported_attribute
 
-    def _get_tcpip_keepalive(self, attribute):
+    def _get_tcpip_keepalive(
+        self, attribute: ResourceAttribute
+    ) -> Tuple[constants.VisaBoolean, StatusCode]:
         if self.interface:
             value = self.interface.getsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE)
             return (
-                constants.VI_TRUE if value == 1 else constants.VI_FALSE,
+                constants.VisaBoolean.true
+                if value == 1
+                else constants.VisaBoolean.false,
                 StatusCode.success,
             )
-        return 0, StatusCode.error_nonsupported_attribute
+        return constants.VisaBoolean.false, StatusCode.error_nonsupported_attribute
 
-    def _set_tcpip_keepalive(self, attribute, attribute_state):
+    def _set_tcpip_keepalive(
+        self, attribute: ResourceAttribute, attribute_state: bool
+    ) -> StatusCode:
         if self.interface:
             self.interface.setsockopt(
                 socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1 if attribute_state else 0
             )
             return StatusCode.success
-        return 0, StatusCode.error_nonsupported_attribute
+        return StatusCode.error_nonsupported_attribute
 
-    def _get_attribute(self, attribute):
+    def _get_attribute(self, attribute: ResourceAttribute) -> Tuple[Any, StatusCode]:
         """Get the value for a given VISA attribute for this session.
 
         Use to implement custom logic for attributes.
 
-        :param attribute: Resource attribute for which the state query is made
-        :return: The state of the queried attribute for a specified resource,
-            return value of the library call.
-        :rtype: (unicode | str | list | int, VISAStatus)
+        Parameters
+        ----------
+        attribute : ResourceAttribute
+            Attribute for which the state query is made
+
+        Returns
+        -------
+        Any
+            State of the queried attribute for a specified resource
+        StatusCode
+            Return value of the library call.
+
         """
         raise UnknownAttribute(attribute)
 
-    def _set_attribute(self, attribute, attribute_state):
+    def _set_attribute(
+        self, attribute: ResourceAttribute, attribute_state: Any
+    ) -> StatusCode:
         """Sets the state of an attribute.
 
         Corresponds to viSetAttribute function of the VISA library.
 
-        :param attribute: Attribute for which the state is to be modified.
-            (Attributes.*)
-        :param attribute_state: The state of the attribute to be set for the
-            specified object.
-        :return: return value of the library call.
-        :rtype: VISAStatus
-        """
+        Parameters
+        ----------
+        attribute : constants.ResourceAttribute
+            Attribute for which the state is to be modified. (Attributes.*)
+        attribute_state : Any
+            The state of the attribute to be set for the specified object.
 
+        Returns
+        -------
+        StatusCode
+            Return value of the library call.
+
+        """
         raise UnknownAttribute(attribute)
