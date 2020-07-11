@@ -8,14 +8,16 @@
 """
 import abc
 import time
-from typing import Any, Callable, Dict, Iterator, Optional, Tuple, Type, TypeVar
+from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple, Type, TypeVar
 
 from pyvisa import attributes, constants, logger, rname
 from pyvisa.constants import ResourceAttribute, StatusCode
 from pyvisa.typing import VISARMSession
 
+from .common import int_to_byte
+
 #: Type var used when typing register.
-T = TypeVar("T", bound="Session")
+T = TypeVar("T", bound=Type["Session"])
 
 
 class UnknownAttribute(Exception):
@@ -101,7 +103,7 @@ class Session(metaclass=abc.ABCMeta):
         """
 
     @abc.abstractmethod
-    def close(self) -> None:
+    def close(self) -> StatusCode:
         """Close the session.
 
         Use it to do final clean ups.
@@ -118,10 +120,10 @@ class Session(metaclass=abc.ABCMeta):
     parsed: rname.ResourceName
 
     #: Session type as (Interface Type, Resource Class)
-    session_type: Optional[Tuple[constants.InterfaceType, str]] = None
+    session_type: Tuple[constants.InterfaceType, str]
 
     #: Timeout in seconds to use when opening the resource.
-    open_timeout: float
+    open_timeout: Optional[float]
 
     #: Value of the timeout in seconds used for general operation
     timeout: Optional[float]
@@ -140,6 +142,11 @@ class Session(metaclass=abc.ABCMeta):
         Tuple[constants.InterfaceType, str], Type["Session"]
     ] = dict()
 
+    @staticmethod
+    def list_resources() -> List[str]:
+        """List the resources available for the resource class."""
+        return []
+
     @classmethod
     def get_low_level_info(cls) -> str:
         """Get info about the backend used by the session."""
@@ -148,7 +155,7 @@ class Session(metaclass=abc.ABCMeta):
     @classmethod
     def iter_valid_session_classes(
         cls,
-    ) -> Iterator[Tuple[constants.InterfaceType, str], Type["Session"]]:
+    ) -> Iterator[Tuple[Tuple[constants.InterfaceType, str], Type["Session"]]]:
         """Iterator over valid sessions classes infos."""
         for key, val in cls._session_classes.items():
             if issubclass(val, Session):
@@ -157,7 +164,7 @@ class Session(metaclass=abc.ABCMeta):
     @classmethod
     def iter_session_classes_issues(
         cls,
-    ) -> Iterator[Tuple[constants.InterfaceType, str], str]:
+    ) -> Iterator[Tuple[Tuple[constants.InterfaceType, str], str]]:
         """Iterator over invalid sessions classes (i.e. those with import errors)."""
         for key, val in cls._session_classes.items():
             try:
@@ -228,7 +235,7 @@ class Session(metaclass=abc.ABCMeta):
     @classmethod
     def register_unavailable(
         cls, interface_type: constants.InterfaceType, resource_class: str, msg: str
-    ) -> Type[object]:
+    ) -> None:
         """Register that no session class exists.
 
         This creates a fake session that will raise a ValueError if called.
@@ -245,18 +252,27 @@ class Session(metaclass=abc.ABCMeta):
 
         Returns
         -------
-        Type[object]
+        Type[Session]
             Fake session.
 
         """
 
-        class _internal(object):
+        class _internal(Session):
 
             #: Message detailing why no session is available.
             session_issue: str = msg
 
             def __init__(self, *args, **kwargs) -> None:
                 raise ValueError(msg)
+
+            def _get_attribute(self, attr):
+                raise NotImplementedError()
+
+            def _set_attribute(self, attr, value):
+                raise NotImplementedError()
+
+            def close(self):
+                raise NotImplementedError()
 
         if (interface_type, resource_class) in cls._session_classes:
             logger.warning(
@@ -272,7 +288,7 @@ class Session(metaclass=abc.ABCMeta):
         resource_manager_session: VISARMSession,
         resource_name: str,
         parsed: Optional[rname.ResourceName] = None,
-        open_timeout: Optional[int] = None,
+        open_timeout: Optional[float] = None,
     ) -> None:
         if parsed is None:
             parsed = rname.parse_resource_name(resource_name)
@@ -343,6 +359,46 @@ class Session(metaclass=abc.ABCMeta):
 
         """
         pass
+
+    def write(self, data: bytes) -> Tuple[int, StatusCode]:
+        """Writes data to device or interface synchronously.
+
+        Corresponds to viWrite function of the VISA library.
+
+        Parameters
+        ----------
+        data : bytes
+            Data to be written.
+
+        Returns
+        -------
+        int
+            Number of bytes actually transferred
+        StatusCode
+            Return value of the library call.
+
+        """
+        raise NotImplementedError
+
+    def read(self, count: int) -> Tuple[bytes, StatusCode]:
+        """Reads data from device or interface synchronously.
+
+        Corresponds to viRead function of the VISA library.
+
+        Parameters
+        -----------
+        count : int
+            Number of bytes to be read.
+
+        Returns
+        -------
+        bytes
+            Data read from the device
+        StatusCode
+            Return value of the library call.
+
+        """
+        raise NotImplementedError()
 
     def clear(self) -> StatusCode:
         """Clears a device.
@@ -687,7 +743,7 @@ class Session(metaclass=abc.ABCMeta):
         count: int,
         end_indicator_checker: Callable[[bytes], bool],
         suppress_end_en: bool,
-        termination_char: str,
+        termination_char: Optional[int],
         termination_char_en: bool,
         timeout_exception: Type[Exception],
     ) -> Tuple[bytes, StatusCode]:
@@ -705,7 +761,7 @@ class Session(metaclass=abc.ABCMeta):
             Function to check if the message is complete.
         suppress_end_en : bool
             Suppress end.
-        termination_char : str
+        termination_char : int
             Stop reading if this character is received.
         termination_char_en : bool
             Is termination char enabled.
@@ -725,11 +781,10 @@ class Session(metaclass=abc.ABCMeta):
         # termination character is in the middle of the  block or that the
         # maximum number of bytes is exceeded
 
-        # Make sure termination_char is a string
-        try:
-            termination_char = chr(termination_char)
-        except TypeError:
-            pass
+        # Turn the termination_char store as an int in VISA attribute in a byte
+        term_char = (
+            int_to_byte(termination_char) if termination_char is not None else b""
+        )
 
         finish_time = None if self.timeout is None else (time.time() + self.timeout)
         out = bytearray()
@@ -747,12 +802,12 @@ class Session(metaclass=abc.ABCMeta):
                         # RULE 6.1.1
                         return bytes(out), StatusCode.success
                 else:
-                    if termination_char_en and termination_char in current:
+                    if termination_char_en and (term_char in current):
                         # RULE 6.1.2
-                        # Return everything upto and including the termination
+                        # Return everything up to and including the termination
                         # character
                         return (
-                            bytes(out[: out.index(termination_char) + 1]),
+                            bytes(out[: out.index(term_char) + 1]),
                             StatusCode.success_termination_character_read,
                         )
                     elif len(out) >= count:
@@ -781,7 +836,7 @@ class Session(metaclass=abc.ABCMeta):
             ret_value = int(self.timeout * 1000.0)
         return ret_value, StatusCode.success
 
-    def _set_timeout(self, attribute: ResourceAttribute, value: Optional[int]):
+    def _set_timeout(self, attribute: ResourceAttribute, value: int):
         """ Sets timeout calculated value from python way to VI_ way
 
         In VISA, the timeout is expressed in milliseconds or using the

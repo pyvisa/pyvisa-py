@@ -12,7 +12,7 @@ import socket
 import time
 from typing import Any, List, Optional, Tuple
 
-from pyvisa import attributes, constants, errors
+from pyvisa import attributes, constants, errors, rname
 from pyvisa.constants import ResourceAttribute, StatusCode
 
 from . import common
@@ -55,6 +55,10 @@ class TCPIPInstrSession(Session):
     #: ID of the link used for VXI-11 communication
     link: int
 
+    # Override parsed to take into account the fact that this class is only used
+    # for a specific kind of resource
+    parsed: rname.TCPIPInstr
+
     @staticmethod
     def list_resources() -> List[str]:
         # TODO: is there a way to get this?
@@ -87,15 +91,17 @@ class TCPIPInstrSession(Session):
             attribute = getattr(constants, "VI_ATTR_" + name)
             self.attrs[attribute] = attributes.AttributesByID[attribute].default
 
-    def close(self) -> None:
+    def close(self) -> StatusCode:
         try:
             self.interface.destroy_link(self.link)
         except (errors.VisaIOError, socket.error, rpc.RPCError) as e:
             print("Error closing VISA link: {}".format(e))
 
         self.interface.close()
-        self.link = None
+        self.link = 0
         self.interface = None
+
+        return StatusCode.success
 
     def read(self, count: int) -> Tuple[bytes, StatusCode]:
         """Reads data from device or interface synchronously.
@@ -120,8 +126,8 @@ class TCPIPInstrSession(Session):
         else:
             chunk_length = self.max_recv_size
 
-        if self.get_attribute(constants.VI_ATTR_TERMCHAR_EN)[0]:
-            term_char, _ = self.get_attribute(constants.VI_ATTR_TERMCHAR)
+        if self.get_attribute(ResourceAttribute.termchar_enabled)[0]:
+            term_char, _ = self.get_attribute(ResourceAttribute.termchar)
             flags = vxi11.OP_FLAG_TERMCHAR_SET
         else:
             term_char = flags = 0
@@ -178,7 +184,7 @@ class TCPIPInstrSession(Session):
             Return value of the library call.
 
         """
-        send_end, _ = self.get_attribute(constants.VI_ATTR_SEND_END_EN)
+        send_end, _ = self.get_attribute(ResourceAttribute.send_end_enabled)
         chunk_size = 1024
 
         try:
@@ -381,9 +387,7 @@ class TCPIPInstrSession(Session):
 
         return VXI11_ERRORS_TO_VISA[error]
 
-    def _set_timeout(
-        self, attribute: ResourceAttribute, value: Optional[int]
-    ) -> StatusCode:
+    def _set_timeout(self, attribute: ResourceAttribute, value: int) -> StatusCode:
         """ Sets timeout calculated value from python way to VI_ way
 
         """
@@ -417,6 +421,10 @@ class TCPIPSocketSession(Session):
     #: Maximum size of a chunk of data in bytes.
     max_recv_size: int
 
+    # Override parsed to take into account the fact that this class is only used
+    # for a specific kind of resource
+    parsed: rname.TCPIPSocket
+
     @staticmethod
     def list_resources() -> List[str]:
         # TODO: is there a way to get this?
@@ -435,35 +443,35 @@ class TCPIPSocketSession(Session):
         # termination char
         self._pending_buffer = bytearray()
 
-        self.attrs[constants.VI_ATTR_TCPIP_ADDR] = self.parsed.host_address
-        self.attrs[constants.VI_ATTR_TCPIP_PORT] = self.parsed.port
-        self.attrs[constants.VI_ATTR_INTF_NUM] = self.parsed.board
-        self.attrs[constants.VI_ATTR_TCPIP_NODELAY] = (
+        self.attrs[ResourceAttribute.tcpip_address] = self.parsed.host_address
+        self.attrs[ResourceAttribute.tcpip_port] = self.parsed.port
+        self.attrs[ResourceAttribute.interface_number] = self.parsed.board
+        self.attrs[ResourceAttribute.tcpip_nodelay] = (
             self._get_tcpip_nodelay,
             self._set_attribute,
         )
-        self.attrs[constants.VI_ATTR_TCPIP_HOSTNAME] = ""
-        self.attrs[constants.VI_ATTR_TCPIP_KEEPALIVE] = (
+        self.attrs[ResourceAttribute.tcpip_hostname] = ""
+        self.attrs[ResourceAttribute.tcpip_keepalive] = (
             self._get_tcpip_keepalive,
             self._set_tcpip_keepalive,
         )
         # to use default as ni visa driver (NI-VISA 15.0)
-        self.attrs[constants.VI_ATTR_SUPPRESS_END_EN] = True
+        self.attrs[ResourceAttribute.suppress_end_enabled] = True
 
         for name in ("TERMCHAR", "TERMCHAR_EN"):
             attribute = getattr(constants, "VI_ATTR_" + name)
             self.attrs[attribute] = attributes.AttributesByID[attribute].default
 
-    def _connect(self) -> None:
+    def _connect(self) -> StatusCode:
         timeout = self.open_timeout / 1000.0 if self.open_timeout else 10.0
         try:
             self.interface = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self.interface.setblocking(0)
+            self.interface.setblocking(False)
             self.interface.connect_ex((self.parsed.host_address, int(self.parsed.port)))
         except Exception as e:
             raise Exception("could not connect: {0}".format(str(e)))
         finally:
-            self.interface.setblocking(1)
+            self.interface.setblocking(True)
 
         # minimum is in interval 100 - 500ms based on timeout
         min_select_timeout = max(min(timeout / 10.0, 0.5), 0.1)
@@ -488,9 +496,10 @@ class TCPIPSocketSession(Session):
             # min_select_timeout
             select_timout = max(select_timout / 2.0, min_select_timeout)
 
-    def close(self) -> None:
+    def close(self) -> StatusCode:
         self.interface.close()
         self.interface = None
+        return StatusCode.success
 
     def read(self, count: int) -> Tuple[bytes, StatusCode]:
         """Reads data from device or interface synchronously.
@@ -515,10 +524,10 @@ class TCPIPSocketSession(Session):
         else:
             chunk_length = self.max_recv_size
 
-        term_char, _ = self.get_attribute(constants.VI_ATTR_TERMCHAR)
+        term_char, _ = self.get_attribute(ResourceAttribute.termchar)
         term_byte = common.int_to_byte(term_char) if term_char else b""
-        term_char_en, _ = self.get_attribute(constants.VI_ATTR_TERMCHAR_EN)
-        suppress_end_en, _ = self.get_attribute(constants.VI_ATTR_SUPPRESS_END_EN)
+        term_char_en, _ = self.get_attribute(ResourceAttribute.termchar_enabled)
+        suppress_end_en, _ = self.get_attribute(ResourceAttribute.suppress_end_enabled)
 
         read_fun = self.interface.recv
 

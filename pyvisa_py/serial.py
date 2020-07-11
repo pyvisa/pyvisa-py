@@ -6,9 +6,9 @@
 :license: MIT, see LICENSE for more details.
 
 """
-from typing import Any, List, Tuple
+from typing import Any, List, Optional, Tuple
 
-from pyvisa import attributes, constants, logger
+from pyvisa import attributes, constants, logger, rname
 from pyvisa.constants import (
     BufferOperation,
     ResourceAttribute,
@@ -31,6 +31,24 @@ except ImportError as e:
     raise
 
 
+def iter_bytes(data: bytes, mask: Optional[int] = None, send_end: bool = False):
+    if send_end and mask is None:
+        raise ValueError("send_end requires a valid mask.")
+
+    if mask is None:
+        for d in data:
+            yield bytes([d])
+
+    else:
+        for d in data[:-1]:
+            yield bytes([d & ~mask])
+
+        if send_end:
+            yield bytes([data[-1] | ~mask])
+        else:
+            yield bytes([data[-1] & ~mask])
+
+
 def to_state(boolean_input: bool) -> constants.LineState:
     """Convert a boolean input into a LineState value."""
     if boolean_input:
@@ -41,6 +59,10 @@ def to_state(boolean_input: bool) -> constants.LineState:
 @Session.register(constants.InterfaceType.asrl, "INSTR")
 class SerialSession(Session):
     """A serial Session that uses PySerial to do the low level communication."""
+
+    # Override parsed to take into account the fact that this class is only used
+    # for a specific kind of resource
+    parsed: rname.ASRLInstr
 
     @staticmethod
     def list_resources() -> List[str]:
@@ -85,8 +107,9 @@ class SerialSession(Session):
             self.interface.write_timeout = self.timeout
         return status
 
-    def close(self) -> None:
+    def close(self) -> StatusCode:
         self.interface.close()
+        return StatusCode.success
 
     def read(self, count: int) -> Tuple[bytes, StatusCode]:
         """Reads data from device or interface synchronously.
@@ -116,12 +139,12 @@ class SerialSession(Session):
 
         elif end_in == SerialTermination.last_bit:
             mask = 2 ** self.interface.bytesize
-            checker = lambda current: bool(common.last_int(current) & mask)
+            checker = lambda current: bool(current[-1] & mask)
 
         elif end_in == SerialTermination.termination_char:
             end_char, _ = self.get_attribute(ResourceAttribute.termchar)
 
-            checker = lambda current: common.last_int(current) == end_char
+            checker = lambda current: current[-1] == end_char
 
         else:
             raise ValueError("Unknown value for VI_ATTR_ASRL_END_IN: %s" % end_in)
@@ -160,19 +183,17 @@ class SerialSession(Session):
         send_end, _ = self.get_attribute(ResourceAttribute.send_end_enabled)
 
         try:
-            # We need to wrap data in common.iter_bytes to Provide Python 2 and 3 compatibility
-
             if end_out in (SerialTermination.none, SerialTermination.termination_break):
-                data = common.iter_bytes(data)
+                data = data
 
             elif end_out == SerialTermination.last_bit:
-                last_bit, _ = self.get_attribute(constants.VI_ATTR_ASRL_DATA_BITS)
+                last_bit, _ = self.get_attribute(ResourceAttribute.asrl_data_bits)
                 mask = 1 << (last_bit - 1)
-                data = common.iter_bytes(data, mask, send_end)
+                data = iter_bytes(data, mask, send_end)
 
             elif end_out == SerialTermination.termination_char:
-                term_char, _ = self.get_attribute(constants.VI_ATTR_TERMCHAR)
-                data = common.iter_bytes(data + common.int_to_byte(term_char))
+                term_char, _ = self.get_attribute(ResourceAttribute.termchar)
+                data = data + common.int_to_byte(term_char)
 
             else:
                 raise ValueError("Unknown value for VI_ATTR_ASRL_END_OUT: %s" % end_out)
@@ -384,7 +405,7 @@ class SerialSession(Session):
             raise NotImplementedError
 
         elif attribute == constants.VI_ATTR_ASRL_DSR_STATE:
-            return to_state(self.interface.getDSR())
+            raise NotImplementedError
 
         elif attribute == constants.VI_ATTR_ASRL_DTR_STATE:
             raise NotImplementedError

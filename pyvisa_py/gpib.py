@@ -8,18 +8,19 @@
 """
 import ctypes  # Used for missing bindings not ideal
 from bisect import bisect
-from typing import Any, Iterator, List, Optional, Tuple
+from typing import Any, Iterator, List, Tuple, Union
 
 from pyvisa import attributes, constants, logger
 from pyvisa.constants import ResourceAttribute, StatusCode
+from pyvisa.rname import GPIBInstr, GPIBIntfc
 
 from .sessions import Session, UnknownAttribute
 
 try:
     GPIB_CTYPES = True
-    from gpib_ctypes import gpib
-    from gpib_ctypes.Gpib import Gpib
-    from gpib_ctypes.gpib.gpib import _lib as gpib_lib
+    from gpib_ctypes import gpib  # typing: ignore
+    from gpib_ctypes.Gpib import Gpib  # typing: ignore
+    from gpib_ctypes.gpib.gpib import _lib as gpib_lib  # typing: ignore
 
     # Add some extra binding not available by default
     extra_funcs = [
@@ -35,8 +36,8 @@ try:
 except ImportError:
     GPIB_CTYPES = False
     try:
-        import gpib
-        from Gpib import Gpib, GpibError
+        import gpib  # typing: ignore
+        from Gpib import Gpib, GpibError  # typing: ignore
     except ImportError as e:
         Session.register_unavailable(
             constants.InterfaceType.gpib,
@@ -215,7 +216,7 @@ def convert_gpib_status(status: int) -> StatusCode:
         return StatusCode.success
 
 
-class _GPIBCommon:
+class _GPIBCommon(Session):
     """Common base class for GPIB sessions.
 
     Both INSTR and INTFC resources share the following attributes:
@@ -236,6 +237,10 @@ class _GPIBCommon:
 
     """
 
+    # Override parsed to take into account the fact that this class is only used
+    # for a specific kind of resource
+    parsed: Union[GPIBIntfc, GPIBInstr]
+
     #: Bus wide controller.
     controller: Gpib
 
@@ -255,7 +260,7 @@ class _GPIBCommon:
         send_eoi = 1
         eos_mode = 0
         self.interface = None
-        if self.parsed.resource_class == "INSTR":
+        if isinstance(self.parsed, GPIBInstr):
             pad = int(self.parsed.primary_address)
             # Used to talk to a specific resource
             self.interface = Gpib(
@@ -271,7 +276,7 @@ class _GPIBCommon:
 
         # Force timeout setting to interface
         self.set_attribute(
-            constants.VI_ATTR_TMO_VALUE,
+            constants.ResourceAttribute.timeout_value,
             attributes.AttributesByID[constants.VI_ATTR_TMO_VALUE].default,
         )
 
@@ -279,7 +284,9 @@ class _GPIBCommon:
             attribute = getattr(constants, "VI_ATTR_" + name)
             self.attrs[attribute] = attributes.AttributesByID[attribute].default
 
-    def _get_timeout(self, attribute: constants.ResourceAttribute) -> Optional[int]:
+    def _get_timeout(
+        self, attribute: constants.ResourceAttribute
+    ) -> Tuple[int, StatusCode]:
         if self.interface:
             # 0x3 is the hexadecimal reference to the IbaTMO (timeout) configuration
             # option in linux-gpib.
@@ -291,9 +298,7 @@ class _GPIBCommon:
                 self.timeout = None
         return super(_GPIBCommon, self)._get_timeout(attribute)
 
-    def _set_timeout(
-        self, attribute: constants.ResourceAttribute, value: Optional[int]
-    ):
+    def _set_timeout(self, attribute: constants.ResourceAttribute, value: int):
         """Set the timeout value.
 
         linux-gpib only supports 18 discrete timeout values. If a timeout
@@ -321,6 +326,8 @@ class _GPIBCommon:
 
         """
         status = super(_GPIBCommon, self)._set_timeout(attribute, value)
+        # Inspect the result of setting the value to decide how to translate the result
+        # on the interface.
         if self.interface:
             if self.timeout is None:
                 gpib_timeout = 0
@@ -331,12 +338,13 @@ class _GPIBCommon:
             self.interface.timeout(gpib_timeout)
         return status
 
-    def close(self) -> None:
+    def close(self) -> StatusCode:
         if self.interface:
             self.interface.close()
         self.controller.close()
+        return StatusCode.success
 
-    def read(self, count: int) -> bytes:
+    def read(self, count: int) -> Tuple[bytes, StatusCode]:
         """Reads data from device or interface synchronously.
 
         Corresponds to viRead function of the VISA library.
@@ -414,7 +422,7 @@ class _GPIBCommon:
             Return value of the library call.
 
         """
-        if self.parsed.interface_type == "INTFC":
+        if isinstance(self.parsed, GPIBIntfc):
             if mode not in (
                 constants.VI_GPIB_REN_ASSERT,
                 constants.VI_GPIB_REN_DEASSERT,
@@ -447,7 +455,10 @@ class _GPIBCommon:
                 constants.VI_GPIB_REN_ASSERT_ADDRESS,
             ):
                 ifc.remote_enable(1)
-                if mode == constants.VI_GPIB_REN_ASSERT_ADDRESS:
+                if (
+                    isinstance(self.parsed, GPIBInstr)
+                    and mode == constants.VI_GPIB_REN_ASSERT_ADDRESS
+                ):
                     # 0 for the secondary address means don't use it
                     ifc.listener(
                         self.parsed.primary_address, self.parsed.secondary_address
@@ -605,8 +616,12 @@ class _GPIBCommon:
 
 # TODO: Check secondary addresses.
 @Session.register(constants.InterfaceType.gpib, "INSTR")
-class GPIBSession(_GPIBCommon, Session):
+class GPIBSession(_GPIBCommon):
     """A GPIB Session that uses linux-gpib to do the low level communication."""
+
+    # Override parsed to take into account the fact that this class is only used
+    # for a specific kind of resource
+    parsed: GPIBInstr
 
     @staticmethod
     def list_resources() -> List[str]:
@@ -757,9 +772,12 @@ class GPIBSession(_GPIBCommon, Session):
 
 
 @Session.register(constants.InterfaceType.gpib, "INTFC")
-class GPIBInterface(_GPIBCommon, Session):
-    """A GPIB Interface that uses linux-gpib to do the low level communication.
-    """
+class GPIBInterface(_GPIBCommon):
+    """A GPIB Interface that uses linux-gpib to do the low level communication."""
+
+    # Override parsed to take into account the fact that this class is only used
+    # for a specific kind of resource
+    parsed: GPIBIntfc
 
     @staticmethod
     def list_resources() -> List[str]:
@@ -787,7 +805,7 @@ class GPIBInterface(_GPIBCommon, Session):
         try:
             return self.controller.command(command_bytes), StatusCode.success
         except gpib.GpibError as e:
-            return convert_gpib_error(e, self.controller.ibsta(), "gpib command")
+            return 0, convert_gpib_error(e, self.controller.ibsta(), "gpib command")
 
     def gpib_send_ifc(self) -> StatusCode:
         """Pulse the interface clear line (IFC) for at least 100 microseconds.
@@ -922,7 +940,7 @@ class GPIBInterface(_GPIBCommon, Session):
                 # some versions of linux-gpib do not expose Gpib.lines()
                 return constants.VI_STATE_UNKNOWN, StatusCode.success
 
-        return super(GPIBSession, self)._get_attribute(attribute)
+        return super()._get_attribute(attribute)
 
     def _set_attribute(
         self, attribute: ResourceAttribute, attribute_state: Any
@@ -951,4 +969,4 @@ class GPIBInterface(_GPIBCommon, Session):
         # INTFC don't have an interface so use the controller
         _ = self.controller
 
-        return super(GPIBSession, self)._set_attribute(attribute, attribute_state)
+        return super()._set_attribute(attribute, attribute_state)

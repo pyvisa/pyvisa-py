@@ -8,11 +8,12 @@
 """
 import random
 from collections import OrderedDict
-from typing import Any, Dict, Iterable, Iterator, Optional, Tuple, Union
+from typing import Any, Dict, Iterable, Optional, Tuple, Union, List, cast
 
-from pyvisa import constants, errors, highlevel, rname
+from pyvisa import constants, highlevel, rname
 from pyvisa.constants import StatusCode
 from pyvisa.typing import VISAEventContext, VISARMSession, VISASession
+from pyvisa.util import LibraryPath
 
 from . import sessions
 from .common import logger
@@ -35,6 +36,9 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
     the user just as NIVisaLibrary.
 
     """
+
+    #: Live session object identified by a randon session ID
+    sessions: Dict[int, sessions.Session]
 
     # Try to import packages implementing lower level functionality.
     try:
@@ -65,42 +69,32 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
     except Exception as e:
         logger.debug("GPIBSession was not imported %s." % e)
 
-    @classmethod
-    def get_session_classes(cls) -> Dict[sessions.Session]:
-        return sessions.Session._session_classes
-
-    @classmethod
-    def iter_session_classes_issues(
-        cls,
-    ) -> Iterator[Tuple[constants.InterfaceType, str], str]:
-        return sessions.Session.iter_session_classes_issues()
-
     @staticmethod
-    def get_library_paths() -> Iterable[str]:
+    def get_library_paths() -> Iterable[LibraryPath]:
         """List a dummy library path to allow to create the library."""
-        return ("py",)
+        return (LibraryPath("py"),)
 
     @staticmethod
-    def get_debug_info() -> Dict[str, Union[str, Dict[str, str]]]:
+    def get_debug_info() -> Dict[str, Union[str, List[str], Dict[str, str]]]:
         """Return a list of lines with backend info."""
         from . import __version__
 
-        d = OrderedDict()
+        d: OrderedDict[str, Union[str, List[str], Dict[str, str]]] = OrderedDict()
         d["Version"] = "%s" % __version__
 
-        for key, val in PyVisaLibrary.get_session_classes().items():
+        for key, val in sessions.Session.iter_valid_session_classes():
             key_name = "%s %s" % (key[0].name.upper(), key[1])
-            try:
-                d[key_name] = getattr(val, "session_issue").split("\n")
-            except AttributeError:
-                d[key_name] = "Available " + val.get_low_level_info()
+            d[key_name] = "Available " + val.get_low_level_info()
+
+        for key, issue in sessions.Session.iter_session_classes_issues():
+            key_name = "%s %s" % (key[0].name.upper(), key[1])
+            d[key_name] = issue.split("\n")
 
         return d
 
     def _init(self) -> None:
         """Custom initialization code."""
-        #: map session handle to session object.
-        #: dict[int, session.Session]
+        # Map session handle to session object.
         self.sessions = {}
 
     def _register(self, obj: object) -> VISASession:
@@ -117,13 +111,12 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
         self.sessions[session] = obj
         return session
 
-    # noinspection PyShadowingBuiltins
     def open(
         self,
         session: VISARMSession,
         resource_name: str,
         access_mode: constants.AccessModes = constants.AccessModes.no_lock,
-        open_timeout: Optional[int] = constants.VI_TMO_IMMEDIATE,
+        open_timeout: int = constants.VI_TMO_IMMEDIATE,
     ) -> Tuple[VISASession, StatusCode]:
         """Opens a session to the specified resource.
 
@@ -131,20 +124,21 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
 
         Parameters
         ----------
-        session : typing.VISARMSession
+        session : VISARMSession
             Resource Manager session (should always be a session returned from
             open_default_resource_manager()).
         resource_name : str
             Unique symbolic name of a resource.
         access_mode : constants.AccessModes, optional
             Specifies the mode by which the resource is to be accessed.
-        open_timeout : Optional[int]
+        open_timeout : int
             Specifies the maximum time period (in milliseconds) that this
-            operation waits before returning an error.
+            operation waits before returning an error. constants.VI_TMO_IMMEDIATE
+            and constants.VI_TMO_INFINITE are used as min and max.
 
         Returns
         -------
-        typing.VISASession
+        VISASession
             Unique logical identifier reference to a session
         StatusCode
             Return value of the library call.
@@ -161,7 +155,10 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
         try:
             parsed = rname.parse_resource_name(resource_name)
         except rname.InvalidResourceName:
-            return 0, StatusCode.error_invalid_resource_name
+            return (
+                VISASession(0),
+                self.handle_return_value(None, StatusCode.error_invalid_resource_name),
+            )
 
         cls = sessions.Session.get_session_class(
             parsed.interface_type_const, parsed.resource_class
@@ -190,12 +187,12 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
         try:
             sess = self.sessions[session]
         except KeyError:
-            return constants.StatusCode.error_invalid_object
-        return sess.clear()
+            return self.handle_return_value(session, StatusCode.error_invalid_object)
+        return self.handle_return_value(session, sess.clear())
 
     def flush(
         self, session: VISASession, mask: constants.BufferOperation
-    ) -> constants.StatusCode:
+    ) -> StatusCode:
         """Flush the specified buffers.
 
         The buffers can be associated with formatted I/O operations and/or
@@ -214,19 +211,19 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
 
         Returns
         -------
-        constants.StatusCode
+        StatusCode
             Return value of the library call.
 
         """
         try:
             sess = self.sessions[session]
         except KeyError:
-            return constants.StatusCode.error_invalid_object
-        return sess.flush(mask)
+            return self.handle_return_value(session, StatusCode.error_invalid_object)
+        return self.handle_return_value(session, sess.flush(mask))
 
     def gpib_command(
         self, session: VISASession, command_byte: bytes
-    ) -> Tuple[int, constants.StatusCode]:
+    ) -> Tuple[int, StatusCode]:
         """Write GPIB command bytes on the bus.
 
         Corresponds to viGpibCommand function of the VISA library.
@@ -242,18 +239,19 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
         -------
         int
             Number of written bytes
-        constants.StatusCode
+        StatusCode
             Return value of the library call.
 
         """
         try:
-            return self.sessions[session].gpib_command(command_byte)
+            written, st = self.sessions[session].gpib_command(command_byte)
+            return written, self.handle_return_value(session, st)
         except KeyError:
-            return constants.StatusCode.error_invalid_object
+            return 0, self.handle_return_value(session, StatusCode.error_invalid_object)
 
     def assert_trigger(
         self, session: VISASession, protocol: constants.TriggerProtocol
-    ) -> constants.StatusCode:
+    ) -> StatusCode:
         """Assert software or hardware trigger.
 
         Corresponds to viAssertTrigger function of the VISA library.
@@ -267,16 +265,18 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
 
         Returns
         -------
-        constants.StatusCode
+        StatusCode
             Return value of the library call.
 
         """
         try:
-            return self.sessions[session].assert_trigger(protocol)
+            return self.handle_return_value(
+                session, self.sessions[session].assert_trigger(protocol)
+            )
         except KeyError:
-            return constants.StatusCode.error_invalid_object
+            return self.handle_return_value(session, StatusCode.error_invalid_object)
 
-    def gpib_send_ifc(self, session: VISASession) -> constants.StatusCode:
+    def gpib_send_ifc(self, session: VISASession) -> StatusCode:
         """Pulse the interface clear line (IFC) for at least 100 microseconds.
 
         Corresponds to viGpibSendIFC function of the VISA library.
@@ -288,19 +288,20 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
 
         Returns
         -------
-        constants.StatusCode
+        StatusCode
             Return value of the library call.
 
         """
         try:
-            sess = self.sessions[session]
+            return self.handle_return_value(
+                session, self.sessions[session].gpib_send_ifc()
+            )
         except KeyError:
-            return constants.StatusCode.error_invalid_object
-        return sess.gpib_send_ifc()
+            return self.handle_return_value(session, StatusCode.error_invalid_object)
 
     def gpib_control_ren(
         self, session: VISASession, mode: constants.RENLineOperation
-    ) -> constants.StatusCode:
+    ) -> StatusCode:
         """Controls the state of the GPIB Remote Enable (REN) interface line.
 
         Optionally the remote/local state of the device can also be set.
@@ -316,19 +317,20 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
 
         Returns
         -------
-        constants.StatusCode
+        StatusCode
             Return value of the library call.
 
         """
         try:
-            sess = self.sessions[session]
+            return self.handle_return_value(
+                session, self.sessions[session].gpib_control_ren(mode)
+            )
         except KeyError:
-            return constants.StatusCode.error_invalid_object
-        return sess.gpib_control_ren()
+            return self.handle_return_value(session, StatusCode.error_invalid_object)
 
     def gpib_control_atn(
         self, session: VISASession, mode: constants.ATNLineOperation
-    ) -> constants.StatusCode:
+    ) -> StatusCode:
         """Specifies the state of the ATN line and the local active controller state.
 
         Corresponds to viGpibControlATN function of the VISA library.
@@ -342,19 +344,20 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
 
         Returns
         -------
-        constants.StatusCode
+        StatusCode
             Return value of the library call.
 
         """
         try:
-            sess = self.sessions[session]
+            return self.handle_return_value(
+                session, self.sessions[session].gpib_control_atn(mode)
+            )
         except KeyError:
-            return constants.StatusCode.error_invalid_object
-        return sess.gpib_control_atn()
+            return self.handle_return_value(session, StatusCode.error_invalid_object)
 
     def gpib_pass_control(
         self, session: VISASession, primary_address: int, secondary_address: int
-    ) -> constants.StatusCode:
+    ) -> StatusCode:
         """Tell a GPIB device to become controller in charge (CIC).
 
         Corresponds to viGpibPassControl function of the VISA library.
@@ -372,17 +375,21 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
 
         Returns
         -------
-        constants.StatusCode
+        StatusCode
             Return value of the library call.
 
         """
         try:
-            sess = self.sessions[session]
+            return self.handle_return_value(
+                session,
+                self.sessions[session].gpib_pass_control(
+                    primary_address, secondary_address
+                ),
+            )
         except KeyError:
-            return constants.StatusCode.error_invalid_object
-        return sess.gpib_pass_control()
+            return self.handle_return_value(session, StatusCode.error_invalid_object)
 
-    def read_stb(self, session: VISASession) -> Tuple[int, constants.StatusCode]:
+    def read_stb(self, session: VISASession) -> Tuple[int, StatusCode]:
         """Reads a status byte of the service request.
 
         Corresponds to viReadSTB function of the VISA library.
@@ -396,19 +403,20 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
         -------
         int
             Service request status byte
-        constants.StatusCode
+        StatusCode
             Return value of the library call.
 
         """
         try:
             sess = self.sessions[session]
         except KeyError:
-            return 0, constants.StatusCode.error_invalid_object
-        return sess.read_stb()
+            return 0, self.handle_return_value(session, StatusCode.error_invalid_object)
+        stb, status_code = sess.read_stb()
+        return stb, self.handle_return_value(session, status_code)
 
     def close(
         self, session: Union[VISASession, VISAEventContext, VISARMSession]
-    ) -> constants.StatusCode:
+    ) -> StatusCode:
         """Closes the specified session, event, or find list.
 
         Corresponds to viClose function of the VISA library.
@@ -420,20 +428,21 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
 
         Returns
         -------
-        constants.StatusCode
+        StatusCode
             Return value of the library call.
 
         """
         try:
             sess = self.sessions[session]
+            # The RM session directly references the library.
             if sess is not self:
-                sess.close()
+                return self.handle_return_value(session, sess.close())
+            else:
+                return self.handle_return_value(session, StatusCode.success)
         except KeyError:
-            return StatusCode.error_invalid_object
+            return self.handle_return_value(session, StatusCode.error_invalid_object)
 
-    def open_default_resource_manager(
-        self,
-    ) -> Tuple[VISARMSession, constants.StatusCode]:
+    def open_default_resource_manager(self,) -> Tuple[VISARMSession, StatusCode]:
         """This function returns a session to the Default Resource Manager resource.
 
         Corresponds to viOpenDefaultRM function of the VISA library.
@@ -442,11 +451,14 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
         -------
         VISARMSession
             Unique logical identifier to a Default Resource Manager session
-        constants.StatusCode
+        StatusCode
             Return value of the library call.
 
         """
-        return self._register(self), StatusCode.success
+        return (
+            cast(VISARMSession, self._register(self)),
+            self.handle_return_value(None, StatusCode.success),
+        )
 
     def list_resources(
         self, session: VISARMSession, query: str = "?*::INSTR"
@@ -468,22 +480,23 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
         """
         # For each session type, ask for the list of connected resources and
         # merge them into a single list.
-
-        resources = sum(
-            [
-                st.list_resources()
-                for key, st in sessions.Session.iter_valid_session_classes()
-            ],
-            [],
+        # HINT: the cast should not be necessary here
+        resources = cast(
+            List[str],
+            (
+                sum(
+                    [
+                        st.list_resources()
+                        for key, st in sessions.Session.iter_valid_session_classes()
+                    ]
+                )
+                or []
+            ),
         )
 
-        resources = rname.filter(resources, query)
+        return rname.filter(resources, query)
 
-        return resources
-
-    def read(
-        self, session: VISASession, count: int
-    ) -> Tuple[bytes, constants.StatusCode]:
+    def read(self, session: VISASession, count: int) -> Tuple[bytes, StatusCode]:
         """Reads data from device or interface synchronously.
 
         Corresponds to viRead function of the VISA library.
@@ -499,24 +512,22 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
         -------
         bytes
             Date read
-        constants.StatusCode
+        StatusCode
             Return value of the library call.
 
         """
         # from the session handle, dispatch to the read method of the session object.
         try:
-            ret = self.sessions[session].read(count)
+            data, status_code = self.sessions[session].read(count)
         except KeyError:
-            return 0, StatusCode.error_invalid_object
+            return (
+                b"",
+                self.handle_return_value(session, StatusCode.error_invalid_object),
+            )
 
-        if ret[1] < 0:
-            raise errors.VisaIOError(ret[1])
+        return data, self.handle_return_value(session, status_code)
 
-        return ret
-
-    def write(
-        self, session: VISASession, data: bytes
-    ) -> Tuple[int, constants.StatusCode]:
+    def write(self, session: VISASession, data: bytes) -> Tuple[int, StatusCode]:
         """Write data to device or interface synchronously.
 
         Corresponds to viWrite function of the VISA library.
@@ -532,24 +543,19 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
         -------
         int
             Number of bytes actually transferred
-        constants.StatusCode
+        StatusCode
             Return value of the library call.
 
         """
         # from the session handle, dispatch to the write method of the session object.
         try:
-            ret = self.sessions[session].write(data)
+            written, status_code = self.sessions[session].write(data)
         except KeyError:
-            return 0, StatusCode.error_invalid_object
+            return 0, self.handle_return_value(session, StatusCode.error_invalid_object)
 
-        if ret[1] < 0:
-            raise errors.VisaIOError(ret[1])
+        return written, self.handle_return_value(session, status_code)
 
-        return ret
-
-    def buffer_read(
-        self, session: VISASession, count: int
-    ) -> Tuple[bytes, constants.StatusCode]:
+    def buffer_read(self, session: VISASession, count: int) -> Tuple[bytes, StatusCode]:
         """Reads data through the use of a formatted I/O read buffer.
 
         The data can be read from a device or an interface.
@@ -567,15 +573,13 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
         -------
         bytes
             Data read
-        constants.StatusCode
+        StatusCode
             Return value of the library call.
 
         """
         return self.read(session, count)
 
-    def buffer_write(
-        self, session: VISASession, data: bytes
-    ) -> Tuple[int, constants.StatusCode]:
+    def buffer_write(self, session: VISASession, data: bytes) -> Tuple[int, StatusCode]:
         """Writes data to a formatted I/O write buffer synchronously.
 
         Corresponds to viBufWrite function of the VISA library.
@@ -591,7 +595,7 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
         -------
         int
             number of written bytes
-        constants.StatusCode
+        StatusCode
             return value of the library call.
 
         """
@@ -601,7 +605,7 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
         self,
         session: Union[VISASession, VISAEventContext, VISARMSession],
         attribute: Union[constants.ResourceAttribute, constants.EventAttribute],
-    ) -> Tuple[Any, constants.StatusCode]:
+    ) -> Tuple[Any, StatusCode]:
         """Retrieves the state of an attribute.
 
         Corresponds to viGetAttribute function of the VISA library.
@@ -617,23 +621,29 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
         -------
         Any
             State of the queried attribute for a specified resource
-        constants.StatusCode
+        StatusCode
             Return value of the library call.
 
         """
         try:
             sess = self.sessions[session]
         except KeyError:
-            return None, StatusCode.error_invalid_object
+            return (
+                None,
+                self.handle_return_value(session, StatusCode.error_invalid_object),
+            )
 
-        return sess.get_attribute(attribute)
+        state, status_code = sess.get_attribute(
+            cast(constants.ResourceAttribute, attribute)
+        )
+        return state, self.handle_return_value(session, status_code)
 
     def set_attribute(
         self,
         session: VISASession,
         attribute: constants.ResourceAttribute,
         attribute_state: Any,
-    ) -> constants.StatusCode:
+    ) -> StatusCode:
         """Set the state of an attribute.
 
         Corresponds to viSetAttribute function of the VISA library.
@@ -654,11 +664,12 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
 
         """
         try:
-            sess = self.sessions[session]
+            return self.handle_return_value(
+                session,
+                self.sessions[session].set_attribute(attribute, attribute_state),
+            )
         except KeyError:
-            return StatusCode.error_invalid_object
-
-        return sess.set_attribute(attribute, attribute_state)
+            return self.handle_return_value(session, StatusCode.error_invalid_object)
 
     def lock(
         self,
@@ -666,7 +677,7 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
         lock_type: constants.Lock,
         timeout: int,
         requested_key: Optional[str] = None,
-    ) -> Tuple[str, constants.StatusCode]:
+    ) -> Tuple[str, StatusCode]:
         """Establishes an access mode to the specified resources.
 
         Corresponds to viLock function of the VISA library.
@@ -686,7 +697,7 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
 
         Returns
         -------
-        Optional[str]
+        str
             Key that can then be passed to other sessions to share the lock, or
             None for an exclusive lock.
         StatusCode
@@ -696,11 +707,14 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
         try:
             sess = self.sessions[session]
         except KeyError:
-            return StatusCode.error_invalid_object
+            return (
+                "",
+                self.handle_return_value(session, StatusCode.error_invalid_object),
+            )
+        key, status_code = sess.lock(lock_type, timeout, requested_key)
+        return key, self.handle_return_value(session, key)
 
-        return sess.lock(lock_type, timeout, requested_key)
-
-    def unlock(self, session: VISASession) -> constants.StatusCode:
+    def unlock(self, session: VISASession) -> StatusCode:
         """Relinquish a lock for the specified resource.
 
         Corresponds to viUnlock function of the VISA library.
@@ -719,9 +733,8 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
         try:
             sess = self.sessions[session]
         except KeyError:
-            return StatusCode.error_invalid_object
-
-        return sess.unlock()
+            return self.handle_return_value(session, StatusCode.error_invalid_object)
+        return self.handle_return_value(session, sess.unlock())
 
     def disable_event(
         self,

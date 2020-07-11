@@ -7,10 +7,11 @@
 
 """
 import errno
-from typing import Any, List, Tuple
+from typing import Any, List, Tuple, Union, Type
 
 from pyvisa import attributes, constants
 from pyvisa.constants import ResourceAttribute, StatusCode
+from pyvisa.rname import USBInstr, USBRaw
 
 from .common import logger
 from .sessions import Session, UnknownAttribute
@@ -47,13 +48,18 @@ class USBTimeoutException(Exception):
 
 
 class USBSession(Session):
-    """Base class for drivers that communicate with usb devices
-    via usb port using pyUSB
-    """
+    """Base class for drivers working with usb devices via usb port using pyUSB."""
+
+    # Override parsed to take into account the fact that this class is only used
+    # for a specific kind of resource
+    parsed: Union[USBInstr, USBRaw]
+
+    #: Class to use when instantiating the interface
+    _intf_cls: Union[Type[usbraw.USBRawDevice], Type[usbtmc.USBTMC]]
 
     @staticmethod
     def list_resources() -> List[str]:
-        """Return list of resources for this type of USB device"""
+        """Return list of resources for this type of USB device."""
         raise NotImplementedError
 
     @classmethod
@@ -86,7 +92,7 @@ class USBSession(Session):
         attribute = constants.VI_ATTR_TMO_VALUE
         self.set_attribute(attribute, attributes.AttributesByID[attribute].default)
 
-    def _get_timeout(self, attribute: ResourceAttribute) -> int:
+    def _get_timeout(self, attribute: ResourceAttribute) -> Tuple[int, StatusCode]:
         if self.interface:
             if self.interface.timeout == 2 ** 32 - 1:
                 self.timeout = None
@@ -226,6 +232,10 @@ class USBSession(Session):
 class USBInstrSession(USBSession):
     """Class for USBTMC devices."""
 
+    # Override parsed to take into account the fact that this class is only used
+    # for a specific kind of resource
+    parsed: USBInstr
+
     #: Class to use when instantiating the interface
     _intf_cls = usbtmc.USBTMC
 
@@ -280,6 +290,10 @@ class USBInstrSession(USBSession):
 @Session.register(constants.InterfaceType.usb, "RAW")
 class USBRawSession(USBSession):
     """Class for RAW devices."""
+
+    # Override parsed to take into account the fact that this class is only used
+    # for a specific kind of resource
+    parsed: USBRaw
 
     #: Class to use when instantiating the interface
     _intf_cls = usbraw.USBRawDevice
