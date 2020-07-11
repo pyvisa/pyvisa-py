@@ -6,8 +6,6 @@
 :license: MIT, see LICENSE for more details.
 
 """
-import importlib
-
 from pyvisa.testsuite import BaseTestCase
 
 from pyvisa_py import highlevel
