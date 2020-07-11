@@ -56,7 +56,7 @@ author = "PyVISA Authors"
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
 # built documents.
-version = get_version(project)
+version = get_version("pyvisa_py")
 release = version
 this_year = datetime.date.today().year
 copyright = "%s, %s" % (this_year, author)
