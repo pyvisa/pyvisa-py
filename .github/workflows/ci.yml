@@ -60,7 +60,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install git+https://github.com/pyvisa/pyvisa.git@black-cis#egg=pyvisa
+          pip install git+https://github.com/pyvisa/pyvisa.git@ext-rname#egg=pyvisa
       - name: Install project
         run: |
           pip install -e .
