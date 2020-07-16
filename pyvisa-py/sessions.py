@@ -6,26 +6,20 @@
     Base Session class.
 
 
-    :copyright: 2014-2018 by PyVISA-py Authors, see AUTHORS for more details.
+    :copyright: 2014-2020 by PyVISA-py Authors, see AUTHORS for more details.
     :license: MIT, see LICENSE for more details.
 """
-
-from __future__ import (division, unicode_literals, print_function,
-                        absolute_import)
-
 import abc
 import time
 
-from pyvisa import logger, constants, attributes, compat, rname
+from pyvisa import attributes, constants, logger, rname
 
 from . import common
-
 
 StatusCode = constants.StatusCode
 
 
 class UnknownAttribute(Exception):
-
     def __init__(self, attribute):
         self.attribute = attribute
 
@@ -35,16 +29,16 @@ class UnknownAttribute(Exception):
             try:
                 name = attributes.AttributesByID[attr].visa_name
             except KeyError:
-                name = 'Name not found'
+                name = "Name not found"
 
-            return 'Unknown attribute %s (%s - %s)' % (attr, hex(attr), name)
+            return "Unknown attribute %s (%s - %s)" % (attr, hex(attr), name)
 
-        return 'Unknown attribute %s' % attr
+        return "Unknown attribute %s" % attr
 
     __repr__ = __str__
 
 
-class Session(compat.with_metaclass(abc.ABCMeta)):
+class Session(metaclass=abc.ABCMeta):
     """A base class for Session objects.
 
     Just makes sure that common methods are defined and information is stored.
@@ -95,7 +89,7 @@ class Session(compat.with_metaclass(abc.ABCMeta)):
 
     @classmethod
     def get_low_level_info(cls):
-        return ''
+        return ""
 
     @classmethod
     def iter_valid_session_classes(cls):
@@ -114,7 +108,7 @@ class Session(compat.with_metaclass(abc.ABCMeta)):
         """
         for key, val in cls._session_classes.items():
             try:
-                yield key, getattr(val, 'session_issue')
+                yield key, getattr(val, "session_issue")
             except AttributeError:
                 pass
 
@@ -129,8 +123,9 @@ class Session(compat.with_metaclass(abc.ABCMeta)):
         try:
             return cls._session_classes[(interface_type, resource_class)]
         except KeyError:
-            raise ValueError('No class registered for %s, %s' %
-                             (interface_type, resource_class))
+            raise ValueError(
+                "No class registered for %s, %s" % (interface_type, resource_class)
+            )
 
     @classmethod
     def register(cls, interface_type, resource_class):
@@ -139,17 +134,19 @@ class Session(compat.with_metaclass(abc.ABCMeta)):
         :type interface_type: constants.InterfaceType
         :type resource_class: str
         """
+
         def _internal(python_class):
             if (interface_type, resource_class) in cls._session_classes:
-                logger.warning('%s is already registered in the '
-                               'ResourceManager. Overwriting with %s',
-                               ((interface_type, resource_class), python_class)
-                               )
+                logger.warning(
+                    "%s is already registered in the "
+                    "ResourceManager. Overwriting with %s",
+                    ((interface_type, resource_class), python_class),
+                )
 
             python_class.session_type = (interface_type, resource_class)
-            cls._session_classes[(interface_type,
-                                  resource_class)] = python_class
+            cls._session_classes[(interface_type, resource_class)] = python_class
             return python_class
+
         return _internal
 
     @classmethod
@@ -172,17 +169,20 @@ class Session(compat.with_metaclass(abc.ABCMeta)):
         _internal.session_issue = msg
 
         if (interface_type, resource_class) in cls._session_classes:
-            logger.warning('%s is already registered in the ResourceManager. '
-                           'Overwriting with unavailable %s',
-                           ((interface_type, resource_class), msg))
+            logger.warning(
+                "%s is already registered in the ResourceManager. "
+                "Overwriting with unavailable %s",
+                ((interface_type, resource_class), msg),
+            )
 
         cls._session_classes[(interface_type, resource_class)] = _internal
 
-    def __init__(self, resource_manager_session, resource_name, parsed=None,
-                 open_timeout=None):
+    def __init__(
+        self, resource_manager_session, resource_name, parsed=None, open_timeout=None
+    ):
         if isinstance(resource_name, common.MockInterface):
             parsed = rname.parse_resource_name(resource_name.resource_name)
-            parsed['mock'] = resource_name
+            parsed["mock"] = resource_name
 
         elif parsed is None:
             parsed = rname.parse_resource_name(resource_name)
@@ -198,12 +198,13 @@ class Session(compat.with_metaclass(abc.ABCMeta)):
         #: Values are get or set automatically by get_attribute and
         #: set_attribute
         #: Add your own by overriding after_parsing.
-        self.attrs = {constants.VI_ATTR_RM_SESSION: resource_manager_session,
-                      constants.VI_ATTR_RSRC_NAME: str(parsed),
-                      constants.VI_ATTR_RSRC_CLASS: parsed.resource_class,
-                      constants.VI_ATTR_INTF_TYPE: parsed.interface_type,
-                      constants.VI_ATTR_TMO_VALUE: (self._get_timeout,
-                                                    self._set_timeout)}
+        self.attrs = {
+            constants.VI_ATTR_RM_SESSION: resource_manager_session,
+            constants.VI_ATTR_RSRC_NAME: str(parsed),
+            constants.VI_ATTR_RSRC_CLASS: parsed.resource_class,
+            constants.VI_ATTR_INTF_TYPE: parsed.interface_type,
+            constants.VI_ATTR_TMO_VALUE: (self._get_timeout, self._set_timeout),
+        }
 
         #: Timeout expressed in second or None for the absence of a timeout.
         #: The default value is set when calling
@@ -300,7 +301,7 @@ class Session(compat.with_metaclass(abc.ABCMeta)):
         :return: access_key that can then be passed to other sessions to share the lock, return value of the library call.
         :rtype: str, :class:`pyvisa.constants.StatusCode`
         """
-        return '', StatusCode.error_nonsupported_operation
+        return "", StatusCode.error_nonsupported_operation
 
     def unlock(self, session):
         """Relinquishes a lock for the specified resource.
@@ -410,7 +411,7 @@ class Session(compat.with_metaclass(abc.ABCMeta)):
 
         # Check if reading the attribute is allowed.
         if not attr.read:
-            raise Exception('Do not now how to handle write only attributes.')
+            raise Exception("Do not now how to handle write only attributes.")
 
         # First try to answer those attributes that are registered in
         # self.attrs, see Session.after_parsing
@@ -419,8 +420,11 @@ class Session(compat.with_metaclass(abc.ABCMeta)):
             status = StatusCode.success
             if isinstance(value, tuple):
                 getter = value[0]
-                value, status = (getter(attribute) if getter else
-                                 (0, StatusCode.error_nonsupported_attribute))
+                value, status = (
+                    getter(attribute)
+                    if getter
+                    else (0, StatusCode.error_nonsupported_attribute)
+                )
             return value, status
 
         # Dispatch to `_get_attribute`, which must be implemented by subclasses
@@ -465,8 +469,11 @@ class Session(compat.with_metaclass(abc.ABCMeta)):
             status = StatusCode.success
             if isinstance(value, tuple):
                 setter = value[1]
-                status = (setter(attribute, attribute_state) if setter else
-                          StatusCode.error_nonsupported_attribute)
+                status = (
+                    setter(attribute, attribute_state)
+                    if setter
+                    else StatusCode.error_nonsupported_attribute
+                )
             else:
                 self.attrs[attribute] = attribute_state
             return status
@@ -485,8 +492,16 @@ class Session(compat.with_metaclass(abc.ABCMeta)):
             logger.exception(str(e))
             return StatusCode.error_nonsupported_attribute
 
-    def _read(self, reader, count, end_indicator_checker, suppress_end_en,
-              termination_char, termination_char_en, timeout_exception):
+    def _read(
+        self,
+        reader,
+        count,
+        end_indicator_checker,
+        suppress_end_en,
+        termination_char,
+        termination_char_en,
+        timeout_exception,
+    ):
         """Reads data from device or interface synchronously.
 
         Corresponds to viRead function of the VISA library.
@@ -522,8 +537,7 @@ class Session(compat.with_metaclass(abc.ABCMeta)):
         except TypeError:
             pass
 
-        finish_time = (None if self.timeout is None else
-                       (time.time() + self.timeout))
+        finish_time = None if self.timeout is None else (time.time() + self.timeout)
         out = bytearray()
         while True:
             try:
@@ -543,13 +557,14 @@ class Session(compat.with_metaclass(abc.ABCMeta)):
                         # RULE 6.1.2
                         # Return everything upto and including the termination
                         # character
-                        return (bytes(out[:out.index(termination_char)+1]),
-                                StatusCode.success_termination_character_read)
+                        return (
+                            bytes(out[: out.index(termination_char) + 1]),
+                            StatusCode.success_termination_character_read,
+                        )
                     elif len(out) >= count:
                         # RULE 6.1.3
                         # Return at most the number of bytes requested
-                        return (bytes(out[:count]),
-                                StatusCode.success_max_count_read)
+                        return (bytes(out[:count]), StatusCode.success_max_count_read)
 
             if finish_time and time.time() > finish_time:
                 return bytes(out), StatusCode.error_timeout
