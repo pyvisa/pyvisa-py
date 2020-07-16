@@ -349,7 +349,7 @@ def _recvrecord(sock, timeout, read_fun=None, min_packages=0):
         # if more data for the current fragment is needed, use select
         # to wait for read ready, max `select_timeout` seconds
         if len(buffer) < exp_length:
-            r, w, x = select.select([sock], [], [], select_timout)
+            r, w, x = select.select([sock], [], [], select_timeout)
             read_data = b""
             if sock in r:
                 read_data = read_fun(exp_length)
