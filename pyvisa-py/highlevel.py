@@ -44,7 +44,7 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
         logger.debug("SerialSession was not imported %s." % e)
 
     try:
-        from .usb import USBSession, USBRawSession
+        from .usb import USBRawSession, USBSession
 
         logger.debug("USBSession and USBRawSession were correctly imported.")
     except Exception as e:
