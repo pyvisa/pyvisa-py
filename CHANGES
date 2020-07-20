@@ -5,6 +5,8 @@ PyVISA-py Changelog
 ------------------
 
 - drop Python 2 support and run against PyVISA 1.11 PR #222
+- usbtmc: improve support for USB488 devices. PR #241
+  For instrument that support REN_CONTROL, we now always assert the REN line.
 
 0.4.1 (2020-05-27)
 ------------------

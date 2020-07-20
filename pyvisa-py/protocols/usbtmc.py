@@ -36,7 +36,9 @@ class MsgID(enum.IntEnum):
     vendor_specific_out = 126
     request_vendor_specific_in = 127
     vendor_specific_in = 127
-    trigger = 128  # for USB488
+
+    # USB488
+    trigger = 128
 
 
 class Request(enum.IntEnum):
@@ -49,6 +51,12 @@ class Request(enum.IntEnum):
     get_capabilities = 7
     indicator_pulse = 64
 
+    # USB488
+    read_status_byte = 128
+    ren_control = 160
+    go_to_local = 161
+    local_lockout = 162
+
 
 class UsbTmcStatus(enum.IntEnum):
     success = 1
@@ -57,6 +65,9 @@ class UsbTmcStatus(enum.IntEnum):
     transfer_not_in_progress = 0x81
     split_not_in_progress = 0x82
     split_in_progress = 0x83
+
+
+UsbTmcCapabilities = namedtuple("UsbTmcCapabilities", "usb488 ren_control trigger")
 
 
 def find_tmc_devices(
@@ -293,7 +304,7 @@ class USBTMC(USBRaw):
 
         time.sleep(0.01)
 
-        self._get_capabilities()
+        self._capabilities = self._get_capabilities()
 
         self._btag = 0
 
@@ -301,8 +312,27 @@ class USBTMC(USBRaw):
             msg = "TMC device must have both Bulk-In and Bulk-out endpoints."
             raise ValueError(msg)
 
-    def _get_capabilities(self):
+        self._enable_remote_control()
+
+    def _enable_remote_control(self):
+        if not self._capabilities.ren_control:
+            return
+
         self.usb_dev.ctrl_transfer(
+            usb.util.build_request_type(
+                usb.util.CTRL_IN,
+                usb.util.CTRL_TYPE_CLASS,
+                usb.util.CTRL_RECIPIENT_INTERFACE,
+            ),
+            Request.ren_control,
+            1,
+            self.usb_intf.index,
+            1,
+            timeout=self.timeout,
+        )
+
+    def _get_capabilities(self):
+        c = self.usb_dev.ctrl_transfer(
             usb.util.build_request_type(
                 usb.util.CTRL_IN,
                 usb.util.CTRL_TYPE_CLASS,
@@ -313,6 +343,20 @@ class USBTMC(USBRaw):
             self.usb_intf.index,
             0x0018,
             timeout=self.timeout,
+        )
+
+        usb488_capabilities = c[0xE]
+
+        # bit #2: The interface is a 488.2 USB488 interface.
+        # bit #1: The interface accepts REN_CONTROL, GO_TO_LOCAL,
+        #         and LOCAL_LOCKOUT requests.
+        # bit #0: The interface accepts the MsgID = TRIGGER
+        #         USBTMC command message and forwards
+        #         TRIGGER requests to the Function Layer.
+        return UsbTmcCapabilities(
+            usb488=bool(usb488_capabilities & (1 << 2)),
+            ren_control=bool(usb488_capabilities & (1 << 1)),
+            trigger=bool(usb488_capabilities & (1 << 0)),
         )
 
     def _find_interface(self, dev, setting):
