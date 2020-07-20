@@ -326,9 +326,9 @@ def _recvrecord(sock, timeout, read_fun=None, min_packages=0):
     last = False
     exp_length = 4
     packages_received = 0
-    
+
     if min_packages != 0:
-        logger.debug('Start receiving at least %i packages'%min_packages)
+        logger.debug("Start receiving at least %i packages" % min_packages)
 
     # minimum is in interval 1 - 100ms based on timeout or for infinite it is
     # 1 sec
@@ -354,7 +354,7 @@ def _recvrecord(sock, timeout, read_fun=None, min_packages=0):
             if sock in r:
                 read_data = read_fun(exp_length)
                 buffer.extend(read_data)
-                logger.debug("received %r"%read_data)
+                logger.debug("received %r" % read_data)
             # Timeout was reached
             if not read_data:  # no response or empty response
                 if timeout is not None and time.time() >= finish_time:
@@ -375,13 +375,18 @@ def _recvrecord(sock, timeout, read_fun=None, min_packages=0):
                     )
                     raise socket.timeout(msg)
                 elif min_packages != 0 and packages_received >= min_packages:
-                    logger.debug('Stop receiving after %i of %i requested packages. Received record through %s: %r',
-                             packages_received, min_packages, sock, record)
+                    logger.debug(
+                        "Stop receiving after %i of %i requested packages. Received record through %s: %r",
+                        packages_received,
+                        min_packages,
+                        sock,
+                        record,
+                    )
                     return bytes(record)
                 else:
                     # `select_timeout` decreased to 50% of previous or
                     # min_select_timeout
-                    select_timeout = max(select_timeout/2.0, min_select_timeout)
+                    select_timeout = max(select_timeout / 2.0, min_select_timeout)
                     continue
 
         if wait_header:
@@ -491,15 +496,15 @@ class RawTCPClient(Client):
         call = self.packer.get_buf()
 
         _sendrecord(self.sock, call, timeout=self.timeout)
-        
+
         try:
             min_packages = int(self.packer.proc == 3)
-            logger.debug('RawTCPClient: procedure type %i'%self.packer.proc)
+            logger.debug("RawTCPClient: procedure type %i" % self.packer.proc)
             # if the command is get_port, we only expect one package.
             # This is a workaround for misbehaving instruments.
         except AttributeError:
             min_packages = 0
-        reply = _recvrecord(self.sock, self.timeout, min_packages= min_packages)
+        reply = _recvrecord(self.sock, self.timeout, min_packages=min_packages)
         u = self.unpacker
         u.reset(reply)
         xid, verf = u.unpack_replyheader()
