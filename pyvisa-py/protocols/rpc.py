@@ -258,6 +258,7 @@ class Client(object):
         p = self.packer
         p.reset()
         p.pack_callheader(self.lastxid, self.prog, self.vers, proc, cred, verf)
+        p.proc = proc
 
     def do_call(self):
         # This MUST be overridden
@@ -314,7 +315,7 @@ def _sendrecord(sock, record, fragsize=None, timeout=None):
         record = record[fragsize:]
 
 
-def _recvrecord(sock, timeout, read_fun=None):
+def _recvrecord(sock, timeout, read_fun=None, min_packages=0):
 
     record = bytearray()
     buffer = bytearray()
@@ -324,16 +325,21 @@ def _recvrecord(sock, timeout, read_fun=None):
     wait_header = True
     last = False
     exp_length = 4
+    packages_received = 0
+
+    if min_packages != 0:
+        logger.debug("Start receiving at least %i packages" % min_packages)
 
     # minimum is in interval 1 - 100ms based on timeout or for infinite it is
     # 1 sec
+
     min_select_timeout = (
         max(min(timeout / 100.0, 0.1), 0.001) if timeout is not None else 1.0
     )
-    # initial 'select_timout' is half of timeout or max 2 secs
+    # initial 'select_timeout' is half of timeout or max 2 secs
     # (max blocking time).
     # min is from 'min_select_timeout'
-    select_timout = (
+    select_timeout = (
         max(min(timeout / 2.0, 2.0), min_select_timeout) if timeout is not None else 1.0
     )
     # time, when loop shall finish
@@ -341,36 +347,47 @@ def _recvrecord(sock, timeout, read_fun=None):
     while True:
 
         # if more data for the current fragment is needed, use select
-        # to wait for read ready, max `select_timout` seconds
+        # to wait for read ready, max `select_timeout` seconds
         if len(buffer) < exp_length:
-            r, w, x = select.select([sock], [], [], select_timout)
+            r, w, x = select.select([sock], [], [], select_timeout)
             read_data = b""
             if sock in r:
                 read_data = read_fun(exp_length)
                 buffer.extend(read_data)
+                logger.debug("received %r" % read_data)
             # Timeout was reached
-            elif timeout is not None and time.time() >= finish_time:
-                logger.debug(
-                    (
-                        "Time out encountered in %s."
-                        "Already receieved %d bytes. Last fragment is %d "
-                        "bytes long and we were expecting %d"
-                    ),
-                    sock,
-                    len(record),
-                    len(buffer),
-                    exp_length,
-                )
-                msg = (
-                    "socket.timeout: The instrument seems to have stopped "
-                    "responding."
-                )
-                raise socket.timeout(msg)
-            else:
-                # `select_timout` decreased to 50% of previous or
-                # min_select_timeout
-                select_timout = max(select_timout / 2.0, min_select_timeout)
-                continue
+            if not read_data:  # no response or empty response
+                if timeout is not None and time.time() >= finish_time:
+                    logger.debug(
+                        (
+                            "Time out encountered in %s."
+                            "Already receieved %d bytes. Last fragment is %d "
+                            "bytes long and we were expecting %d"
+                        ),
+                        sock,
+                        len(record),
+                        len(buffer),
+                        exp_length,
+                    )
+                    msg = (
+                        "socket.timeout: The instrument seems to have stopped "
+                        "responding."
+                    )
+                    raise socket.timeout(msg)
+                elif min_packages != 0 and packages_received >= min_packages:
+                    logger.debug(
+                        "Stop receiving after %i of %i requested packages. Received record through %s: %r",
+                        packages_received,
+                        min_packages,
+                        sock,
+                        record,
+                    )
+                    return bytes(record)
+                else:
+                    # `select_timeout` decreased to 50% of previous or
+                    # min_select_timeout
+                    select_timeout = max(select_timeout / 2.0, min_select_timeout)
+                    continue
 
         if wait_header:
             # need to find header
@@ -391,6 +408,7 @@ def _recvrecord(sock, timeout, read_fun=None):
                 else:
                     wait_header = True
                     exp_length = 4
+                    packages_received += 1
 
 
 def _connect(sock, host, port, timeout=0):
@@ -479,7 +497,14 @@ class RawTCPClient(Client):
 
         _sendrecord(self.sock, call, timeout=self.timeout)
 
-        reply = _recvrecord(self.sock, self.timeout)
+        try:
+            min_packages = int(self.packer.proc == 3)
+            logger.debug("RawTCPClient: procedure type %i" % self.packer.proc)
+            # if the command is get_port, we only expect one package.
+            # This is a workaround for misbehaving instruments.
+        except AttributeError:
+            min_packages = 0
+        reply = _recvrecord(self.sock, self.timeout, min_packages=min_packages)
         u = self.unpacker
         u.reset(reply)
         xid, verf = u.unpack_replyheader()
