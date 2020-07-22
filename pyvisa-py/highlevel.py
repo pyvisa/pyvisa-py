@@ -497,3 +497,31 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
     def discard_events(self, session, event_type, mechanism):
         # TODO: implement this for GPIB finalization
         pass
+
+    def usb_control_in(self, session, request_type_bitmap_field, request_id, request_value,
+                       index, length=0):
+        """Performs a USB control pipe transfer from the device.
+
+        Corresponds to viUsbControlIn function of the VISA library.
+
+        :param session: Unique logical identifier to a session.
+        :param request_type_bitmap_field: bmRequestType parameter of the setup stage of a USB control transfer.
+        :param request_id: bRequest parameter of the setup stage of a USB control transfer.
+        :param request_value: wValue parameter of the setup stage of a USB control transfer.
+        :param index: wIndex parameter of the setup stage of a USB control transfer.
+                      This is usually the index of the interface or endpoint.
+        :param length: wLength parameter of the setup stage of a USB control transfer.
+                       This value also specifies the size of the data buffer to receive the data from the
+                       optional data stage of the control transfer.
+        :return: - The data buffer that receives the data from the optional data stage of the control transfer
+                 - return value of the library call.
+        :rtype: - bytes
+                - :class:`pyvisa.constants.StatusCode`
+        """
+        try:
+            sess = self.sessions[session]
+        except KeyError:
+            return StatusCode.error_invalid_object
+        
+        return sess.control_transfer(request_type_bitmap_field, request_id, request_value, index, length)
+

@@ -261,7 +261,6 @@ class USBRaw(object):
         :param data: bytes to be sent to the instrument
         :type data: bytes
         """
-
         try:
             return self.usb_send_ep.write(data)
         except usb.core.USBError as e:
@@ -485,3 +484,31 @@ class USBTMC(USBRaw):
                 eom = response.transfer_attributes & 1
 
         return bytes(received)
+
+    def control_transfer(self, request_type_bitmap_field, request_id, request_value,
+                       index, length):
+        """Performs a USB control pipe transfer from the device.
+
+        :param request_type_bitmap_field: bmRequestType parameter of the setup stage of a USB control transfer.
+        :param request_id: bRequest parameter of the setup stage of a USB control transfer.
+        :param request_value: wValue parameter of the setup stage of a USB control transfer.
+        :param index: wIndex parameter of the setup stage of a USB control transfer.
+                      This is usually the index of the interface or endpoint.
+        :param length: wLength parameter of the setup stage of a USB control transfer.
+                       This value also specifies the size of the data buffer to receive the data from the
+                       optional data stage of the control transfer.
+        :return: - The data buffer that receives the data from the optional data stage of the control transfer
+        :rtype: - bytes
+        """
+
+        self.usb_dev.ctrl_transfer(request_type_bitmap_field,
+                request_id,
+                request_value,
+                index,
+                length,
+                timeout=self.timeout)
+
+        #TODO satisfy the second half of the problem -i.e. sending buffer the optional data stage
+        # return self.read(length) does not work
+        return bytes()
+
