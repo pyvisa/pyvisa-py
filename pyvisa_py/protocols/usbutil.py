@@ -202,7 +202,11 @@ def find_devices(
             if custom_match is not None and not custom_match(dev):
                 return False
             for attr, pattern in attrs.items():
-                if not fnmatch(getattr(dev, attr).lower(), pattern.lower()):
+                try:
+                    value = getattr(dev, attr)
+                except (NotImplementedError, ValueError):
+                    return False
+                if not fnmatch(value.lower(), pattern.lower()):
                     return False
             return True
 
