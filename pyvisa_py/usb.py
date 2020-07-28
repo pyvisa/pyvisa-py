@@ -1,17 +1,17 @@
 # -*- coding: utf-8 -*-
-"""
-    pyvisa-py.usb
-    ~~~~~~~~~~~~~
-
-    Serial Session implementation using PyUSB.
+"""Serial Session implementation using PyUSB.
 
 
-    :copyright: 2014-2020 by PyVISA-py Authors, see AUTHORS for more details.
-    :license: MIT, see LICENSE for more details.
+:copyright: 2014-2020 by PyVISA-py Authors, see AUTHORS for more details.
+:license: MIT, see LICENSE for more details.
+
 """
 import errno
+from typing import Any, List, Tuple, Union, Type
 
 from pyvisa import attributes, constants
+from pyvisa.constants import ResourceAttribute, StatusCode
+from pyvisa.rname import USBInstr, USBRaw
 
 from .common import logger
 from .sessions import Session, UnknownAttribute
@@ -41,9 +41,6 @@ except Exception as e:
     raise
 
 
-StatusCode = constants.StatusCode
-
-
 class USBTimeoutException(Exception):
     """Exception used internally to indicate USB timeout."""
 
@@ -51,17 +48,22 @@ class USBTimeoutException(Exception):
 
 
 class USBSession(Session):
-    """Base class for drivers that communicate with usb devices
-    via usb port using pyUSB
-    """
+    """Base class for drivers working with usb devices via usb port using pyUSB."""
+
+    # Override parsed to take into account the fact that this class is only used
+    # for a specific kind of resource
+    parsed: Union[USBInstr, USBRaw]
+
+    #: Class to use when instantiating the interface
+    _intf_cls: Union[Type[usbraw.USBRawDevice], Type[usbtmc.USBTMC]]
 
     @staticmethod
-    def list_resources():
-        """Return list of resources for this type of USB device"""
+    def list_resources() -> List[str]:
+        """Return list of resources for this type of USB device."""
         raise NotImplementedError
 
     @classmethod
-    def get_low_level_info(cls):
+    def get_low_level_info(cls) -> str:
         try:
             ver = usb.__version__
         except AttributeError:
@@ -75,107 +77,7 @@ class USBSession(Session):
 
         return "via PyUSB (%s). Backend: %s" % (ver, backend)
 
-    def _get_timeout(self, attribute):
-        if self.interface:
-            if self.interface.timeout == 2 ** 32 - 1:
-                self.timeout = None
-            else:
-                self.timeout = self.interface.timeout / 1000
-        return super(USBSession, self)._get_timeout(attribute)
-
-    def _set_timeout(self, attribute, value):
-        status = super(USBSession, self)._set_timeout(attribute, value)
-        timeout = int(self.timeout * 1000) if self.timeout else 2 ** 32 - 1
-        timeout = min(timeout, 2 ** 32 - 1)
-        if self.interface:
-            self.interface.timeout = timeout
-        return status
-
-    def read(self, count):
-        """Reads data from device or interface synchronously.
-
-        Corresponds to viRead function of the VISA library.
-
-        :param count: Number of bytes to be read.
-        :return: data read, return value of the library call.
-        :rtype: (bytes, VISAStatus)
-        """
-
-        def _usb_reader():
-            """Data reader identifying usb timeout exception."""
-            try:
-                return self.interface.read(count)
-            except usb.USBError as exc:
-                if exc.errno in (errno.ETIMEDOUT, -errno.ETIMEDOUT):
-                    raise USBTimeoutException()
-                raise
-
-        supress_end_en, _ = self.get_attribute(constants.VI_ATTR_SUPPRESS_END_EN)
-
-        if supress_end_en:
-            raise ValueError(
-                "VI_ATTR_SUPPRESS_END_EN == True is currently unsupported by pyvisa-py"
-            )
-
-        term_char, _ = self.get_attribute(constants.VI_ATTR_TERMCHAR)
-        term_char_en, _ = self.get_attribute(constants.VI_ATTR_TERMCHAR_EN)
-
-        return self._read(
-            _usb_reader,
-            count,
-            lambda current: True,  # USB always returns a complete message
-            supress_end_en,
-            term_char,
-            term_char_en,
-            USBTimeoutException,
-        )
-
-    def write(self, data):
-        """Writes data to device or interface synchronously.
-
-        Corresponds to viWrite function of the VISA library.
-
-        :param data: data to be written.
-        :type data: bytes
-        :return: Number of bytes actually transferred, return value of the library call.
-        :rtype: (int, VISAStatus)
-        """
-
-        send_end, _ = self.get_attribute(constants.VI_ATTR_SEND_END_EN)
-
-        count = self.interface.write(data)
-
-        return count, StatusCode.success
-
-    def close(self):
-        self.interface.close()
-
-    def _get_attribute(self, attribute):
-        """Get the value for a given VISA attribute for this session.
-
-        Use to implement custom logic for attributes.
-
-        :param attribute: Resource attribute for which the state query is made
-        :return: The state of the queried attribute for a specified resource, return value of the library call.
-        :rtype: (unicode | str | list | int, VISAStatus)
-        """
-
-        raise UnknownAttribute(attribute)
-
-    def _set_attribute(self, attribute, attribute_state):
-        """Sets the state of an attribute.
-
-        Corresponds to viSetAttribute function of the VISA library.
-
-        :param attribute: Attribute for which the state is to be modified. (Attributes.*)
-        :param attribute_state: The state of the attribute to be set for the specified object.
-        :return: return value of the library call.
-        :rtype: VISAStatus
-        """
-
-        raise UnknownAttribute(attribute)
-
-    def after_parsing(self):
+    def after_parsing(self) -> None:
         self.interface = self._intf_cls(
             int(self.parsed.manufacturer_id, 0),
             int(self.parsed.model_code, 0),
@@ -190,18 +92,155 @@ class USBSession(Session):
         attribute = constants.VI_ATTR_TMO_VALUE
         self.set_attribute(attribute, attributes.AttributesByID[attribute].default)
 
+    def _get_timeout(self, attribute: ResourceAttribute) -> Tuple[int, StatusCode]:
+        if self.interface:
+            if self.interface.timeout == 2 ** 32 - 1:
+                self.timeout = None
+            else:
+                self.timeout = self.interface.timeout / 1000
+        return super(USBSession, self)._get_timeout(attribute)
+
+    def _set_timeout(self, attribute: ResourceAttribute, value: int) -> StatusCode:
+        status = super(USBSession, self)._set_timeout(attribute, value)
+        timeout = int(self.timeout * 1000) if self.timeout else 2 ** 32 - 1
+        timeout = min(timeout, 2 ** 32 - 1)
+        if self.interface:
+            self.interface.timeout = timeout
+        return status
+
+    def read(self, count: int) -> Tuple[bytes, StatusCode]:
+        """Reads data from device or interface synchronously.
+
+        Corresponds to viRead function of the VISA library.
+
+        Parameters
+        -----------
+        count : int
+            Number of bytes to be read.
+
+        Returns
+        -------
+        bytes
+            Data read from the device
+        StatusCode
+            Return value of the library call.
+
+        """
+
+        def _usb_reader():
+            """Data reader identifying usb timeout exception."""
+            try:
+                return self.interface.read(count)
+            except usb.USBError as exc:
+                if exc.errno in (errno.ETIMEDOUT, -errno.ETIMEDOUT):
+                    raise USBTimeoutException()
+                raise
+
+        supress_end_en, _ = self.get_attribute(ResourceAttribute.suppress_end_enabled)
+
+        if supress_end_en:
+            raise ValueError(
+                "VI_ATTR_SUPPRESS_END_EN == True is currently unsupported by pyvisa-py"
+            )
+
+        term_char, _ = self.get_attribute(ResourceAttribute.termchar)
+        term_char_en, _ = self.get_attribute(ResourceAttribute.termchar_enabled)
+
+        return self._read(
+            _usb_reader,
+            count,
+            lambda current: True,  # USB always returns a complete message
+            supress_end_en,
+            term_char,
+            term_char_en,
+            USBTimeoutException,
+        )
+
+    def write(self, data: bytes) -> Tuple[int, StatusCode]:
+        """Writes data to device or interface synchronously.
+
+        Corresponds to viWrite function of the VISA library.
+
+        Parameters
+        ----------
+        data : bytes
+            Data to be written.
+
+        Returns
+        -------
+        int
+            Number of bytes actually transferred
+        StatusCode
+            Return value of the library call.
+
+        """
+        send_end, _ = self.get_attribute(ResourceAttribute.send_end_enabled)
+
+        count = self.interface.write(data)
+
+        return count, StatusCode.success
+
+    def close(self):
+        self.interface.close()
+
+    def _get_attribute(
+        self, attribute: constants.ResourceAttribute
+    ) -> Tuple[Any, StatusCode]:
+        """Get the value for a given VISA attribute for this session.
+
+        Use to implement custom logic for attributes.
+
+        Parameters
+        ----------
+        attribute : ResourceAttribute
+            Attribute for which the state query is made
+
+        Returns
+        -------
+        Any
+            State of the queried attribute for a specified resource
+        StatusCode
+            Return value of the library call.
+
+        """
+        raise UnknownAttribute(attribute)
+
+    def _set_attribute(
+        self, attribute: constants.ResourceAttribute, attribute_state: Any
+    ) -> StatusCode:
+        """Sets the state of an attribute.
+
+        Corresponds to viSetAttribute function of the VISA library.
+
+        Parameters
+        ----------
+        attribute : constants.ResourceAttribute
+            Attribute for which the state is to be modified. (Attributes.*)
+        attribute_state : Any
+            The state of the attribute to be set for the specified object.
+
+        Returns
+        -------
+        StatusCode
+            Return value of the library call.
+
+        """
+        raise UnknownAttribute(attribute)
+
 
 @Session.register(constants.InterfaceType.usb, "INSTR")
 class USBInstrSession(USBSession):
-    """Base class for drivers that communicate with instruments
-    via usb port using pyUSB
-    """
+    """Class for USBTMC devices."""
+
+    # Override parsed to take into account the fact that this class is only used
+    # for a specific kind of resource
+    parsed: USBInstr
 
     #: Class to use when instantiating the interface
     _intf_cls = usbtmc.USBTMC
 
     @staticmethod
-    def list_resources():
+    def list_resources() -> List[str]:
         out = []
         fmt = (
             "USB%(board)s::%(manufacturer_id)s::%(model_code)s::"
@@ -250,15 +289,17 @@ class USBInstrSession(USBSession):
 
 @Session.register(constants.InterfaceType.usb, "RAW")
 class USBRawSession(USBSession):
-    """Base class for drivers that communicate with usb raw devices
-    via usb port using pyUSB
-    """
+    """Class for RAW devices."""
+
+    # Override parsed to take into account the fact that this class is only used
+    # for a specific kind of resource
+    parsed: USBRaw
 
     #: Class to use when instantiating the interface
     _intf_cls = usbraw.USBRawDevice
 
     @staticmethod
-    def list_resources():
+    def list_resources() -> List[str]:
         out = []
         fmt = (
             "USB%(board)s::%(manufacturer_id)s::%(model_code)s::"

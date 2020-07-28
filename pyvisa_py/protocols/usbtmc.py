@@ -1,19 +1,14 @@
 # -*- coding: utf-8 -*-
-"""
-    pyvisa-py.protocols.usbtmc
-    ~~~~~~~~~~~~~~~~~~~~~~~~~~
+"""Implements Session to control USBTMC instruments
 
-    Implements Session to control USBTMC instruments
+Loosely based on PyUSBTMC:python module to handle USB-TMC(Test and
+Measurement class)　devices. by Noboru Yamamot, Accl. Lab, KEK, JAPAN
 
-    Loosely based on PyUSBTMC:python module to handle USB-TMC(Test and
-    Measurement class)　devices.
+This file is an offspring of the Lantz Project.
 
-    by Noboru Yamamot, Accl. Lab, KEK, JAPAN
+:copyright: 2014-2020 by PyVISA-py Authors, see AUTHORS for more details.
+:license: MIT, see LICENSE for more details.
 
-    This file is an offspring of the Lantz Project.
-
-    :copyright: 2014-2020 by PyVISA-py Authors, see AUTHORS for more details.
-    :license: MIT, see LICENSE for more details.
 """
 import enum
 import struct

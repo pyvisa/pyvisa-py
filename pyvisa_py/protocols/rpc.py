@@ -1,26 +1,22 @@
 # -*- coding: utf-8 -*-
+"""Sun RPC version 2 -- RFC1057
+
+This file is drawn from Python's RPC demo, updated for python 3.
+
+XXX There should be separate exceptions for the various reasons why
+XXX an RPC can fail, rather than using RuntimeError for everything
+
+XXX The UDP version of the protocol resends requests when it does
+XXX not receive a timely reply -- use only for idempotent calls!
+
+Original source:
+    http://svn.python.org/projects/python/trunk/Demo/rpc/rpc.py
+
+
+:copyright: 2014-2020 by PyVISA-py Authors, see AUTHORS for more details.
+:license: MIT, see LICENSE for more details.
+
 """
-    pyvisa-py.protocols.rpc
-    ~~~~~~~~~~~~~~~~~~~~~~~
-
-    Sun RPC version 2 -- RFC1057
-
-    This file is drawn from Python's RPC demo, updated for python 3.
-
-    XXX There should be separate exceptions for the various reasons why
-    XXX an RPC can fail, rather than using RuntimeError for everything
-
-    XXX The UDP version of the protocol resends requests when it does
-    XXX not receive a timely reply -- use only for idempotent calls!
-
-    Original source:
-        http://svn.python.org/projects/python/trunk/Demo/rpc/rpc.py
-
-
-    :copyright: 2014-2020 by PyVISA-py Authors, see AUTHORS for more details.
-    :license: MIT, see LICENSE for more details.
-"""
-
 import enum
 import select
 import socket

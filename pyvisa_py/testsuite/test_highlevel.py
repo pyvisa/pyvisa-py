@@ -6,11 +6,9 @@
 :license: MIT, see LICENSE for more details.
 
 """
-import importlib
-
 from pyvisa.testsuite import BaseTestCase
 
-highlevel = importlib.import_module("pyvisa-py.highlevel")
+from pyvisa_py import highlevel
 
 
 class TestPyVisaLibrary(BaseTestCase):
