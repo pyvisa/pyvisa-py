@@ -47,7 +47,7 @@ steps:
     echo Install pytest and co
     pip install pytest pytest-azurepipelines pytest-cov
     echo Run pytest
-    python -X dev -m pytest --pyargs pyvisa --cov pyvisa --cov-report xml
+    python -X dev -m pytest --pyargs pyvisa_py --cov pyvisa_py --cov-report xml
   displayName: 'Run tests'
 
 - script: |
