@@ -8,7 +8,7 @@
 """
 import random
 from collections import OrderedDict
-from typing import Any, Dict, Iterable, Optional, Tuple, Union, List, cast
+from typing import Any, Dict, Iterable, List, Optional, Tuple, Union, cast
 
 from pyvisa import constants, highlevel, rname
 from pyvisa.constants import StatusCode

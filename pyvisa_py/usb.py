@@ -7,7 +7,7 @@
 
 """
 import errno
-from typing import Any, List, Tuple, Union, Type
+from typing import Any, List, Tuple, Type, Union
 
 from pyvisa import attributes, constants
 from pyvisa.constants import ResourceAttribute, StatusCode
