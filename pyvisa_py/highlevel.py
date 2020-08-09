@@ -481,18 +481,9 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
         # For each session type, ask for the list of connected resources and
         # merge them into a single list.
         # HINT: the cast should not be necessary here
-        resources = cast(
-            List[str],
-            (
-                sum(
-                    [
-                        st.list_resources()
-                        for key, st in sessions.Session.iter_valid_session_classes()
-                    ]
-                )
-                or []
-            ),
-        )
+        resources: List[str] = []
+        for key, st in sessions.Session.iter_valid_session_classes():
+            resources += st.list_resources()
 
         return rname.filter(resources, query)
 
@@ -712,7 +703,7 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
                 self.handle_return_value(session, StatusCode.error_invalid_object),
             )
         key, status_code = sess.lock(lock_type, timeout, requested_key)
-        return key, self.handle_return_value(session, key)
+        return key, self.handle_return_value(session, status_code)
 
     def unlock(self, session: VISASession) -> StatusCode:
         """Relinquish a lock for the specified resource.
