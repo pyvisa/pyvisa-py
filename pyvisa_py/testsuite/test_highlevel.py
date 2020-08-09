@@ -18,4 +18,4 @@ class TestPyVisaLibrary(BaseTestCase):
         """Test generating debug infos for PyVISA-py."""
         infos = highlevel.PyVisaLibrary.get_debug_info()
         for key in ("Version",):
-            self.assertIn(key, infos)
+            assert key in infos

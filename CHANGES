@@ -4,6 +4,7 @@ PyVISA-py Changelog
 0.5.0 (unreleased)
 ------------------
 
+- start running testsuite on Keysight buildbot PR #247
 - fix import in gpib.py when using linux-gpib PR #246
 - drop Python 2 support and run against PyVISA 1.11 PR #222
 - usbtmc: improve support for USB488 devices. PR #241

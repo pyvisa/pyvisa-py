@@ -307,7 +307,7 @@ class Session(metaclass=abc.ABCMeta):
             ResourceAttribute.resource_manager_session: resource_manager_session,
             ResourceAttribute.resource_name: str(parsed),
             ResourceAttribute.resource_class: parsed.resource_class,
-            ResourceAttribute.interface_type: parsed.interface_type,
+            ResourceAttribute.interface_type: parsed.interface_type_const,
             ResourceAttribute.timeout_value: (self._get_timeout, self._set_timeout),
         }
 
