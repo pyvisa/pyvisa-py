@@ -37,7 +37,7 @@ except ImportError:
     GPIB_CTYPES = False
     try:
         import gpib  # typing: ignore
-        from Gpib import Gpib, GpibError  # typing: ignore
+        from Gpib import Gpib  # typing: ignore
     except ImportError as e:
         Session.register_unavailable(
             constants.InterfaceType.gpib,
@@ -463,7 +463,7 @@ class _GPIBCommon(Session):
                     ifc.listener(
                         self.parsed.primary_address, self.parsed.secondary_address
                     )
-        except GpibError as e:
+        except gpib.GpibError as e:
             return convert_gpib_error(e, self.interface.ibsta(), "perform control REN")
 
         return constants.StatusCode.success
