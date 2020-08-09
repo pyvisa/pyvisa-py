@@ -35,6 +35,7 @@ steps:
     echo Activate environment
     call conda activate test_
     echo Install project
+    pip install git+https://github.com/pyvisa/.git#egg=pyvisa
     pip install -e .
   displayName: 'Install dependencies'
 
