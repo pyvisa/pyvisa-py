@@ -11,6 +11,8 @@ assignees: ''
 
 <!--- If you are not using pyvisa as a backend please report the issue to pyvisa issue tracker at https://github.com/pyvisa/pyvisa/issues -->
 
+<!--- If you are running from inside a VM please mention it since a VM can get in the way of some hardware communications -->
+
 Instrument details
 ------------------
 * Model:

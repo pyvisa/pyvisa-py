@@ -4,8 +4,13 @@ PyVISA-py Changelog
 0.5.0 (unreleased)
 ------------------
 
+In 0.5.0, the Python package installed in site-packages in now called pyvisa_py
+which makes it a valid python package. This change was decided because the old name
+was causing issues with tools such as Mypy and PyInstaller.
+
 - start running testsuite on Keysight buildbot PR #247
 - fix import in gpib.py when using linux-gpib PR #246
+- add typing validation through mypy PR #238
 - drop Python 2 support and run against PyVISA 1.11 PR #222
 - usbtmc: improve support for USB488 devices. PR #241
   For instrument that support REN_CONTROL, we now always assert the REN line.
