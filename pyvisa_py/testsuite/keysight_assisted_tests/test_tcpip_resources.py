@@ -103,3 +103,9 @@ class TestTCPIPSocket(TCPIPSocketBaseTest):
     #: to VI_TMO_IMMEDIATE, Visa (Keysight at least) may actually use a
     #: different value depending on the values supported by the resource.
     MINIMAL_TIMEOUT = 1
+
+    test_timeout = pytest.mark.xfail(copy_func(TCPIPInstrBaseTest.test_timeout))
+
+    test_attribute_handling = pytest.mark.xfail(
+        copy_func(TCPIPInstrBaseTest.test_attribute_handling)
+    )
