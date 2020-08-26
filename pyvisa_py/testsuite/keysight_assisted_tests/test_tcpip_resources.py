@@ -6,9 +6,6 @@ import pytest
 from pyvisa.testsuite.keysight_assisted_tests import copy_func, require_virtual_instr
 from pyvisa.testsuite.keysight_assisted_tests.test_tcpip_resources import (
     TestTCPIPInstr as TCPIPInstrBaseTest,
-)
-
-from pyvisa.testsuite.keysight_assisted_tests.test_tcpip_resources import (
     TestTCPIPSocket as TCPIPSocketBaseTest,
 )
 
@@ -28,6 +25,9 @@ class TestTCPIPInstr(TCPIPInstrBaseTest):
     #: to VI_TMO_IMMEDIATE, Visa (Keysight at least) may actually use a
     #: different value depending on the values supported by the resource.
     MINIMAL_TIMEOUT = 0  # XXX should we try to have this match VISA ?
+
+    # XXX Skip test clear to see if it has some bad side effect
+    test_clear = pytest.mark.skip(copy_func(TCPIPInstrBaseTest.test_clear))
 
     test_wrapping_handler = pytest.mark.xfail(
         copy_func(TCPIPInstrBaseTest.test_wrapping_handler)
@@ -104,8 +104,10 @@ class TestTCPIPSocket(TCPIPSocketBaseTest):
     #: different value depending on the values supported by the resource.
     MINIMAL_TIMEOUT = 1
 
-    test_timeout = pytest.mark.xfail(copy_func(TCPIPInstrBaseTest.test_timeout))
+    test_timeout = pytest.mark.xfail(copy_func(TCPIPSocketBaseTest.test_timeout))
 
     test_attribute_handling = pytest.mark.xfail(
-        copy_func(TCPIPInstrBaseTest.test_attribute_handling)
+        copy_func(TCPIPSocketBaseTest.test_attribute_handling)
     )
+
+    test_stb = pytest.mark.xfail(copy_func(TCPIPSocketBaseTest.test_stb))
