@@ -636,6 +636,21 @@ class TCPIPSocketSession(Session):
 
         return offset, StatusCode.success
 
+    def clear(self) -> StatusCode:
+        """Clears a device.
+
+        Corresponds to viClear function of the VISA library.
+
+        """
+        self._pending_buffer.clear()
+        while True:
+            r, w, x = select.select([self.interface], [], [], 0.1)
+            if not r:
+                break
+            r[0].recv(4096)
+
+        return StatusCode.success
+
     def _get_tcpip_nodelay(
         self, attribute: ResourceAttribute
     ) -> Tuple[constants.VisaBoolean, StatusCode]:
