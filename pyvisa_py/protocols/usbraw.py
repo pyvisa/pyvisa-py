@@ -17,8 +17,7 @@ from .usbutil import find_devices, find_interfaces
 def find_raw_devices(
     vendor=None, product=None, serial_number=None, custom_match=None, **kwargs
 ):
-    """Find connected USB RAW devices. See usbutil.find_devices for more info.
-    """
+    """Find connected USB RAW devices. See usbutil.find_devices for more info."""
 
     def is_usbraw(dev):
         if custom_match and not custom_match(dev):

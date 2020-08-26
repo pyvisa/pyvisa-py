@@ -215,8 +215,7 @@ class Unpacker(xdrlib.Unpacker):
 
 
 class Client(object):
-    """Common base class for clients.
-    """
+    """Common base class for clients."""
 
     def __init__(self, host, prog, vers, port):
         self.host = host
@@ -440,9 +439,7 @@ def _connect(sock, host, port, timeout=0):
 
 
 class RawTCPClient(Client):
-    """Client using TCP to a specific port.
-
-    """
+    """Client using TCP to a specific port."""
 
     def __init__(self, host, prog, vers, port, open_timeout=5000):
         Client.__init__(self, host, prog, vers, port)
@@ -452,9 +449,7 @@ class RawTCPClient(Client):
         self.timeout = 4.0
 
     def make_call(self, proc, args, pack_func, unpack_func):
-        """Overridden to allow for utilizing io_timeout (passed in args).
-
-        """
+        """Overridden to allow for utilizing io_timeout (passed in args)."""
         if proc == 11:
             # vxi11.DEVICE_WRITE
             self.timeout = args[1] / 1000.0
@@ -511,9 +506,7 @@ class RawTCPClient(Client):
 
 
 class RawUDPClient(Client):
-    """Client using UDP to a specific port.
-
-    """
+    """Client using UDP to a specific port."""
 
     def __init__(self, host, prog, vers, port):
         Client.__init__(self, host, prog, vers, port)
@@ -559,8 +552,7 @@ class RawUDPClient(Client):
 
 
 class RawBroadcastUDPClient(RawUDPClient):
-    """Client using UDP broadcast to a specific port.
-    """
+    """Client using UDP broadcast to a specific port."""
 
     def __init__(self, bcastaddr, prog, vers, port):
         RawUDPClient.__init__(self, bcastaddr, prog, vers, port)
@@ -749,8 +741,7 @@ class BroadcastUDPPortMapperClient(PartialPortMapperClient, RawBroadcastUDPClien
 
 
 class TCPClient(RawTCPClient):
-    """A TCP Client that find their server through the Port mapper
-    """
+    """A TCP Client that find their server through the Port mapper"""
 
     def __init__(self, host, prog, vers, open_timeout=5000):
         pmap = TCPPortMapperClient(host, open_timeout)
@@ -762,8 +753,7 @@ class TCPClient(RawTCPClient):
 
 
 class UDPClient(RawUDPClient):
-    """A UDP Client that find their server through the Port mapper
-    """
+    """A UDP Client that find their server through the Port mapper"""
 
     def __init__(self, host, prog, vers):
         pmap = UDPPortMapperClient(host)
@@ -775,8 +765,7 @@ class UDPClient(RawUDPClient):
 
 
 class BroadcastUDPClient(Client):
-    """A Broadcast UDP Client that find their server through the Port mapper
-    """
+    """A Broadcast UDP Client that find their server through the Port mapper"""
 
     def __init__(self, bcastaddr, prog, vers):
         self.pmap = BroadcastUDPPortMapperClient(bcastaddr)

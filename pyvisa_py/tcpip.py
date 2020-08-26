@@ -297,7 +297,7 @@ class TCPIPInstrSession(Session):
         """
         # XXX make this nicer (either validate protocol or pass it)
         error = self.interface.device_trigger(
-            self.link, 0, self.lock_timeout, self._io_timeout,
+            self.link, 0, self.lock_timeout, self._io_timeout
         )
 
         return VXI11_ERRORS_TO_VISA[error]
@@ -388,9 +388,7 @@ class TCPIPInstrSession(Session):
         return VXI11_ERRORS_TO_VISA[error]
 
     def _set_timeout(self, attribute: ResourceAttribute, value: int) -> StatusCode:
-        """ Sets timeout calculated value from python way to VI_ way
-
-        """
+        """Sets timeout calculated value from python way to VI_ way"""
         if value == constants.VI_TMO_INFINITE:
             self.timeout = None
             self._io_timeout = 2 ** 32 - 1
