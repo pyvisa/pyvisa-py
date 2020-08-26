@@ -14,8 +14,7 @@ from pyvisa.testsuite.keysight_assisted_tests.test_resource_manager import (
 
 @require_virtual_instr
 class TestPyResourceManager(BaseTestResourceManager):
-    """
-    """
+    """"""
 
     test_list_resource = pytest.mark.xfail(
         copy_func(BaseTestResourceManager.test_list_resource)
@@ -32,7 +31,6 @@ class TestPyResourceManager(BaseTestResourceManager):
 
 @require_virtual_instr
 class TestPyResourceParsing(BaseTestResourceParsing):
-    """
-    """
+    """"""
 
     pass

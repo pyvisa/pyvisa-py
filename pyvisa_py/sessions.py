@@ -819,7 +819,7 @@ class Session(metaclass=abc.ABCMeta):
                 return bytes(out), StatusCode.error_timeout
 
     def _get_timeout(self, attribute: ResourceAttribute) -> Tuple[int, StatusCode]:
-        """ Returns timeout calculated value from python way to VI_ way
+        """Returns timeout calculated value from python way to VI_ way
 
         In VISA, the timeout is expressed in milliseconds or using the
         constants VI_TMO_INFINITE or VI_TMO_IMMEDIATE.
@@ -837,7 +837,7 @@ class Session(metaclass=abc.ABCMeta):
         return ret_value, StatusCode.success
 
     def _set_timeout(self, attribute: ResourceAttribute, value: int):
-        """ Sets timeout calculated value from python way to VI_ way
+        """Sets timeout calculated value from python way to VI_ way
 
         In VISA, the timeout is expressed in milliseconds or using the
         constants VI_TMO_INFINITE or VI_TMO_IMMEDIATE.

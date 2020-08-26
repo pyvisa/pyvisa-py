@@ -297,7 +297,7 @@ class TCPIPInstrSession(Session):
         """
         # XXX make this nicer (either validate protocol or pass it)
         error = self.interface.device_trigger(
-            self.link, 0, self.lock_timeout, self._io_timeout,
+            self.link, 0, self.lock_timeout, self._io_timeout
         )
 
         return VXI11_ERRORS_TO_VISA[error]
@@ -388,9 +388,7 @@ class TCPIPInstrSession(Session):
         return VXI11_ERRORS_TO_VISA[error]
 
     def _set_timeout(self, attribute: ResourceAttribute, value: int) -> StatusCode:
-        """ Sets timeout calculated value from python way to VI_ way
-
-        """
+        """Sets timeout calculated value from python way to VI_ way"""
         if value == constants.VI_TMO_INFINITE:
             self.timeout = None
             self._io_timeout = 2 ** 32 - 1
@@ -635,6 +633,21 @@ class TCPIPSocketSession(Session):
             num -= size
 
         return offset, StatusCode.success
+
+    def clear(self) -> StatusCode:
+        """Clears a device.
+
+        Corresponds to viClear function of the VISA library.
+
+        """
+        self._pending_buffer.clear()
+        while True:
+            r, w, x = select.select([self.interface], [], [], 0.1)
+            if not r:
+                break
+            r[0].recv(4096)
+
+        return StatusCode.success
 
     def _get_tcpip_nodelay(
         self, attribute: ResourceAttribute

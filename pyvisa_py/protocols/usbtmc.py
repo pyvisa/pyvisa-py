@@ -22,8 +22,7 @@ from .usbutil import find_devices, find_endpoint, find_interfaces, usb_find_desc
 
 
 class MsgID(enum.IntEnum):
-    """From USB-TMC table2
-    """
+    """From USB-TMC table2"""
 
     dev_dep_msg_out = 1
     request_dev_dep_msg_in = 2
@@ -68,9 +67,7 @@ UsbTmcCapabilities = namedtuple("UsbTmcCapabilities", "usb488 ren_control trigge
 def find_tmc_devices(
     vendor=None, product=None, serial_number=None, custom_match=None, **kwargs
 ):
-    """Find connected USBTMC devices. See usbutil.find_devices for more info.
-
-    """
+    """Find connected USBTMC devices. See usbutil.find_devices for more info."""
 
     def is_usbtmc(dev):
         if custom_match and not custom_match(dev):
@@ -128,9 +125,7 @@ class BulkInMessage(
 
     @classmethod
     def from_quirky(cls, data):
-        """Constructs a correct response for quirky devices.
-
-        """
+        """Constructs a correct response for quirky devices."""
         msgid, btag, btaginverse = struct.unpack_from("BBBx", data)
         data = data.rstrip(b"\x00")
         # check whether it contains a ';' and if throw away the first 12 bytes
