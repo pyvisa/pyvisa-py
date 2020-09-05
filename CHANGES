@@ -15,6 +15,8 @@ was causing issues with tools such as Mypy and PyInstaller.
 - usbtmc: improve support for USB488 devices. PR #241
   For instrument that support REN_CONTROL, we now always assert the REN line.
 - fix a crash on Windows when opening multiple USBTMC devices
+- make sure setuptools installs a module that follows PEP8 naming guidelines
+  pyvisa-py --> pyvisa_py
 
 0.4.1 (2020-05-27)
 ------------------
