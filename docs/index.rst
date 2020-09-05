@@ -11,6 +11,8 @@ PyVISA-py: Pure Python backend for PyVISA
 PyVISA-py is a backend for PyVISA_. It implements most of the methods
 for Message Based communication (Serial/USB/GPIB/Ethernet) using Python
 and some well developed, easy to deploy and cross platform libraries.
+The pyvisa_py module is not intended to be imported anywhere in your
+code, instead follow the instructions below for using it.
 
 You can select the PyVISA-py backend using **@py** when instantiating the
 visa Resource Manager:
