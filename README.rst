@@ -8,7 +8,7 @@ PyVISA-py
     :target: https://github.com/pyvisa/pyvisa-py/actions
     :alt: Documentation building
 .. image:: https://dev.azure.com/pyvisa/pyvisa-py/_apis/build/status/pyvisa.pyvisa-py.keysight-assisted?branchName=master
-    :target: https://github.com/pyvisa/pyvisa/actions
+    :target: https://dev.azure.com/pyvisa/pyvisa-py/_build
     :alt: Keysight assisted testing
 .. image:: https://codecov.io/gh/pyvisa/pyvisa-py/branch/master/graph/badge.svg
     :target: https://codecov.io/gh/pyvisa/pyvisa-py
@@ -30,15 +30,16 @@ libraries python packages!).
 Description
 -----------
 
-PyVISA started as wrapper for the NI-VISA library and therefore you need to install
-National Instruments VISA library in your system. This works most of the time,
-for most people. But NI-VISA is a proprietary library that only works on certain
-systems. That is when PyVISA-py jumps in.
+PyVISA started as wrapper for the IVI-VISA library and therefore you need to install
+a VISA library in your system (National Instruments, Keysight, etc). This works
+most of the time, for most people. But IVI-VISA implementations are proprietary
+libraries that only works on certain systems. That is when PyVISA-py jumps in.
 
-Starting from version 1.6, PyVISA allows to use different backends. These backends can be
-dynamically loaded. PyVISA-py is one of such backends. It implements most of the methods
-for Message Based communication (Serial/USB/GPIB/Ethernet) using Python and some well developed,
-easy to deploy and cross platform libraries
+Starting from version 1.6, PyVISA allows to use different backends. These
+backends can be dynamically loaded. PyVISA-py is one of such backends. It
+implements most of the methods for Message Based communication
+(Serial/USB/GPIB/Ethernet) using Python and some well developed, easy to deploy
+and cross platform libraries
 
 .. _VISA: http://www.ivifoundation.org/Downloads/Specifications.htm
 
@@ -46,13 +47,14 @@ easy to deploy and cross platform libraries
 VISA and Python
 ---------------
 
-Python has a couple of features that make it very interesting for measurement controlling:
+Python has a couple of features that make it very interesting for measurement
+controlling:
 
 - Python is an easy-to-learn scripting language with short development cycles.
-- It represents a high abstraction level, which perfectly blends with the abstraction
-  level of measurement programs.
-- It has a very rich set of native libraries, including numerical and plotting modules for
-  data analysis and visualisation.
+- It represents a high abstraction level, which perfectly blends with the
+  abstraction level of measurement programs.
+- It has a very rich set of native libraries, including numerical and plotting
+  modules for data analysis and visualisation.
 - A large set of books (in many languages) and on-line publications is available.
 
 
@@ -66,7 +68,7 @@ Optionally
 - PySerial (to interface with Serial instruments)
 - PyUSB (to interface with USB instruments)
 - linux-gpib (to interface with gpib instruments, only on linux)
-- gpib-ctypes (to interface with GPIB instruments on Windows and Linux, warning: experimental)
+- gpib-ctypes (to interface with GPIB instruments on Windows and Linux)
 
 
 Installation
