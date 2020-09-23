@@ -1,6 +1,11 @@
 PyVISA-py Changelog
 ===================
 
+0.5.1 (unreleased)
+------------------
+
+- fix return value of USB close method PR #265
+
 0.5.0 (16-09-2020)
 ------------------
 
