@@ -182,6 +182,7 @@ class USBSession(Session):
 
     def close(self):
         self.interface.close()
+        return StatusCode.success
 
     def _get_attribute(
         self, attribute: constants.ResourceAttribute
