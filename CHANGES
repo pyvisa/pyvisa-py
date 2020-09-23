@@ -5,6 +5,7 @@ PyVISA-py Changelog
 ------------------
 
 - fix return value of USB close method PR #265
+- fix pyvisa version contraint PR #268
 
 0.5.0 (16-09-2020)
 ------------------
