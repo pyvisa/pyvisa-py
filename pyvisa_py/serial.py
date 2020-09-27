@@ -198,9 +198,12 @@ class SerialSession(Session):
             else:
                 raise ValueError("Unknown value for VI_ATTR_ASRL_END_OUT: %s" % end_out)
 
-            count = 0
-            for d in data:
-                count += self.interface.write(d)
+            if end_out == SerialTermination.last_bit:
+                count = 0
+                for d in data:
+                    count += self.interface.write(d)
+            else:
+                count = self.interface.write(data)
 
             if end_out == SerialTermination.termination_break:
                 logger.debug("Serial.sendBreak")
