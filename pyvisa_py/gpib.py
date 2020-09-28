@@ -454,7 +454,7 @@ class _GPIBCommon(Session):
         try:
             if mode == constants.VI_GPIB_REN_DEASSERT_GTL:
                 # Send GTL command byte (cf linux-gpib documentation)
-                ifc.command(chr(1))
+                ifc.command(b"\x01")
             if mode in (
                 constants.VI_GPIB_REN_DEASSERT,
                 constants.VI_GPIB_REN_DEASSERT_GTL,
@@ -463,10 +463,10 @@ class _GPIBCommon(Session):
 
             if mode == constants.VI_GPIB_REN_ASSERT_LLO:
                 # LLO
-                ifc.command(b"0x11")
+                ifc.command(b"\x11")
             elif mode == constants.VI_GPIB_REN_ADDRESS_GTL:
                 # GTL
-                ifc.command(b"0x1")
+                ifc.command(b"\x01")
             elif mode == constants.VI_GPIB_REN_ASSERT_ADDRESS_LLO:
                 pass
             elif mode in (
