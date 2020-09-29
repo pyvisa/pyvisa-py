@@ -178,14 +178,12 @@ class SerialSession(Session):
 
         """
         logger.debug("Serial.write %r" % data)
-        # TODO: How to deal with VI_ATTR_TERMCHAR_EN
         end_out, _ = self.get_attribute(ResourceAttribute.asrl_end_out)
         send_end, _ = self.get_attribute(ResourceAttribute.send_end_enabled)
 
-        # For end_out in (SerialTermination.none, SerialTermination.termination_break)
-        # we can send the data as passed.
-
-        if end_out == SerialTermination.last_bit:
+        if end_out in (SerialTermination.none, SerialTermination.termination_break):
+            pass
+        elif end_out == SerialTermination.last_bit:
             last_bit, _ = self.get_attribute(ResourceAttribute.asrl_data_bits)
             mask = 1 << (last_bit - 1)
             data = bytes(iter_bytes(data, mask, send_end))
