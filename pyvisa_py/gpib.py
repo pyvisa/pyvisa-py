@@ -449,12 +449,12 @@ class _GPIBCommon(Session):
             ):
                 return constants.StatusCode.error_nonsupported_operation
 
-        # INTFC don't have an interface so use the controller
-        ifc = self.interface or self.controller
+        # Commands and remote enable operation are common to the whole bus and
+        # are hence handled by the board (ie self.controller)
         try:
             if mode == constants.VI_GPIB_REN_DEASSERT_GTL:
                 # Send GTL command byte (cf linux-gpib documentation)
-                ifc.command(b"\x01")
+                self.controller.command(b"\x01")
             if mode in (
                 constants.VI_GPIB_REN_DEASSERT,
                 constants.VI_GPIB_REN_DEASSERT_GTL,
@@ -463,23 +463,24 @@ class _GPIBCommon(Session):
 
             if mode == constants.VI_GPIB_REN_ASSERT_LLO:
                 # LLO
-                ifc.command(b"\x11")
+                self.controller.command(b"\x11")
             elif mode == constants.VI_GPIB_REN_ADDRESS_GTL:
                 # GTL
-                ifc.command(b"\x01")
+                self.controller.command(b"\x01")
             elif mode == constants.VI_GPIB_REN_ASSERT_ADDRESS_LLO:
                 pass
             elif mode in (
                 constants.VI_GPIB_REN_ASSERT,
                 constants.VI_GPIB_REN_ASSERT_ADDRESS,
             ):
-                ifc.remote_enable(1)
+                self.controller.remote_enable(1)
                 if (
                     isinstance(self.parsed, GPIBInstr)
                     and mode == constants.VI_GPIB_REN_ASSERT_ADDRESS
                 ):
+                    # GPIBINstr have a valid interface
                     # 0 for the secondary address means don't use it
-                    ifc.listener(
+                    self.interface.listener(
                         self.parsed.primary_address, self.parsed.secondary_address
                     )
         except gpib.GpibError as e:
