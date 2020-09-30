@@ -8,6 +8,7 @@
 """
 import ctypes  # Used for missing bindings not ideal
 from bisect import bisect
+from enum import Enum
 from typing import Any, Iterator, List, Tuple, Union
 
 from pyvisa import attributes, constants, logger
@@ -74,6 +75,27 @@ def _patch_Gpib() -> None:
 
 
 _patch_Gpib()
+
+
+class GPIBCommand(bytes, Enum):
+    """GPIB commands to use in send_command."""
+
+    #:
+    GTL = b"\x01"
+
+    #:
+    LLO = b"\x11"
+
+    #:
+    UNL = b"\x5F"
+
+    @staticmethod
+    def MTA(board_pad):
+        return chr(40 + board_pad)
+
+    @staticmethod
+    def MLA(board_pad):
+        return chr(20 + board_pad)
 
 
 def _find_boards() -> Iterator[Tuple[int, int]]:
@@ -453,8 +475,12 @@ class _GPIBCommon(Session):
         # are hence handled by the board (ie self.controller)
         try:
             if mode == constants.VI_GPIB_REN_DEASSERT_GTL:
-                # Send GTL command byte (cf linux-gpib documentation)
-                self.controller.command(b"\x01")
+                # Make the instrument Go To Local
+                # Using ibloc is a nice way to avoid manually sending all the
+                # right commands but under the hood it does send GTL to the
+                # proper device.
+                # Only for INSTR hence sel.interface exists
+                self.interface.ibloc()
             if mode in (
                 constants.VI_GPIB_REN_DEASSERT,
                 constants.VI_GPIB_REN_DEASSERT_GTL,
@@ -462,13 +488,27 @@ class _GPIBCommon(Session):
                 self.controller.remote_enable(0)
 
             if mode == constants.VI_GPIB_REN_ASSERT_LLO:
-                # LLO
+                # Send LLO to all devices addressed to listen as per the
+                # specification.
                 self.controller.command(b"\x11")
             elif mode == constants.VI_GPIB_REN_ADDRESS_GTL:
-                # GTL
-                self.controller.command(b"\x01")
+                # Make the instrument Go To Local
+                # Using ibloc is a nice way to avoid manually sending all the
+                # right commands but under the hood it does send GTL to the
+                # proper device.
+                # Only fro INSTR hence sel.interface exists
+                self.interface.ibloc()
             elif mode == constants.VI_GPIB_REN_ASSERT_ADDRESS_LLO:
-                pass
+                # Make the board teh controller, unlisten all devices, address
+                # the target device and send LLO
+                # Closely inspired from linux-glib implementation of ibloc
+                # XXX handle secondary address
+                self.controller.command(
+                    GPIBCommand.MTA(int(self.controller.parsed.primary_address))
+                    + GPIBCommand.UNL
+                    + GPIBCommand.MLA(int(self.interface.parsed.primary_address))
+                    + GPIBCommand.LLO
+                )
             elif mode in (
                 constants.VI_GPIB_REN_ASSERT,
                 constants.VI_GPIB_REN_ASSERT_ADDRESS,
@@ -478,10 +518,11 @@ class _GPIBCommon(Session):
                     isinstance(self.parsed, GPIBInstr)
                     and mode == constants.VI_GPIB_REN_ASSERT_ADDRESS
                 ):
-                    # GPIBINstr have a valid interface
-                    # 0 for the secondary address means don't use it
-                    self.interface.listener(
-                        self.parsed.primary_address, self.parsed.secondary_address
+                    # Address teh specified device,
+                    # XXX handle secondary address
+                    self.controller.command(
+                        GPIBCommand.UNL
+                        + GPIBCommand.MLA(int(self.interface.parsed.primary_address))
                     )
         except gpib.GpibError as e:
             return convert_gpib_error(e, self.interface.ibsta(), "perform control REN")
