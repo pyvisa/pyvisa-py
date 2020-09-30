@@ -6,6 +6,7 @@
 :license: MIT, see LICENSE for more details.
 
 """
+from pyvisa.highlevel import list_backends
 from pyvisa.testsuite import BaseTestCase
 
 from pyvisa_py import highlevel
@@ -13,6 +14,10 @@ from pyvisa_py import highlevel
 
 class TestPyVisaLibrary(BaseTestCase):
     """Test generic property of PyVisaLibrary."""
+
+    def test_list_backends(self):
+        """Test listing backends."""
+        assert "py" in list_backends()
 
     def test_debug_info(self):
         """Test generating debug infos for PyVISA-py."""

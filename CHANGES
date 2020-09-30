@@ -4,6 +4,7 @@ PyVISA-py Changelog
 0.5.1 (unreleased)
 ------------------
 
+- list serial resources under Windows without the COM prefix #269
 - fix writing to serial resources PR #277
 - fix return value of USB close method PR #265
 - fix pyvisa version contraint PR #268

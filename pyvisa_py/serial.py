@@ -6,6 +6,7 @@
 :license: MIT, see LICENSE for more details.
 
 """
+import sys
 from typing import Any, List, Optional, Tuple
 
 from pyvisa import attributes, constants, logger, rname
@@ -29,6 +30,8 @@ except ImportError as e:
         "Please install PySerial (>=3.0) to use this resource type.\n%s" % e,
     )
     raise
+
+IS_WIN = sys.platform == "win32"
 
 
 def iter_bytes(data: bytes, mask: Optional[int] = None, send_end: bool = False):
@@ -66,7 +69,10 @@ class SerialSession(Session):
 
     @staticmethod
     def list_resources() -> List[str]:
-        return ["ASRL%s::INSTR" % port[0] for port in comports()]
+        return [
+            "ASRL%s::INSTR" % (port[0][3:] if IS_WIN else port[0])
+            for port in comports()
+        ]
 
     @classmethod
     def get_low_level_info(cls) -> str:
@@ -81,7 +87,9 @@ class SerialSession(Session):
         cls = serial.Serial
 
         self.interface = cls(
-            port=self.parsed.board, timeout=self.timeout, write_timeout=self.timeout
+            port=("COM" if IS_WIN else "") + self.parsed.board,
+            timeout=self.timeout,
+            write_timeout=self.timeout,
         )
 
         for name in (
