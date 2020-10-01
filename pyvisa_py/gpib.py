@@ -80,22 +80,32 @@ _patch_Gpib()
 class GPIBCommand(bytes, Enum):
     """GPIB commands to use in send_command."""
 
-    #:
+    #: GO TO LOCAL affects only addressed devices
     GTL = b"\x01"
 
-    #:
+    #: LOCAL LOCKOUT
     LLO = b"\x11"
 
-    #:
+    #: UNLISTEN
     UNL = b"\x5F"
 
+    # Talker
     @staticmethod
     def MTA(board_pad):
         return chr(40 + board_pad)
 
+    # Listener
     @staticmethod
-    def MLA(board_pad):
-        return chr(20 + board_pad)
+    def MLA(device_pad):
+        return chr(20 + device_pad)
+
+    # Listener secondary address
+    # for VISA SAD range from 1 to 31 and 0 is not SAD
+    @staticmethod
+    def MSA(device_sad):
+        if device_sad == 0:
+            return b""
+        return chr(95 + device_sad)
 
 
 def _find_boards() -> Iterator[Tuple[int, int]]:
@@ -499,14 +509,18 @@ class _GPIBCommon(Session):
                 # Only fro INSTR hence sel.interface exists
                 self.interface.ibloc()
             elif mode == constants.VI_GPIB_REN_ASSERT_ADDRESS_LLO:
-                # Make the board teh controller, unlisten all devices, address
+                # Make the board the controller, unlisten all devices, address
                 # the target device and send LLO
-                # Closely inspired from linux-glib implementation of ibloc
-                # XXX handle secondary address
+                # Closely inspired from linux-glib implementation of ibloc but
+                # in the VISA spec the board cannot have a secondary address
+                board_pad = int(self.controller.parsed.primary_address)
+                device_pad = int(self.interface.parsed.primary_address)
+                device_sad = int(self.interface.parsed.secondary_address)
                 self.controller.command(
-                    GPIBCommand.MTA(int(self.controller.parsed.primary_address))
+                    GPIBCommand.MTA(board_pad)
                     + GPIBCommand.UNL
-                    + GPIBCommand.MLA(int(self.interface.parsed.primary_address))
+                    + GPIBCommand.MLA(device_pad)
+                    + GPIBCommand.MSA(device_sad)
                     + GPIBCommand.LLO
                 )
             elif mode in (
@@ -519,10 +533,12 @@ class _GPIBCommon(Session):
                     and mode == constants.VI_GPIB_REN_ASSERT_ADDRESS
                 ):
                     # Address teh specified device,
-                    # XXX handle secondary address
+                    device_pad = int(self.interface.parsed.primary_address)
+                    device_sad = int(self.interface.parsed.secondary_address)
                     self.controller.command(
                         GPIBCommand.UNL
-                        + GPIBCommand.MLA(int(self.interface.parsed.primary_address))
+                        + GPIBCommand.MLA(device_pad)
+                        + GPIBCommand.MSA(device_sad)
                     )
         except gpib.GpibError as e:
             return convert_gpib_error(e, self.interface.ibsta(), "perform control REN")
