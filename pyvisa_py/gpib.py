@@ -87,7 +87,7 @@ class GPIBCommand(bytes, Enum):
     LLO = b"\x11"
 
     #: UNLISTEN
-    UNL = b"\x5F"
+    UNL = b"\x3F"
 
     # Talker
     @staticmethod
