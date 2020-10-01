@@ -16,6 +16,7 @@ from pyvisa.constants import ResourceAttribute, StatusCode
 from pyvisa.rname import GPIBInstr, GPIBIntfc
 
 from .sessions import Session, UnknownAttribute
+from .common import int_to_byte
 
 try:
     GPIB_CTYPES = True
@@ -91,21 +92,21 @@ class GPIBCommand(bytes, Enum):
 
     # Talker
     @staticmethod
-    def MTA(board_pad):
-        return chr(40 + board_pad)
+    def MTA(board_pad) -> bytes:
+        return int_to_byte(40 + board_pad)
 
     # Listener
     @staticmethod
-    def MLA(device_pad):
-        return chr(20 + device_pad)
+    def MLA(device_pad) -> bytes:
+        return int_to_byte(20 + device_pad)
 
     # Listener secondary address
     # for VISA SAD range from 1 to 31 and 0 is not SAD
     @staticmethod
-    def MSA(device_sad):
+    def MSA(device_sad) -> bytes:
         if device_sad == 0:
             return b""
-        return chr(95 + device_sad)
+        return int_to_byte(95 + device_sad)
 
 
 def _find_boards() -> Iterator[Tuple[int, int]]:
