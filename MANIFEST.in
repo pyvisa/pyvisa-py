@@ -1,5 +1,5 @@
 include README AUTHORS CHANGES LICENSE
 recursive-include pyvisa-py *
 recursive-include docs *
-prune docs/_build
+prune docs/build
 global-exclude *.pyc *~ .DS_Store *__pycache__* *.pyo
