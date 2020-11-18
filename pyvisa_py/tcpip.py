@@ -95,7 +95,7 @@ class TCPIPInstrSession(Session):
         try:
             self.interface.destroy_link(self.link)
         except (errors.VisaIOError, socket.error, rpc.RPCError) as e:
-            print("Error closing VISA link: {}".format(e))
+            common.logging.warning("Error closing VISA link: {}".format(e))
 
         self.interface.close()
         self.link = 0
