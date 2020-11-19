@@ -3,6 +3,7 @@
 
 """
 import pytest
+from pyvisa import errors
 from pyvisa.testsuite.keysight_assisted_tests import copy_func, require_virtual_instr
 from pyvisa.testsuite.keysight_assisted_tests.test_tcpip_resources import (
     TestTCPIPInstr as TCPIPInstrBaseTest,
@@ -86,6 +87,21 @@ class TestTCPIPInstr(TCPIPInstrBaseTest):
     test_attribute_handling = pytest.mark.xfail(
         copy_func(TCPIPInstrBaseTest.test_attribute_handling)
     )
+
+    def test_recovering_from_timeout(self):
+        """Test communication after a timeout.
+
+        This can fail if we do not handle properly the lastxid value.
+
+        """
+        with pytest.raises(errors.VisaIOError):
+            self.instr.read()
+
+        self.instr.write("RECEIVE")
+        self.instr.write("test")
+        self.instr.write("SEND")
+        with pytest.warns(Warning):
+            assert self.instr.read() == "test\n"
 
 
 @require_virtual_instr
