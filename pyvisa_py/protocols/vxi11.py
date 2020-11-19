@@ -12,8 +12,8 @@ This file is an offspring of the Lantz project.
 import enum
 import socket
 
-from . import rpc
 from ..common import logger
+from . import rpc
 
 # fmt: off
 # VXI-11 RPC constants
