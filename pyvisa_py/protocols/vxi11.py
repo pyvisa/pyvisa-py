@@ -13,6 +13,7 @@ import enum
 import socket
 
 from . import rpc
+from ..common import logger
 
 # fmt: off
 # VXI-11 RPC constants
@@ -224,8 +225,8 @@ class CoreClient(rpc.TCPClient):
                 self.packer.pack_device_write_parms,
                 self.unpacker.unpack_device_write_resp,
             )
-        except socket.timeout as e:
-            return ErrorCodes.io_error, e.args[0]
+        except rpc.RPCTimeoutError as e:
+            return ErrorCodes.io_error, str(e)
 
     def device_read(
         self, link, request_size, io_timeout, lock_timeout, flags, term_char
@@ -238,8 +239,19 @@ class CoreClient(rpc.TCPClient):
                 self.packer.pack_device_read_parms,
                 self.unpacker.unpack_device_read_resp,
             )
-        except socket.timeout as e:
-            return ErrorCodes.io_error, e.args[0], ""
+        except rpc.RPCTimeoutError as e:
+            if e.details["received_bytes"] and e.details["last_fragment"]:
+                logger.debug(
+                    "No data were received, the connection may be dead "
+                    "but most likely the instrument has no data to transfer and "
+                    "just did not bother answering"
+                )
+                # Decrement the xid since the instrument fully ignored it.
+                self.lastxid -= 1
+                # Identify the issue as a timeout since this is the most likely
+                # reason.
+                return ErrorCodes.io_timeout, e.args[0], ""
+            return ErrorCodes.io_error, e.args[0], e.details["received_bytes"]
 
     def device_read_stb(self, link, flags, lock_timeout, io_timeout):
         params = (link, flags, lock_timeout, io_timeout)

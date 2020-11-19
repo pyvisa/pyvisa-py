@@ -117,6 +117,22 @@ class RPCUnpackError(RPCError):
     pass
 
 
+@enum.unique
+class RPCOperation(enum.Enum):
+    sendfrag = enum.auto()
+    recvfrag = enum.auto()
+
+
+class RPCTimeoutError(RPCError):
+    def __init__(self, operation: RPCOperation, msg: str, details: None) -> None:
+        self.operation = operation
+        self.msg = msg
+        self.details = details
+
+    def __str__(self):
+        return f"Timeout occurred during {self.operation}. {self.msg}"
+
+
 def make_auth_null():
     return b""
 
@@ -292,8 +308,8 @@ def _sendrecord(sock, record, fragsize=None, timeout=None):
     if timeout is not None:
         r, w, x = select.select([], [sock], [], timeout)
         if sock not in w:
-            msg = "socket.timeout: The instrument seems to have stopped " "responding."
-            raise socket.timeout(msg)
+            msg = "The instrument seems to have stopped responding."
+            raise RPCTimeoutError(RPCOperation.sendfrag, msg)
 
     last = False
     if not fragsize:
@@ -364,11 +380,16 @@ def _recvrecord(sock, timeout, read_fun=None, min_packages=0):
                         len(buffer),
                         exp_length,
                     )
-                    msg = (
-                        "socket.timeout: The instrument seems to have stopped "
-                        "responding."
+                    msg = "The instrument seems to have stopped responding."
+                    raise RPCTimeoutError(
+                        RPCOperation.recvfrag,
+                        msg,
+                        {
+                            "received_bytes": record,
+                            "last_fragment": buffer,
+                            "expected_length": exp_length,
+                        },
                     )
-                    raise socket.timeout(msg)
                 elif min_packages != 0 and packages_received >= min_packages:
                     logger.debug(
                         "Stop receiving after %i of %i requested packages. Received record through %s: %r",
