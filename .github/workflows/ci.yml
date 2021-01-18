@@ -34,7 +34,7 @@ jobs:
           pip install git+https://github.com/pyvisa/pyvisa.git#egg=pyvisa
       - name: Isort
         run: |
-          isort pyvisa_y -c;
+          isort pyvisa_py -c;
       - name: Black
         run: |
           black pyvisa_py --check;
