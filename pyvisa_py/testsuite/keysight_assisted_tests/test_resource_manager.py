@@ -6,8 +6,6 @@ import pytest
 from pyvisa.testsuite.keysight_assisted_tests import copy_func, require_virtual_instr
 from pyvisa.testsuite.keysight_assisted_tests.test_resource_manager import (
     TestResourceManager as BaseTestResourceManager,
-)
-from pyvisa.testsuite.keysight_assisted_tests.test_resource_manager import (
     TestResourceParsing as BaseTestResourceParsing,
 )
 
