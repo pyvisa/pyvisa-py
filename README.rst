@@ -7,10 +7,10 @@ PyVISA-py
 .. image:: https://github.com/pyvisa/pyvisa-py/workflows/Documentation%20building/badge.svg
     :target: https://github.com/pyvisa/pyvisa-py/actions
     :alt: Documentation building
-.. image:: https://dev.azure.com/pyvisa/pyvisa-py/_apis/build/status/pyvisa.pyvisa-py.keysight-assisted?branchName=master
+.. image:: https://dev.azure.com/pyvisa/pyvisa-py/_apis/build/status/pyvisa.pyvisa-py.keysight-assisted?branchName=main
     :target: https://dev.azure.com/pyvisa/pyvisa-py/_build
     :alt: Keysight assisted testing
-.. image:: https://codecov.io/gh/pyvisa/pyvisa-py/branch/master/graph/badge.svg
+.. image:: https://codecov.io/gh/pyvisa/pyvisa-py/branch/main/graph/badge.svg
     :target: https://codecov.io/gh/pyvisa/pyvisa-py
     :alt: Code Coverage
 .. image:: https://readthedocs.org/projects/pyvisa-py/badge/?version=latest
