@@ -1,6 +1,11 @@
 PyVISA-py Changelog
 ===================
 
+0.5.2 (unreleased)
+------------------
+
+- handle SUPPRESS_END_EN in usb.py to fix #293
+
 0.5.1 (30-09-2020)
 ------------------
 
