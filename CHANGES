@@ -1,6 +1,11 @@
 PyVISA-py Changelog
 ===================
 
+0.5.3 (unreleased)
+------------------
+
+- List TCPIP resources to fix #165
+
 0.5.2 (04-02-2020)
 ------------------
 
