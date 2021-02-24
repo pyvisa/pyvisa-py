@@ -63,15 +63,19 @@ class TCPIPInstrSession(Session):
     def list_resources() -> List[str]:
         pmap = rpc.BroadcastUDPPortMapperClient("255.255.255.255")
         pmap.set_timeout(1)
-        resp = pmap.get_port(
-            (vxi11.DEVICE_CORE_PROG, vxi11.DEVICE_CORE_VERS, rpc.IPPROTO_TCP, 0)
-        )
-        res = [r[1][0] for r in resp if r[0] > 0]
-        res = sorted(res, key=lambda ip: tuple(int(part) for part in ip.split(".")))
-        # TODO: Detect GPIB over TCPIP
-        res = ["TCPIP::{}::INSTR".format(host) for host in res]
 
-        return res
+        try:
+            resp = pmap.get_port(
+                (vxi11.DEVICE_CORE_PROG, vxi11.DEVICE_CORE_VERS, rpc.IPPROTO_TCP, 0)
+            )
+            res = [r[1][0] for r in resp if r[0] > 0]
+            res = sorted(res, key=lambda ip: tuple(int(part) for part in ip.split(".")))
+            # TODO: Detect GPIB over TCPIP
+            res = ["TCPIP::{}::INSTR".format(host) for host in res]
+
+            return res
+        except rpc.RPCError:
+            return []
 
     def after_parsing(self) -> None:
         # TODO: board_number not handled
