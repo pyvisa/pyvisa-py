@@ -476,10 +476,18 @@ class RawTCPClient(Client):
             "RawTCPClient: connecting to socket at (%s, %s)", self.host, self.port
         )
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
-        self.sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, 60)
-        self.sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, 60)
-        self.sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 5)
+
+        # In case of an environment with idle socket garbage collection (like docker)
+        # sockets need to be kept alive. Set <TODO: Global variable> to enable 
+        # keepalive packets even for VXI11 protocol. To read more on this issue
+        # https://tech.xing.com/a-reason-for-unexplained-connection-timeouts-on-kubernetes-docker-abd041cf7e02
+        globalvar = True
+        if globalvar:
+            self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
+            self.sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, 60)
+            self.sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, 60)
+            self.sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 5)
+        
         if not _connect(self.sock, self.host, self.port, timeout):
             raise RPCError("can't connect to server")
 
