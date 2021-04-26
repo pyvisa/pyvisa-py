@@ -84,7 +84,7 @@ class USBSession(Session):
             self.parsed.serial_number,
         )
 
-        for name in ("SEND_END_EN", "TERMCHAR", "TERMCHAR_EN"):
+        for name in ("SEND_END_EN", "SUPPRESS_END_EN", "TERMCHAR", "TERMCHAR_EN"):
             attribute = getattr(constants, "VI_ATTR_" + name)
             self.attrs[attribute] = attributes.AttributesByID[attribute].default
 

@@ -5,6 +5,14 @@ PyVISA-py Changelog
 ------------------
 - fix tcp/ip connections dropping from inside Docker containers after 5 minute idling #285
 
+0.5.2 (04-02-2020)
+------------------
+
+- handle SUPPRESS_END_EN in usb.py to fix #293 PR #294
+- add python_requires to avoid people trying to get a
+  new pyvisa-py on Python 2 PR #295
+  This addresses pyvisa issue #578
+
 0.5.1 (30-09-2020)
 ------------------
 
