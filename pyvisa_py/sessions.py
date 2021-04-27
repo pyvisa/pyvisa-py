@@ -698,10 +698,7 @@ class Session(metaclass=abc.ABCMeta):
         try:
             attr = attributes.AttributesByID[attribute]
         except KeyError:
-            try:
-                attr = py_attributes.AttributesByID[attribute]
-            except KeyError:
-                return StatusCode.error_nonsupported_attribute
+            return StatusCode.error_nonsupported_attribute
 
         # Check if the attribute is defined for this session type.
         if not attr.in_resource(self.session_type):
