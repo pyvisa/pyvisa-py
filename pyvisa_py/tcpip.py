@@ -280,8 +280,21 @@ class TCPIPInstrSession(Session):
             Return value of the library call.
 
         """
+
+        # In case of an environment with idle socket garbage collection (like docker)
+        # sockets need to be kept alive. Set <TODO: Global variable> to enable
+        # keepalive packets even for VXI11 protocol. To read more on this issue
+        # https://tech.xing.com/a-reason-for-unexplained-connection-timeouts-on-kubernetes-docker-abd041cf7e02
         if attribute == constants.VI_ATTR_TCPIP_KEEPALIVE:
-            print(self.interface.sock)
+            if attribute_state === True:
+                self.interface.sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
+                self.interface.sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, 60)
+                self.interface.sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, 60)
+                self.interface.sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 5)
+            elif attribute_state === False:
+                self.interface.sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 0)
+            else:
+                return StatusCode.error_nonsupported_format
             return StatusCode.success
 
         raise UnknownAttribute(attribute)
