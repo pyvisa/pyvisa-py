@@ -33,7 +33,7 @@ from pyvisa.attributes import (
     BooleanAttribute,
 )
 
-import .constants
+from . import constants as py_constants
 
 # Copy of PyVisa attribute architecture
 #: Map resource to attribute
@@ -83,7 +83,7 @@ class AttrPyVI_ATTR_TCPIP_KEEPALIVE_VXI11(BooleanAttribute):
         if not cls.__name__.startswith("AttrPyVI_"):
             return
 
-        cls.attribute_id = getattr(constants, cls.visa_name)
+        cls.attribute_id = getattr(py_constants, cls.visa_name)
         # Check that the docstring are populated before extending them
         # Cover the case of running with Python with -OO option
         if cls.__doc__ is not None:
