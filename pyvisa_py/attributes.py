@@ -7,13 +7,48 @@ For additional information and VISA attributes see pyvisa.constants
 :license: MIT, see LICENSE for more details.
 """
 
-import pyvisa.attributes.VI_ATTR_TCPIP_KEEPALIVE as former_tcp_keepalive
+from collections import defaultdict
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Dict,
+    Generic,
+    List,
+    Optional,
+    Set,
+    SupportsBytes,
+    SupportsInt,
+    Tuple,
+    Type,
+    TypeVar,
+    Union,
+    overload,
+)
+
+from pyvisa import constants
+from pyvisa.attributes import (
+    AllSessionTypes,
+    AttributesByID,
+    AttributesPerResource,
+    BooleanAttribute,
+)
+
 import .constants
 
-from pyvisa.attributes import AttributesPerResource, AllSessionTypes, AttributesByID
+# Copy of PyVisa attribute architecture
+#: Map resource to attribute
+AttributesPerResource: DefaultDict[
+    Union[
+        Tuple[constants.InterfaceType, str], Type[AllSessionTypes], constants.EventType
+    ],
+    Set[Type["Attribute"]],
+] = defaultdict(set)
+
+#: Map id to attribute
+AttributesByID: Dict[int, Type["Attribute"]] = dict()
 
 
-class AttrPyVI_ATTR_TCPIP_KEEPALIVE_VXI11(former_tcp_keepalive):
+class AttrPyVI_ATTR_TCPIP_KEEPALIVE_VXI11(BooleanAttribute):
     """Requests that a TCP/IP provider enable the use of keep-alive packets.
 
     This is not limited to VXI11 Instrumets. Use VI_ATTR_TCPIP_KEEPALIVE

@@ -15,6 +15,7 @@ from pyvisa.constants import ResourceAttribute, StatusCode
 from pyvisa.typing import VISARMSession
 
 from .common import int_to_byte
+import .attributes as py_attributes
 
 #: Type var used when typing register.
 T = TypeVar("T", bound=Type["Session"])
@@ -678,7 +679,7 @@ class Session(metaclass=abc.ABCMeta):
         session.
 
         Does a few checks before and calls before dispatching to
-        `_gst_attribute`.
+        `_set_attribute`.
 
         Parameters
         ----------
@@ -697,7 +698,10 @@ class Session(metaclass=abc.ABCMeta):
         try:
             attr = attributes.AttributesByID[attribute]
         except KeyError:
-            return StatusCode.error_nonsupported_attribute
+            try:
+                attr = py_attributes.AttributesByID[attribute]
+            except KeyError:
+                return StatusCode.error_nonsupported_attribute
 
         # Check if the attribute is defined for this session type.
         if not attr.in_resource(self.session_type):
