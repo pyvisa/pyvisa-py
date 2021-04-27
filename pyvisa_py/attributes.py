@@ -31,6 +31,7 @@ from pyvisa.attributes import (
     AttributesByID,
     AttributesPerResource,
     BooleanAttribute,
+    DefaultDict
 )
 
 from . import constants as py_constants
