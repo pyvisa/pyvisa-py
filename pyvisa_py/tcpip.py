@@ -283,7 +283,7 @@ class TCPIPInstrSession(Session):
         """
 
         # In case of an environment with idle socket garbage collection (like docker)
-        # sockets need to be kept alive. Set <TODO: Global variable> to enable
+        # sockets need to be kept alive. Set pyvisa.constants.ResourceAttribute.tcpip_keepalive to enable
         # keepalive packets even for VXI11 protocol. To read more on this issue
         # https://tech.xing.com/a-reason-for-unexplained-connection-timeouts-on-kubernetes-docker-abd041cf7e02
         if attribute == constants.VI_ATTR_TCPIP_KEEPALIVE:
