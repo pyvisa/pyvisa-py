@@ -59,6 +59,9 @@ class TCPIPInstrSession(Session):
     # for a specific kind of resource
     parsed: rname.TCPIPInstr
 
+    # Setting if keepalive has been activated
+    keepalive: bool
+
     @staticmethod
     def list_resources() -> List[str]:
         # TODO: is there a way to get this?
@@ -244,7 +247,7 @@ class TCPIPInstrSession(Session):
             raise NotImplementedError
 
         elif attribute == constants.VI_ATTR_TCPIP_KEEPALIVE:
-            raise NotImplementedError
+            return self.keepalive, StatusCode.success
 
         elif attribute == constants.VI_ATTR_TCPIP_NODELAY:
             raise NotImplementedError
@@ -277,6 +280,10 @@ class TCPIPInstrSession(Session):
             Return value of the library call.
 
         """
+        if attribute == constants.VI_ATTR_TCPIP_KEEPALIVE:
+            print(attribute_state)
+            return StatusCode.success
+
         raise UnknownAttribute(attribute)
 
     def assert_trigger(self, protocol: constants.TriggerProtocol):
