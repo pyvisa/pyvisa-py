@@ -80,6 +80,7 @@ class AttrVI_ATTR_TCPIP_KEEPALIVE_VXI11(BooleanAttribute):
     def __init_subclass__(cls, **kwargs):
         """Register the subclass with the supported resources."""
         print(cls.__name__.startswith("AttrPyVI_"))
+        raise Exception("test")
         super().__init_subclass__(**kwargs)
 
         if not cls.__name__.startswith("AttrPyVI_"):
