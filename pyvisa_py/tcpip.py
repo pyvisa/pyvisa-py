@@ -281,7 +281,7 @@ class TCPIPInstrSession(Session):
 
         """
         if attribute == constants.VI_ATTR_TCPIP_KEEPALIVE:
-            print(attribute_state)
+            print(self.interface.sock)
             return StatusCode.success
 
         raise UnknownAttribute(attribute)
