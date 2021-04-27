@@ -14,7 +14,7 @@ from pyvisa import attributes, constants, logger, rname
 from pyvisa.constants import ResourceAttribute, StatusCode
 from pyvisa.typing import VISARMSession
 
-from . import attributes as py_attributes  # We need to import this for overwrite
+
 from .common import int_to_byte
 
 #: Type var used when typing register.
