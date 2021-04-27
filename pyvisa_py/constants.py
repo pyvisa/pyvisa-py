@@ -8,6 +8,7 @@ pyvisa.constants
 :copyright: 2014-2020 by PyVISA-py Authors, see AUTHORS for more details.
 :license: MIT, see LICENSE for more details.
 """
+import enum
 
 # This is no standard and VI_ATTR_TCPIP_KEEPALIVE+1 as it was not taken
 VI_ATTR_TCPIP_KEEPALIVE_VXI11 = 0x3FFF019C
