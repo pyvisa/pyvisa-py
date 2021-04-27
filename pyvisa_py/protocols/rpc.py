@@ -477,7 +477,6 @@ class RawTCPClient(Client):
         )
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
-
         if not _connect(self.sock, self.host, self.port, timeout):
             raise RPCError("can't connect to server")
 

@@ -10,6 +10,7 @@ For additional information and VISA attributes see pyvisa.constants
 from pyvisa import constants
 from pyvisa.attributes import BooleanAttribute
 
+
 class AttrVI_ATTR_TCPIP_KEEPALIVE(BooleanAttribute):
     """Requests that a TCP/IP provider enable the use of keep-alive packets.
 
@@ -22,7 +23,7 @@ class AttrVI_ATTR_TCPIP_KEEPALIVE(BooleanAttribute):
 
     resources = [
         (constants.InterfaceType.tcpip, "SOCKET"),
-        (constants.InterfaceType.tcpip, "INSTR")
+        (constants.InterfaceType.tcpip, "INSTR"),
     ]
 
     py_name = ""

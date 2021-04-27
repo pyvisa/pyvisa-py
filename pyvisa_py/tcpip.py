@@ -287,12 +287,22 @@ class TCPIPInstrSession(Session):
         # https://tech.xing.com/a-reason-for-unexplained-connection-timeouts-on-kubernetes-docker-abd041cf7e02
         if attribute == constants.VI_ATTR_TCPIP_KEEPALIVE:
             if attribute_state == True:
-                self.interface.sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
-                self.interface.sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, 60)
-                self.interface.sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, 60)
-                self.interface.sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 5)
+                self.interface.sock.setsockopt(
+                    socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1
+                )
+                self.interface.sock.setsockopt(
+                    socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, 60
+                )
+                self.interface.sock.setsockopt(
+                    socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, 60
+                )
+                self.interface.sock.setsockopt(
+                    socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 5
+                )
             elif attribute_state == False:
-                self.interface.sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 0)
+                self.interface.sock.setsockopt(
+                    socket.SOL_SOCKET, socket.SO_KEEPALIVE, 0
+                )
             else:
                 return StatusCode.error_nonsupported_format
             return StatusCode.success
