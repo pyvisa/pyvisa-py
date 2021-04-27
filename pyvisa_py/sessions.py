@@ -15,7 +15,7 @@ from pyvisa.constants import ResourceAttribute, StatusCode
 from pyvisa.typing import VISARMSession
 
 from .common import int_to_byte
-import .attributes as py_attributes
+from . import attributes as py_attributes
 
 #: Type var used when typing register.
 T = TypeVar("T", bound=Type["Session"])
