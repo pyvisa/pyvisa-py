@@ -79,6 +79,7 @@ class TCPIPInstrSession(Session):
 
         self.lock_timeout = 10000
         self.client_id = random.getrandbits(31)
+        self.keepalive = False
 
         error, link, abort_port, max_recv_size = self.interface.create_link(
             self.client_id, 0, self.lock_timeout, self.parsed.lan_device_name
@@ -299,10 +300,12 @@ class TCPIPInstrSession(Session):
                 self.interface.sock.setsockopt(
                     socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 5
                 )
+                self.keepalive = True
             elif attribute_state == False:
                 self.interface.sock.setsockopt(
                     socket.SOL_SOCKET, socket.SO_KEEPALIVE, 0
                 )
+                self.keepalive = False
             else:
                 return StatusCode.error_nonsupported_format
             return StatusCode.success
