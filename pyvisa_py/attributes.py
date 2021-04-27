@@ -49,12 +49,8 @@ AttributesPerResource: DefaultDict[
 AttributesByID: Dict[int, Type["Attribute"]] = dict()
 
 
-class AttrVI_ATTR_TCPIP_KEEPALIVE_VXI11(BooleanAttribute):
+class AttrVI_ATTR_TCPIP_KEEPALIVE(BooleanAttribute):
     """Requests that a TCP/IP provider enable the use of keep-alive packets.
-
-    This is not limited to VXI11 Instrumets. Use VI_ATTR_TCPIP_KEEPALIVE
-    for socket type connections. This is a workaround for sockets beeing
-    collected by idle socket garbage collection such as docker utilizes.
 
     After the system detects that a connection was dropped, VISA returns a lost
     connection error code on subsequent I/O calls on the session. The time required
@@ -62,38 +58,18 @@ class AttrVI_ATTR_TCPIP_KEEPALIVE_VXI11(BooleanAttribute):
     system and is not settable.
 
     """
+
     resources = [
+        (constants.InterfaceType.tcpip, "SOCKET"),
         (constants.InterfaceType.tcpip, "INSTR")
     ]
 
-    py_name = "vxi11_use_keepalive"
+    py_name = ""
 
-    visa_name = "VI_ATTR_TCPIP_KEEPALIVE_VXI11"
+    visa_name = "VI_ATTR_TCPIP_KEEPALIVE"
 
     visa_type = "ViBoolean"
 
     default = False
 
     read, write, local = True, True, True
-
-    @classmethod
-    def __init_subclass__(cls, **kwargs):
-        """Register the subclass with the supported resources."""
-        print(cls.__name__.startswith("AttrPyVI_"))
-        raise Exception("test")
-        super().__init_subclass__(**kwargs)
-
-        if not cls.__name__.startswith("AttrPyVI_"):
-            return
-
-        cls.attribute_id = getattr(py_constants, cls.visa_name)
-        # Check that the docstring are populated before extending them
-        # Cover the case of running with Python with -OO option
-        if cls.__doc__ is not None:
-            cls.redoc()
-        if cls.resources is AllSessionTypes:
-            AttributesPerResource[AllSessionTypes].add(cls)
-        else:
-            for res in cls.resources:
-                AttributesPerResource[res].add(cls)
-        AttributesByID[cls.attribute_id] = cls
