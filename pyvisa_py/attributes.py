@@ -7,47 +7,7 @@ For additional information and VISA attributes see pyvisa.constants
 :license: MIT, see LICENSE for more details.
 """
 
-from collections import defaultdict
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    Dict,
-    Generic,
-    List,
-    Optional,
-    Set,
-    SupportsBytes,
-    SupportsInt,
-    Tuple,
-    Type,
-    TypeVar,
-    Union,
-    overload,
-)
-
 from pyvisa import constants
-from pyvisa.attributes import (
-    AllSessionTypes,
-    AttributesByID,
-    AttributesPerResource,
-    BooleanAttribute,
-    DefaultDict
-)
-
-from . import constants as py_constants
-
-# Copy of PyVisa attribute architecture
-#: Map resource to attribute
-AttributesPerResource: DefaultDict[
-    Union[
-        Tuple[constants.InterfaceType, str], Type[AllSessionTypes], constants.EventType
-    ],
-    Set[Type["Attribute"]],
-] = defaultdict(set)
-
-#: Map id to attribute
-AttributesByID: Dict[int, Type["Attribute"]] = dict()
-
 
 class AttrVI_ATTR_TCPIP_KEEPALIVE(BooleanAttribute):
     """Requests that a TCP/IP provider enable the use of keep-alive packets.
