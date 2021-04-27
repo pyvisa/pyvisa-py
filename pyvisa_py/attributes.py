@@ -49,7 +49,7 @@ AttributesPerResource: DefaultDict[
 AttributesByID: Dict[int, Type["Attribute"]] = dict()
 
 
-class AttrPyVI_ATTR_TCPIP_KEEPALIVE_VXI11(BooleanAttribute):
+class AttrVI_ATTR_TCPIP_KEEPALIVE_VXI11(BooleanAttribute):
     """Requests that a TCP/IP provider enable the use of keep-alive packets.
 
     This is not limited to VXI11 Instrumets. Use VI_ATTR_TCPIP_KEEPALIVE
