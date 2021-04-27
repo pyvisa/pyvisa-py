@@ -287,7 +287,7 @@ class TCPIPInstrSession(Session):
         # keepalive packets even for VXI11 protocol. To read more on this issue
         # https://tech.xing.com/a-reason-for-unexplained-connection-timeouts-on-kubernetes-docker-abd041cf7e02
         if attribute == constants.VI_ATTR_TCPIP_KEEPALIVE:
-            if attribute_state == True:
+            if attribute_state is True:
                 self.interface.sock.setsockopt(
                     socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1
                 )
@@ -301,7 +301,7 @@ class TCPIPInstrSession(Session):
                     socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 5
                 )
                 self.keepalive = True
-            elif attribute_state == False:
+            elif attribute_state is False:
                 self.interface.sock.setsockopt(
                     socket.SOL_SOCKET, socket.SO_KEEPALIVE, 0
                 )
