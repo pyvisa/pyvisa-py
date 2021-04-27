@@ -20,6 +20,7 @@ except PackageNotFoundError:
     # package is not installed
     pass
 
+from . import attributes
 from .highlevel import PyVisaLibrary
 
 WRAPPER_CLASS = PyVisaLibrary
