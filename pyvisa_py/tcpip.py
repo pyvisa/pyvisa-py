@@ -725,6 +725,9 @@ class TCPIPSocketSession(Session):
             self.interface.setsockopt(
                 socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1 if attribute_state else 0
             )
+            self.interface.sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, 60)
+            self.interface.sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, 60)
+            self.interface.sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 5)
             return StatusCode.success
         return StatusCode.error_nonsupported_attribute
 
