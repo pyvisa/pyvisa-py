@@ -8,11 +8,14 @@ For additional information and VISA attributes see pyvisa.constants
 """
 
 from pyvisa import constants
-from pyvisa.attributes import BooleanAttribute
+from pyvisa.attributes import AttrVI_ATTR_TCPIP_KEEPALIVE as former_keepalive
 
 
-class AttrVI_ATTR_TCPIP_KEEPALIVE(BooleanAttribute):
+class AttrVI_ATTR_TCPIP_KEEPALIVE(former_keepalive):
     """Requests that a TCP/IP provider enable the use of keep-alive packets.
+
+    Altering the standard PyVISA attribute to also work on INSTR sessions as
+    they are using sockets in pyvisa-py as well.
 
     After the system detects that a connection was dropped, VISA returns a lost
     connection error code on subsequent I/O calls on the session. The time required
@@ -25,13 +28,3 @@ class AttrVI_ATTR_TCPIP_KEEPALIVE(BooleanAttribute):
         (constants.InterfaceType.tcpip, "SOCKET"),
         (constants.InterfaceType.tcpip, "INSTR"),
     ]
-
-    py_name = ""
-
-    visa_name = "VI_ATTR_TCPIP_KEEPALIVE"
-
-    visa_type = "ViBoolean"
-
-    default = False
-
-    read, write, local = True, True, True
