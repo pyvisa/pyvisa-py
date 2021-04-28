@@ -20,6 +20,6 @@ def main():
 
 
 def run() -> unittest.TestResult:
-    """Run all tests.    """
+    """Run all tests."""
     test_runner = unittest.TextTestRunner()
     return test_runner.run(testsuite())
