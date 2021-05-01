@@ -89,18 +89,22 @@ class TestTCPIPInstr(TCPIPInstrBaseTest):
     )
 
     def test_keepalive_attribute_vxi11(self):
-        assert self.instr.keepalive is False
+        assert self.instr.visalib.sessions[self.instr.session].keepalive is False
         self.instr.set_visa_attribute(ResourceAttribute.tcpip_keepalive, True)
-        assert self.instr.keepalive is True
+        assert self.instr.visalib.sessions[self.instr.session].keepalive is True
         assert (
-            self.instr.interface.sock.getsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE)
+            self.instr.visalib.sessions[self.instr.session].interface.sock.getsockopt(
+                socket.SOL_SOCKET, socket.SO_KEEPALIVE
+            )
             == 1
         )
 
         self.instr.set_visa_attribute(ResourceAttribute.tcpip_keepalive, False)
-        assert self.instr.keepalive is False
+        assert self.instr.visalib.sessions[self.instr.session].keepalive is False
         assert (
-            self.instr.interface.sock.getsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE)
+            self.instr.visalib.sessions[self.instr.session].interface.sock.getsockopt(
+                socket.SOL_SOCKET, socket.SO_KEEPALIVE
+            )
             == 0
         )
 
