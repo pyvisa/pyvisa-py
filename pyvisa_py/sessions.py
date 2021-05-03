@@ -678,7 +678,7 @@ class Session(metaclass=abc.ABCMeta):
         session.
 
         Does a few checks before and calls before dispatching to
-        `_gst_attribute`.
+        `_set_attribute`.
 
         Parameters
         ----------

@@ -2,7 +2,10 @@
 """Test the TCPIP based resources.
 
 """
+import socket
+
 import pytest
+from pyvisa.constants import ResourceAttribute
 from pyvisa.testsuite.keysight_assisted_tests import copy_func, require_virtual_instr
 from pyvisa.testsuite.keysight_assisted_tests.test_tcpip_resources import (
     TestTCPIPInstr as TCPIPInstrBaseTest,
@@ -84,6 +87,26 @@ class TestTCPIPInstr(TCPIPInstrBaseTest):
     test_attribute_handling = pytest.mark.xfail(
         copy_func(TCPIPInstrBaseTest.test_attribute_handling)
     )
+
+    def test_keepalive_attribute_vxi11(self):
+        assert self.instr.visalib.sessions[self.instr.session].keepalive is False
+        self.instr.set_visa_attribute(ResourceAttribute.tcpip_keepalive, True)
+        assert self.instr.visalib.sessions[self.instr.session].keepalive is True
+        assert (
+            self.instr.visalib.sessions[self.instr.session].interface.sock.getsockopt(
+                socket.SOL_SOCKET, socket.SO_KEEPALIVE
+            )
+            == 1
+        )
+
+        self.instr.set_visa_attribute(ResourceAttribute.tcpip_keepalive, False)
+        assert self.instr.visalib.sessions[self.instr.session].keepalive is False
+        assert (
+            self.instr.visalib.sessions[self.instr.session].interface.sock.getsockopt(
+                socket.SOL_SOCKET, socket.SO_KEEPALIVE
+            )
+            == 0
+        )
 
 
 @require_virtual_instr
