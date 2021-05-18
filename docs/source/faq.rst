@@ -23,6 +23,7 @@ certain systems. We wanted to provide a compatible alternative.
 
 Can PyVISA-py be used from a VM?
 --------------------------------
+
 Because PyVISA-py access hardware resources (such as USB ports) running from a
 VM can cause issues, such as unexpected timeouts because the VM does not
 receive the response. You may be able to set the VM in such that it works but

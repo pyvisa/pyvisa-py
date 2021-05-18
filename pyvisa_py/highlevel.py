@@ -175,7 +175,7 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
 
         Parameters
         ----------
-        session : typin.VISASession
+        session : typing.VISASession
             Unique logical identifier to a session.
 
         Returns
