@@ -59,6 +59,9 @@ class TCPIPInstrSession(Session):
     # for a specific kind of resource
     parsed: rname.TCPIPInstr
 
+    # Setting if keepalive has been activated
+    keepalive: bool
+
     @staticmethod
     def list_resources() -> List[str]:
         # TODO: is there a way to get this?
@@ -76,6 +79,7 @@ class TCPIPInstrSession(Session):
 
         self.lock_timeout = 10000
         self.client_id = random.getrandbits(31)
+        self.keepalive = False
 
         error, link, abort_port, max_recv_size = self.interface.create_link(
             self.client_id, 0, self.lock_timeout, self.parsed.lan_device_name
@@ -244,7 +248,7 @@ class TCPIPInstrSession(Session):
             raise NotImplementedError
 
         elif attribute == constants.VI_ATTR_TCPIP_KEEPALIVE:
-            raise NotImplementedError
+            return self.keepalive, StatusCode.success
 
         elif attribute == constants.VI_ATTR_TCPIP_NODELAY:
             raise NotImplementedError
@@ -277,6 +281,35 @@ class TCPIPInstrSession(Session):
             Return value of the library call.
 
         """
+
+        # In case of an environment with idle socket garbage collection (like docker)
+        # sockets need to be kept alive. Set pyvisa.constants.ResourceAttribute.tcpip_keepalive to enable
+        # keepalive packets even for VXI11 protocol. To read more on this issue
+        # https://tech.xing.com/a-reason-for-unexplained-connection-timeouts-on-kubernetes-docker-abd041cf7e02
+        if attribute == constants.VI_ATTR_TCPIP_KEEPALIVE:
+            if attribute_state is True:
+                self.interface.sock.setsockopt(
+                    socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1
+                )
+                self.interface.sock.setsockopt(
+                    socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, 60
+                )
+                self.interface.sock.setsockopt(
+                    socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, 60
+                )
+                self.interface.sock.setsockopt(
+                    socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 5
+                )
+                self.keepalive = True
+            elif attribute_state is False:
+                self.interface.sock.setsockopt(
+                    socket.SOL_SOCKET, socket.SO_KEEPALIVE, 0
+                )
+                self.keepalive = False
+            else:
+                return StatusCode.error_nonsupported_format
+            return StatusCode.success
+
         raise UnknownAttribute(attribute)
 
     def assert_trigger(self, protocol: constants.TriggerProtocol):
@@ -692,6 +725,9 @@ class TCPIPSocketSession(Session):
             self.interface.setsockopt(
                 socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1 if attribute_state else 0
             )
+            self.interface.sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, 60)
+            self.interface.sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, 60)
+            self.interface.sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 5)
             return StatusCode.success
         return StatusCode.error_nonsupported_attribute
 

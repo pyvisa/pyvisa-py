@@ -1,6 +1,10 @@
 PyVISA-py Changelog
 ===================
 
+0.5.3 (unreleased)
+------------------
+- fix tcp/ip connections dropping from inside Docker containers after 5 minute idling #285
+
 0.5.2 (04-02-2020)
 ------------------
 

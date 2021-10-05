@@ -32,6 +32,22 @@ you should refer to your VM manual.
 can cause)
 
 
+Can PyVISA-py be used from a Docker container?
+----------------------------------------------
+As the Windows variant of Docker cannot forward neighter USB ports nor GPIB
+interfaces the obvious choice would be to connect via TCP/IP. The problem of a
+Docker container is, that idle connections are disconnected by the VPN garbage
+collection. For this reason it is reasonable to enable keepalive packets.
+For this the VISA attribute `VI_ATTR_TCPIP_KEEPALIVE` has been modified to work
+for all TCP/IP instruments. Enabling this option can be done with:
+
+    inst.set_visa_attribute(pyvisa.constants.ResourceAttribute.tcpip_keepalive, True)
+
+where `inst` is an active TCP/IP visa session.
+(see https://tech.xing.com/a-reason-for-unexplained-connection-timeouts-on-kubernetes-docker-abd041cf7e02
+if you want to read more about connection dropping in docker containers)
+
+
 Why not using LibreVISA?
 ------------------------
 
