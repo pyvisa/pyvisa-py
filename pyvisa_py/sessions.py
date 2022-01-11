@@ -223,7 +223,7 @@ class Session(metaclass=abc.ABCMeta):
                 logger.warning(
                     "%s is already registered in the "
                     "ResourceManager. Overwriting with %s",
-                    ((interface_type, resource_class), python_class),
+                    (interface_type, resource_class), python_class,
                 )
 
             python_class.session_type = (interface_type, resource_class)
@@ -278,7 +278,7 @@ class Session(metaclass=abc.ABCMeta):
             logger.warning(
                 "%s is already registered in the ResourceManager. "
                 "Overwriting with unavailable %s",
-                ((interface_type, resource_class), msg),
+                (interface_type, resource_class), msg,
             )
 
         cls._session_classes[(interface_type, resource_class)] = _internal
