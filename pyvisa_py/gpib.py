@@ -188,7 +188,7 @@ def convert_gpib_error(
     # feels brittle. As a consequence we only try to be smart when using
     # gpib-ctypes. However in both cases we log the exception at debug level.
     else:
-        logger.debug("Failed to %s.", exc_info=error)
+        logger.debug("Failed to %s.", operation, exc_info=error)
         if not GPIB_CTYPES:
             return StatusCode.error_system_error
         if error.code == 1:
