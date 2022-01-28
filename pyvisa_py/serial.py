@@ -418,7 +418,7 @@ class SerialSession(Session):
             if not isinstance(attribute_state, int):
                 return StatusCode.error_nonsupported_attribute_state
 
-            if not 0 < attribute_state < 8:
+            if not 0 <= attribute_state < 8:
                 return StatusCode.error_nonsupported_attribute_state
 
             try:
