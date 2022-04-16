@@ -279,6 +279,17 @@ class Client(object):
 # Record-Marking standard support
 
 
+def _sendto(sock, data, address):
+    """
+    loops calling sock.sendto() until all data is sent.
+    """
+    ptr = 0
+    while data[ptr:]:
+        ptr += sock.sendto(data[ptr:], address)
+
+
+# XXX sendfrag() should have been deleted when it was inlined into
+# _sendrecord() during refactoring
 def sendfrag(sock, last, frag):
     x = len(frag)
     if last:
@@ -292,7 +303,7 @@ def _sendrecord(sock, record, fragsize=None, timeout=None):
     if timeout is not None:
         r, w, x = select.select([], [sock], [], timeout)
         if sock not in w:
-            msg = "socket.timeout: The instrument seems to have stopped " "responding."
+            msg = "socket.timeout: The instrument seems to have stopped responding."
             raise socket.timeout(msg)
 
     last = False
@@ -579,11 +590,6 @@ class RawBroadcastUDPClient(RawUDPClient):
     def set_timeout(self, timeout):
         self.timeout = timeout  # Use None for infinite timeout
 
-    def sock_sendto(self, data, address):
-        ptr = 0
-        while len(data[ptr:]) > 0:
-            ptr += self.sock.sendto(data[ptr:], address)
-
     def make_call(self, proc, args, pack_func, unpack_func):
         if pack_func is None and args is not None:
             raise TypeError("non-null args with null pack_func")
@@ -591,7 +597,7 @@ class RawBroadcastUDPClient(RawUDPClient):
         if pack_func:
             pack_func(args)
         call = self.packer.get_buf()
-        self.sock_sendto(call, (self.host, self.port))
+        _sendto(self.sock, call, (self.host, self.port))
 
         BUFSIZE = 8192  # Max UDP buffer size (for reply)
         replies = []
@@ -994,13 +1000,8 @@ class UDPServer(Server):
         while 1:
             self.session()
 
-    def sock_sendto(self, data, address):
-        ptr = 0
-        while len(data[ptr:]) > 0:
-            ptr += self.sock.sendto(data[ptr:], address)
-
     def session(self):
         call, host_port = self.sock.recvfrom(8192)
         reply = self.handle(call)
         if reply is not None:
-            self.sock_sendto(reply, host_port)
+            _sendto(self.sock, reply, host_port)
