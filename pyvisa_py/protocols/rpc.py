@@ -279,12 +279,23 @@ class Client(object):
 # Record-Marking standard support
 
 
+def _sendto(sock, data, address):
+    """
+    loops calling sock.sendto() until all data is sent.
+    """
+    ptr = 0
+    while data[ptr:]:
+        ptr += sock.sendto(data[ptr:], address)
+
+
+# XXX sendfrag() should have been deleted when it was inlined into
+# _sendrecord() during refactoring
 def sendfrag(sock, last, frag):
     x = len(frag)
     if last:
         x = x | 0x80000000
     header = struct.pack(">I", x)
-    sock.send(header + frag)
+    sock.sendall(header + frag)
 
 
 def _sendrecord(sock, record, fragsize=None, timeout=None):
@@ -292,7 +303,7 @@ def _sendrecord(sock, record, fragsize=None, timeout=None):
     if timeout is not None:
         r, w, x = select.select([], [sock], [], timeout)
         if sock not in w:
-            msg = "socket.timeout: The instrument seems to have stopped " "responding."
+            msg = "socket.timeout: The instrument seems to have stopped responding."
             raise socket.timeout(msg)
 
     last = False
@@ -306,7 +317,7 @@ def _sendrecord(sock, record, fragsize=None, timeout=None):
         if last:
             fragsize = fragsize | 0x80000000
         header = struct.pack(">I", fragsize)
-        sock.send(header + record[:fragsize])
+        sock.sendall(header + record[:fragsize])
         record = record[fragsize:]
 
 
@@ -495,14 +506,24 @@ class RawTCPClient(Client):
             # This is a workaround for misbehaving instruments.
         except AttributeError:
             min_packages = 0
-        reply = _recvrecord(self.sock, self.timeout, min_packages=min_packages)
-        u = self.unpacker
-        u.reset(reply)
-        xid, verf = u.unpack_replyheader()
-        if xid != self.lastxid:
-            # Can't really happen since this is TCP...
-            msg = "wrong xid in reply {0} instead of {1}"
-            raise RPCError(msg.format(xid, self.lastxid))
+
+        while True:
+            reply = _recvrecord(self.sock, self.timeout, min_packages=min_packages)
+            u = self.unpacker
+            u.reset(reply)
+            xid, verf = u.unpack_replyheader()
+            if xid == self.lastxid:
+                # xid matches, we're done
+                return
+            elif xid < self.lastxid:
+                # Stale data in buffer due to interruption
+                # Discard and fetch another record
+                continue
+            else:
+                # xid larger than expected - packet from the future?
+                raise RPCError(
+                    "wrong xid in reply %r instead of %r" % (xid, self.lastxid)
+                )
 
 
 class RawUDPClient(Client):
@@ -525,7 +546,7 @@ class RawUDPClient(Client):
 
     def do_call(self):
         call = self.packer.get_buf()
-        self.sock.send(call)
+        self.sock.sendall(call)
 
         BUFSIZE = 8192  # Max UDP buffer size
         timeout = 1
@@ -540,7 +561,7 @@ class RawUDPClient(Client):
                     raise RPCError("timeout")
                 if timeout < 25:
                     timeout = timeout * 2
-                self.sock.send(call)
+                self.sock.sendall(call)
                 continue
             reply = self.sock.recv(BUFSIZE)
             u = self.unpacker
@@ -576,7 +597,7 @@ class RawBroadcastUDPClient(RawUDPClient):
         if pack_func:
             pack_func(args)
         call = self.packer.get_buf()
-        self.sock.sendto(call, (self.host, self.port))
+        _sendto(self.sock, call, (self.host, self.port))
 
         BUFSIZE = 8192  # Max UDP buffer size (for reply)
         replies = []
@@ -983,4 +1004,4 @@ class UDPServer(Server):
         call, host_port = self.sock.recvfrom(8192)
         reply = self.handle(call)
         if reply is not None:
-            self.sock.sendto(reply, host_port)
+            _sendto(self.sock, reply, host_port)
