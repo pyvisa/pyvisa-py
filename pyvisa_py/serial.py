@@ -146,7 +146,7 @@ class SerialSession(Session):
             checker = lambda current: False
 
         elif end_in == SerialTermination.last_bit:
-            mask = 2 ** self.interface.bytesize
+            mask = 2**self.interface.bytesize
             checker = lambda current: bool(current[-1] & mask)
 
         elif end_in == SerialTermination.termination_char:

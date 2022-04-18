@@ -279,7 +279,7 @@ class USBRaw(object):
 class USBTMC(USBRaw):
 
     # Maximum number of bytes per transfer (for sending and receiving).
-    RECV_CHUNK = 1024 ** 2
+    RECV_CHUNK = 1024**2
 
     find_devices = staticmethod(find_tmc_devices)
 
