@@ -255,6 +255,8 @@ class _GPIBCommon(Session):
 
     def after_parsing(self) -> None:
         minor = int(self.parsed.board)
+        # Secondary address (SAD) values should be in the range 96 to 126,
+        # 0 means the SAD is disabled.
         sad = 0
         timeout = 13
         send_eoi = 1
