@@ -13,7 +13,7 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple, Union, cast
 from pyvisa import constants, highlevel, rname
 from pyvisa.constants import StatusCode
 from pyvisa.typing import VISAEventContext, VISARMSession, VISASession
-from pyvisa.util import LibraryPath, DebugInfo
+from pyvisa.util import DebugInfo, LibraryPath
 
 from . import sessions
 from .common import logger
