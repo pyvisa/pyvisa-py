@@ -95,7 +95,7 @@ jobs:
 
   upload_pypi:
     if: github.event_name == 'push'
-    needs: [build_wheels, build_sdist]
+    needs: [build_wheel, build_sdist]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v2
