@@ -13,7 +13,7 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple, Union, cast
 from pyvisa import constants, highlevel, rname
 from pyvisa.constants import StatusCode
 from pyvisa.typing import VISAEventContext, VISARMSession, VISASession
-from pyvisa.util import LibraryPath
+from pyvisa.util import DebugInfo, LibraryPath
 
 from . import sessions
 from .common import logger
@@ -75,7 +75,7 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
         return (LibraryPath("py"),)
 
     @staticmethod
-    def get_debug_info() -> Dict[str, Union[str, List[str], Dict[str, str]]]:
+    def get_debug_info() -> DebugInfo:
         """Return a list of lines with backend info."""
         from . import __version__
 
