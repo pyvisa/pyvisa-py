@@ -1,7 +1,7 @@
 PyVISA-py Changelog
 ===================
 
-0.5.3 (unreleased)
+0.5.3 (12-05-2022)
 ------------------
 - fix tcp/ip connections dropping from inside Docker containers after 5 minute idling #285
 - fix ControlFlow.none as an invalid attribute in serial.py PR #317
