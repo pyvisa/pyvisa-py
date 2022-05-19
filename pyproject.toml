@@ -51,7 +51,7 @@ usb = ["pyusb"]
 homepage = "https://github.com/pyvisa/pyvisa-py"
 documentation = "https://pyvisa-py.readthedocs.io/en/latest/"
 repository = "https://github.com/pyvisa/pyvisa-py"
-changelog = "https://github.com/pyvisa/pyvisa-py/blob/main/doc/CHANGES"
+changelog = "https://github.com/pyvisa/pyvisa-py/blob/main/CHANGES"
 
 [build-system]
 requires = ["setuptools>=61.2", "wheel", "setuptools_scm[toml]>=3.4.3"]
