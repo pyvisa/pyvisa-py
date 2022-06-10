@@ -6,17 +6,17 @@
 :license: MIT, see LICENSE for more details.
 
 """
+import ipaddress
 import random
 import select
 import socket
-import ipaddress
 import time
 from typing import Any, List, Optional, Tuple
 
 # Let psutil be optional dependency
 try:
     import psutil
-except:
+except ImportError:
     psutil = None
 
 from pyvisa import attributes, constants, errors, rname
