@@ -1,6 +1,10 @@
 PyVISA-py Changelog
 ===================
 
+0.5.4 (Unreleased)
+------------------
+- Implement list_resources for TCPIP instruments
+
 0.5.3 (12-05-2022)
 ------------------
 - fix tcp/ip connections dropping from inside Docker containers after 5 minute idling #285
