@@ -15,7 +15,7 @@ from typing import Any, List, Optional, Tuple
 
 # Let psutil be optional dependency
 try:
-    import psutil
+    import psutil  # type: ignore
 except ImportError:
     psutil = None
 
