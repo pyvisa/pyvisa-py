@@ -636,7 +636,10 @@ class RawBroadcastUDPClient(RawUDPClient):
         if pack_func:
             pack_func(args)
         call = self.packer.get_buf()
-        _sendto(self.sock, call, (self.host, self.port))
+        try:
+            _sendto(self.sock, call, (self.host, self.port))
+        except OSError as exc:
+            raise RPCError("unable to send broadcast") from exc
 
     def recv_call(self, unpack_func):
         BUFSIZE = 8192  # Max UDP buffer size (for reply)
@@ -656,7 +659,10 @@ class RawBroadcastUDPClient(RawUDPClient):
                     r, w, x = select.select(r, w, x, self.timeout)
             if self.sock not in r:
                 break
-            reply, fromaddr = self.sock.recvfrom(BUFSIZE)
+            try:
+                reply, fromaddr = self.sock.recvfrom(BUFSIZE)
+            except OSError as exc:
+                raise RPCError("unable to recieve broadcast") from exc
             u = self.unpacker
             u.reset(reply)
             xid, verf = u.unpack_replyheader()

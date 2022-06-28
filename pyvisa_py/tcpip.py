@@ -85,22 +85,28 @@ class TCPIPInstrSession(Session):
             # If psutil unavailable fallback to default interface
             broadcast_addr.append("255.255.255.255")
 
-        try:
-            pmap_list = [rpc.BroadcastUDPPortMapperClient(ip) for ip in broadcast_addr]
-            for pmap in pmap_list:
-                pmap.set_timeout(0)
+        pmap_list = [rpc.BroadcastUDPPortMapperClient(ip) for ip in broadcast_addr]
+        for pmap in list(pmap_list):
+            pmap.set_timeout(0)
+            try:
                 pmap.send_port(
                     (vxi11.DEVICE_CORE_PROG, vxi11.DEVICE_CORE_VERS, rpc.IPPROTO_TCP, 0)
                 )
+            except rpc.RPCError:
+                pmap_list.remove(pmap)
 
-            # Timeout for responses
-            time.sleep(1)
+        # Timeout for responses
+        time.sleep(1)
 
-            all_res = []
-            for pmap in pmap_list:
+        all_res = []
+        for pmap in pmap_list:
+            try:
                 resp = pmap.recv_port(
                     (vxi11.DEVICE_CORE_PROG, vxi11.DEVICE_CORE_VERS, rpc.IPPROTO_TCP, 0)
                 )
+            except rpc.RPCError:
+                pass
+            else:
                 res = [r[1][0] for r in resp if r[0] > 0]
                 res = sorted(
                     res, key=lambda ip: tuple(int(part) for part in ip.split("."))
@@ -108,8 +114,6 @@ class TCPIPInstrSession(Session):
                 # TODO: Detect GPIB over TCPIP
                 res = ["TCPIP::{}::INSTR".format(host) for host in res]
                 all_res.extend(res)
-        except rpc.RPCError:
-            return []
 
         return all_res
 
