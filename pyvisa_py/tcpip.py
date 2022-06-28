@@ -82,8 +82,7 @@ class TCPIPInstrSession(Session):
                         network = ipaddress.IPv4Network(addr + "/" + mask, strict=False)
                         broadcast_addr.append(str(network.broadcast_address))
         else:
-            msg = "To discover devices on all interfaces, please install psutil"
-            Session.register_unavailable(constants.InterfaceType.tcpip, "INSTR", msg)
+            # If psutil unavailable fallback to default interface
             broadcast_addr.append("255.255.255.255")
 
         try:
