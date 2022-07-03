@@ -74,7 +74,7 @@ How do I know if PyVISA-py is properly installed?
 
 Using the pyvisa information tool. Run in your console::
 
-  python -m visa info
+  pyvisa-info
 
 You will get info about PyVISA, the installed backends and their options.
 
