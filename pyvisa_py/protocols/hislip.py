@@ -93,15 +93,14 @@ REMOTELOCALCONTROLCODE.update(
     {value: key for (key, value) in REMOTELOCALCONTROLCODE.items()}
 )
 
-# fmt: off
-HEADER_FORMAT = "!2sBBIQ"  # !  = network order,
-                           # 2s = prologue ('HS'),
-                           # B  = message type (unsigned byte),
-                           # B  = control code (unsigned byte),
-                           # I  = message parameter (unsigned int),
-                           # Q  = payload length (unsigned long long)
+HEADER_FORMAT = "!2sBBIQ"
+# !  = network order,
+# 2s = prologue ('HS'),
+# B  = message type (unsigned byte),
+# B  = control code (unsigned byte),
+# I  = message parameter (unsigned int),
+# Q  = payload length (unsigned long long)
 HEADER_SIZE = struct.calcsize(HEADER_FORMAT)
-# fmt: on
 
 
 class Struct(dict):
@@ -352,6 +351,7 @@ class Instrument(object):  # pylint: disable=too-many-instance-attributes
         response_header = receive_header(
             self._async, expected_message_type="AsyncRemoteLocalResponse"
         )
+        return response_header.server_status
 
     def async_status_query(self):
         """

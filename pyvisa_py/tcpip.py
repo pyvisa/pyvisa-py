@@ -16,7 +16,7 @@ from pyvisa import attributes, constants, errors, rname
 from pyvisa.constants import ResourceAttribute, StatusCode
 
 from . import common
-from .protocols import rpc, vxi11, hislip
+from .protocols import hislip, rpc, vxi11
 from .sessions import Session, UnknownAttribute
 
 # Conversion between VXI11 error codes and VISA status
@@ -73,10 +73,10 @@ class TCPIPInstrHiSLIP:
                 self.timeout = None
             else:
                 self.timeout = self.interface.timeout
-        return super(TCPIPHislipSession, self)._get_timeout(attribute)
+        return super(TCPIPInstrHiSLIP, self)._get_timeout(attribute)
 
     def _set_timeout(self, attribute: ResourceAttribute, value: int) -> StatusCode:
-        status = super(TCPIPHislipSession, self)._set_timeout(attribute, value)
+        status = super(TCPIPInstrHiSLIP, self)._set_timeout(attribute, value)
         timeout = self.timeout if self.timeout else 2 ** 32 - 1
         timeout = min(timeout, 2 ** 32 - 1)
         if self.interface:
