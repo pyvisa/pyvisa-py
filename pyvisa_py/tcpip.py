@@ -16,7 +16,7 @@ from pyvisa import attributes, constants, errors, rname
 from pyvisa.constants import ResourceAttribute, StatusCode
 
 from . import common
-from .protocols import rpc, vxi11
+from .protocols import rpc, vxi11, hislip
 from .sessions import Session, UnknownAttribute
 
 # Conversion between VXI11 error codes and VISA status
@@ -37,6 +37,177 @@ VXI11_ERRORS_TO_VISA = {
     23: StatusCode.error_abort,  # abort
     29: StatusCode.error_window_already_mapped,  # channel_already_established
 }
+
+
+@Session.register(constants.InterfaceType.tcpip, "HISLIP")
+class TCPIPInstrHiSLIP:
+    """A TCPIP Session built on socket standard library using HiSLIP protocol."""
+
+    # Override parsed to take into account the fact that this class is only used
+    # for a specific kind of resource
+    parsed: rname.TCPIPInstr
+
+    @staticmethod
+    def list_resources() -> List[str]:
+        # TODO: is there a way to get this?
+        return []
+
+    def init_hislip(self) -> None:
+        # TODO: board_number not handled
+
+        if "," in self.parsed.lan_device_name:
+            _, port = self.parsed.lan_device_name.split(",")
+            port = int(port)
+        else:
+            port = 4880
+        self.interface = hislip.Instrument(self.parsed.host_address, port=port)
+
+    def close(self) -> StatusCode:
+        self.interface.close()
+        self.interface = None
+        return StatusCode.success
+
+    def _get_timeout(self, attribute: ResourceAttribute) -> Tuple[int, StatusCode]:
+        if self.interface:
+            if self.interface.timeout == 2 ** 32 - 1:
+                self.timeout = None
+            else:
+                self.timeout = self.interface.timeout
+        return super(TCPIPHislipSession, self)._get_timeout(attribute)
+
+    def _set_timeout(self, attribute: ResourceAttribute, value: int) -> StatusCode:
+        status = super(TCPIPHislipSession, self)._set_timeout(attribute, value)
+        timeout = self.timeout if self.timeout else 2 ** 32 - 1
+        timeout = min(timeout, 2 ** 32 - 1)
+        if self.interface:
+            self.interface.timeout = timeout
+        return status
+
+    def read(self, count: int) -> Tuple[bytes, StatusCode]:
+        """Reads data from device or interface synchronously.
+
+        Corresponds to viRead function of the VISA library.
+
+         Parameters
+        -----------
+        count : int
+            Number of bytes to be read.
+
+        Returns
+        -------
+        bytes
+            Data read from the device
+        StatusCode
+            Return value of the library call.
+
+        """
+        try:
+            data = self.interface.receive(count)
+        except socket.timeout:
+            return b"", StatusCode.error_timeout
+
+        if self.interface.rmt:  # test the Response Message Terminator
+            return data, StatusCode.success_termination_character_read
+        elif len(data) >= count:
+            return data, StatusCode.success_max_count_read
+        else:
+            return data, StatusCode.success
+
+    def write(self, data: bytes) -> Tuple[int, StatusCode]:
+        """Writes data to device or interface synchronously.
+
+        Corresponds to viWrite function of the VISA library.
+
+        Parameters
+        ----------
+        data : bytes
+            Data to be written.
+
+        Returns
+        -------
+        int
+            Number of bytes actually transferred
+        StatusCode
+            Return value of the library call.
+
+        """
+        self.interface.send(data)
+
+        return len(data), StatusCode.success
+
+    def clear(self) -> StatusCode:
+        """Clears a device.
+
+        Corresponds to viClear function of the VISA library.
+
+        """
+        self.interface.device_clear()
+
+        return StatusCode.success
+
+    def _get_attribute(self, attribute: ResourceAttribute) -> Tuple[Any, StatusCode]:
+        """Get the value for a given VISA attribute for this session.
+
+        Use to implement custom logic for attributes.
+
+        Parameters
+        ----------
+        attribute : ResourceAttribute
+            Attribute for which the state query is made
+
+        Returns
+        -------
+        Any
+            State of the queried attribute for a specified resource
+        StatusCode
+            Return value of the library call.
+
+        """
+        raise UnknownAttribute(attribute)
+
+    def _set_attribute(
+        self, attribute: ResourceAttribute, attribute_state: Any
+    ) -> StatusCode:
+        """Sets the state of an attribute.
+
+        Corresponds to viSetAttribute function of the VISA library.
+
+        Parameters
+        ----------
+        attribute : constants.ResourceAttribute
+            Attribute for which the state is to be modified. (Attributes.*)
+        attribute_state : Any
+            The state of the attribute to be set for the specified object.
+
+        Returns
+        -------
+        StatusCode
+            Return value of the library call.
+
+        """
+        raise UnknownAttribute(attribute)
+
+
+class Vxi11CoreClient(vxi11.CoreClient):
+    """
+    make a connection using vxi11 protocol, optionally allowing the port number
+    to be specified.  although in general the port number must be obtained by
+    querying the portmapper, in practice any given instrument typically always
+    uses the same port number.  this allows you to open that port on a firewall
+    or set up an ssh tunnel to that port.
+
+    """
+
+    def __init__(self, host, port, open_timeout=5000):
+        self.packer = vxi11.Vxi11Packer()
+        self.unpacker = vxi11.Vxi11Unpacker("")
+        prog, vers = vxi11.DEVICE_CORE_PROG, vxi11.DEVICE_CORE_VERS
+
+        if port is None:
+            rpc.TCPClient.__init__(self, host, prog, vers, open_timeout)
+        else:
+            # bypass the portmapper lookup and use the specified port instead
+            rpc.RawTCPClient.__init__(self, host, prog, vers, port, open_timeout)
 
 
 @Session.register(constants.InterfaceType.tcpip, "INSTR")
@@ -67,12 +238,37 @@ class TCPIPInstrSession(Session):
         # TODO: is there a way to get this?
         return []
 
+    def override(self, override_class):
+        """
+        replace this instance's class with override_class
+
+        we create a new class which includes the __dict__ from
+        override_class but keeps the bases from this instance's class
+        """
+        cls = self.__class__
+        self.__class__ = type(
+            override_class.__name__, cls.__bases__, dict(override_class.__dict__)
+        )
+
     def after_parsing(self) -> None:
         # TODO: board_number not handled
+        if self.parsed.lan_device_name.lower().startswith("hislip"):
+            self.override(TCPIPInstrHiSLIP)
+            self.init_hislip()
+        else:
+            self.init_vxi11()
+
+    def init_vxi11(self) -> None:
         # vx11 expect all timeouts to be expressed in ms and should be integers
+        lan_device_name = self.parsed.lan_device_name.lower()
+        if lan_device_name.startswith("inst0,"):
+            lan_device_name, port = lan_device_name.split(",")
+            port = int(port)
+        else:
+            port = None
         try:
-            self.interface = vxi11.CoreClient(
-                self.parsed.host_address, self.open_timeout
+            self.interface = Vxi11CoreClient(
+                self.parsed.host_address, port, self.open_timeout
             )
         except rpc.RPCError:
             raise errors.VisaIOError(constants.VI_ERROR_RSRC_NFOUND)
@@ -82,14 +278,14 @@ class TCPIPInstrSession(Session):
         self.keepalive = False
 
         error, link, abort_port, max_recv_size = self.interface.create_link(
-            self.client_id, 0, self.lock_timeout, self.parsed.lan_device_name
+            self.client_id, 0, self.lock_timeout, lan_device_name
         )
 
         if error:
             raise Exception("error creating link: %d" % error)
 
         self.link = link
-        self.max_recv_size = min(max_recv_size, 2**30)  # 1GB
+        self.max_recv_size = min(max_recv_size, 2 ** 30)  # 1GB
 
         for name in ("SEND_END_EN", "TERMCHAR", "TERMCHAR_EN"):
             attribute = getattr(constants, "VI_ATTR_" + name)
@@ -424,7 +620,7 @@ class TCPIPInstrSession(Session):
         """Sets timeout calculated value from python way to VI_ way"""
         if value == constants.VI_TMO_INFINITE:
             self.timeout = None
-            self._io_timeout = 2**32 - 1
+            self._io_timeout = 2 ** 32 - 1
         elif value == constants.VI_TMO_IMMEDIATE:
             self.timeout = 0
             self._io_timeout = 0
