@@ -10,7 +10,7 @@ import random
 import select
 import socket
 import time
-from typing import Any, List, Optional, Tuple
+from typing import Any, List, Optional, Tuple, Type
 
 from pyvisa import attributes, constants, errors, rname
 from pyvisa.constants import ResourceAttribute, StatusCode
@@ -237,7 +237,7 @@ class TCPIPInstrSession(Session):
         self.interface = hislip.Instrument(self.parsed.host_address, port=port)
 
         # use read, write, close, etc. methods specific to HiSLIP
-        self.__class__ = TCPIPInstrHiSLIP  # type: ignore
+        self.__class__: type = TCPIPInstrHiSLIP
 
     def init_vxi11(self) -> None:
         # vx11 expect all timeouts to be expressed in ms and should be integers
