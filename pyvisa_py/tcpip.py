@@ -40,7 +40,7 @@ VXI11_ERRORS_TO_VISA = {
 
 
 @Session.register(constants.InterfaceType.tcpip, "HISLIP")
-class TCPIPInstrHiSLIP:
+class TCPIPInstrHiSLIP(Session):
     """A TCPIP Session built on socket standard library using HiSLIP protocol."""
 
     # Override parsed to take into account the fact that this class is only used
@@ -67,20 +67,11 @@ class TCPIPInstrHiSLIP:
         self.interface = None
         return StatusCode.success
 
-    def _get_timeout(self, attribute: ResourceAttribute) -> Tuple[int, StatusCode]:
-        if self.interface:
-            if self.interface.timeout == 2 ** 32 - 1:
-                self.timeout = None
-            else:
-                self.timeout = self.interface.timeout
-        return super(TCPIPInstrHiSLIP, self)._get_timeout(attribute)
+    def _timeout_setter(self, attribute: ResourceAttribute, value: int) -> StatusCode:
 
-    def _set_timeout(self, attribute: ResourceAttribute, value: int) -> StatusCode:
-        status = super(TCPIPInstrHiSLIP, self)._set_timeout(attribute, value)
-        timeout = self.timeout if self.timeout else 2 ** 32 - 1
-        timeout = min(timeout, 2 ** 32 - 1)
-        if self.interface:
-            self.interface.timeout = timeout
+        status = super()._set_timeout(attribute, value)
+        self.interface.timeout = 1e-3 * value
+
         return status
 
     def read(self, count: int) -> Tuple[bytes, StatusCode]:
@@ -238,22 +229,10 @@ class TCPIPInstrSession(Session):
         # TODO: is there a way to get this?
         return []
 
-    def override(self, override_class):
-        """
-        replace this instance's class with override_class
-
-        we create a new class which includes the __dict__ from
-        override_class but keeps the bases from this instance's class
-        """
-        cls = self.__class__
-        self.__class__ = type(
-            override_class.__name__, cls.__bases__, dict(override_class.__dict__)
-        )
-
     def after_parsing(self) -> None:
         # TODO: board_number not handled
         if self.parsed.lan_device_name.lower().startswith("hislip"):
-            self.override(TCPIPInstrHiSLIP)
+            self.__class__ = TCPIPInstrHiSLIP
             self.init_hislip()
         else:
             self.init_vxi11()
@@ -617,6 +596,9 @@ class TCPIPInstrSession(Session):
         return VXI11_ERRORS_TO_VISA[error]
 
     def _set_timeout(self, attribute: ResourceAttribute, value: int) -> StatusCode:
+        return self._timeout_setter(attribute, value)
+
+    def _timeout_setter(self, attribute: ResourceAttribute, value: int) -> StatusCode:
         """Sets timeout calculated value from python way to VI_ way"""
         if value == constants.VI_TMO_INFINITE:
             self.timeout = None
