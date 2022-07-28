@@ -237,7 +237,7 @@ class TCPIPInstrSession(Session):
         self.interface = hislip.Instrument(self.parsed.host_address, port=port)
 
         # use read, write, close, etc. methods specific to HiSLIP
-        self.__class__ = TCPIPInstrHiSLIP    # type: ignore
+        self.__class__ = TCPIPInstrHiSLIP  # type: ignore
 
     def init_vxi11(self) -> None:
         # vx11 expect all timeouts to be expressed in ms and should be integers

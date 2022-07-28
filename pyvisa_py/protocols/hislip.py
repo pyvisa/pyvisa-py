@@ -513,7 +513,7 @@ def receive_exact_into(sock, recv_buffer):
         raise MemoryError("socket.recv_into scribbled past end of recv_buffer")
 
 
-def receive_header(    # noqa: C901
+def receive_header(  # noqa: C901
     sock, expected_message_type=None
 ):  # pylint: disable=too-many-statements,too-many-branches
     """receive and decode the HiSLIP message header"""
