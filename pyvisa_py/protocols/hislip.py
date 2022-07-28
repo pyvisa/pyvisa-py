@@ -159,12 +159,12 @@ class Instrument(object):  # pylint: disable=too-many-instance-attributes
 
     @property
     def timeout(self):
-        """ returns the timeout value in seconds for both the sync and async sockets """
+        """returns the timeout value in seconds for both the sync and async sockets"""
         return self._timeout
 
     @timeout.setter
     def timeout(self, val):
-        """ sets the timeout value in seconds for both the sync and async sockets """
+        """sets the timeout value in seconds for both the sync and async sockets"""
         self._timeout = val
         self._sync.settimeout(self._timeout)
         self._async.settimeout(self._timeout)
@@ -403,7 +403,7 @@ class Instrument(object):  # pylint: disable=too-many-instance-attributes
         return response_header.feature_bitmap
 
     def trigger(self):
-        """ sends a Trigger packet on the sync channel """
+        """sends a Trigger packet on the sync channel"""
         header = struct.pack(
             "!2sBBIQ", b"HS", MESSAGETYPE["Trigger"], self.rmt, self.message_id, 0
         )
@@ -412,7 +412,7 @@ class Instrument(object):  # pylint: disable=too-many-instance-attributes
         self._sync.sendall(header)
 
     def send_data_packet(self, payload):
-        """ sends a Data packet on the sync channel """
+        """sends a Data packet on the sync channel"""
         header = struct.pack(
             "!2sBBIQ",
             b"HS",
@@ -427,7 +427,7 @@ class Instrument(object):  # pylint: disable=too-many-instance-attributes
         self._sync.sendall(header + payload)
 
     def send_data_end_packet(self, payload):
-        """ sends a DataEnd packet on the sync channel """
+        """sends a DataEnd packet on the sync channel"""
         header = struct.pack(
             "!2sBBIQ",
             b"HS",
@@ -513,7 +513,7 @@ def receive_exact_into(sock, recv_buffer):
 def receive_header(
     sock, expected_message_type=None
 ):  # pylint: disable=too-many-statements,too-many-branches
-    """ receive and decode the HiSLIP message header """
+    """receive and decode the HiSLIP message header"""
     header = receive_exact(sock, HEADER_SIZE)
     (
         prologue,

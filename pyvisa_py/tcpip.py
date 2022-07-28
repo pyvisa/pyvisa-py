@@ -264,7 +264,7 @@ class TCPIPInstrSession(Session):
             raise Exception("error creating link: %d" % error)
 
         self.link = link
-        self.max_recv_size = min(max_recv_size, 2 ** 30)  # 1GB
+        self.max_recv_size = min(max_recv_size, 2**30)  # 1GB
 
         for name in ("SEND_END_EN", "TERMCHAR", "TERMCHAR_EN"):
             attribute = getattr(constants, "VI_ATTR_" + name)
@@ -602,7 +602,7 @@ class TCPIPInstrSession(Session):
         """Sets timeout calculated value from python way to VI_ way"""
         if value == constants.VI_TMO_INFINITE:
             self.timeout = None
-            self._io_timeout = 2 ** 32 - 1
+            self._io_timeout = 2**32 - 1
         elif value == constants.VI_TMO_IMMEDIATE:
             self.timeout = 0
             self._io_timeout = 0
