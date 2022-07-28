@@ -4,10 +4,10 @@
     http://www.ivifoundation.org/downloads/Class%20Specifications/IVI-6.1_HiSLIP-1.1-2011-02-24.pdf
 """
 
-from typing import Dict, Union
 import socket
 import struct
 import time
+from typing import Dict, Union
 
 PORT = 4880
 
