@@ -4,13 +4,16 @@
     http://www.ivifoundation.org/downloads/Class%20Specifications/IVI-6.1_HiSLIP-1.1-2011-02-24.pdf
 """
 
+from typing import Dict, Union
 import socket
 import struct
 import time
 
 PORT = 4880
 
-MESSAGETYPE = {
+LookupTable = Dict[Union[int, str], Union[int, str]]
+
+MESSAGETYPE: LookupTable = {
     0: "Initialize",
     1: "InitializeResponse",
     2: "FatalError",
@@ -42,7 +45,7 @@ MESSAGETYPE = {
 }
 MESSAGETYPE.update({value: key for (key, value) in MESSAGETYPE.items()})
 
-FATALERRORCODE = {
+FATALERRORCODE: LookupTable = {
     0: "Unidentified error",
     1: "Poorly formed message",
     2: "Attempt to use connection without both channels established",
@@ -53,7 +56,7 @@ FATALERRORCODE = {
 }
 FATALERRORCODE.update({value: key for (key, value) in FATALERRORCODE.items()})
 
-ERRORCODE = {
+ERRORCODE: LookupTable = {
     0: "Undefined error",
     1: "Unrecognized message type",
     2: "Unrecognized control code",
@@ -64,13 +67,13 @@ ERRORCODE = {
 }
 ERRORCODE.update({value: key for (key, value) in ERRORCODE.items()})
 
-LOCKCONTROLCODE = {
+LOCKCONTROLCODE: LookupTable = {
     0: "release",
     1: "request",
 }
 LOCKCONTROLCODE.update({value: key for (key, value) in LOCKCONTROLCODE.items()})
 
-LOCKRESPONSECONTROLCODE = {
+LOCKRESPONSECONTROLCODE: LookupTable = {
     0: "fail",
     1: "success",
     2: "successSharedLock",
@@ -80,7 +83,7 @@ LOCKRESPONSECONTROLCODE.update(
     {value: key for (key, value) in LOCKRESPONSECONTROLCODE.items()}
 )
 
-REMOTELOCALCONTROLCODE = {
+REMOTELOCALCONTROLCODE: LookupTable = {
     0: "disableRemote",
     1: "enableRemote",
     2: "disableAndGTL",
@@ -510,7 +513,7 @@ def receive_exact_into(sock, recv_buffer):
         raise MemoryError("socket.recv_into scribbled past end of recv_buffer")
 
 
-def receive_header(
+def receive_header(    # noqa: C901
     sock, expected_message_type=None
 ):  # pylint: disable=too-many-statements,too-many-branches
     """receive and decode the HiSLIP message header"""

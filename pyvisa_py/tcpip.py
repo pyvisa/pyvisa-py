@@ -52,16 +52,6 @@ class TCPIPInstrHiSLIP(Session):
         # TODO: is there a way to get this?
         return []
 
-    def init_hislip(self) -> None:
-        # TODO: board_number not handled
-
-        if "," in self.parsed.lan_device_name:
-            _, port = self.parsed.lan_device_name.split(",")
-            port = int(port)
-        else:
-            port = 4880
-        self.interface = hislip.Instrument(self.parsed.host_address, port=port)
-
     def close(self) -> StatusCode:
         self.interface.close()
         self.interface = None
@@ -232,17 +222,29 @@ class TCPIPInstrSession(Session):
     def after_parsing(self) -> None:
         # TODO: board_number not handled
         if self.parsed.lan_device_name.lower().startswith("hislip"):
-            self.__class__ = TCPIPInstrHiSLIP
             self.init_hislip()
         else:
             self.init_vxi11()
+
+    def init_hislip(self) -> None:
+        # TODO: board_number not handled
+
+        if "," in self.parsed.lan_device_name:
+            _, port_str = self.parsed.lan_device_name.split(",")
+            port = int(port_str)
+        else:
+            port = 4880
+        self.interface = hislip.Instrument(self.parsed.host_address, port=port)
+
+        # use read, write, close, etc. methods specific to HiSLIP
+        self.__class__ = TCPIPInstrHiSLIP    # type: ignore
 
     def init_vxi11(self) -> None:
         # vx11 expect all timeouts to be expressed in ms and should be integers
         lan_device_name = self.parsed.lan_device_name.lower()
         if lan_device_name.startswith("inst0,"):
-            lan_device_name, port = lan_device_name.split(",")
-            port = int(port)
+            lan_device_name, port_str = lan_device_name.split(",")
+            port = int(port_str)
         else:
             port = None
         try:
