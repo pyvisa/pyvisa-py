@@ -12,12 +12,13 @@ import socket
 import time
 from typing import Any, List, Optional, Tuple
 
+
 from pyvisa import attributes, constants, errors, rname
 from pyvisa.constants import ResourceAttribute, StatusCode
 
 from . import common
 from .protocols import hislip, rpc, vxi11
-from .sessions import Session, UnknownAttribute
+from .sessions import Session, UnknownAttribute, VISARMSession
 
 # Conversion between VXI11 error codes and VISA status
 # TODO this is so far a best guess, in particular 6 and 29 are likely wrong
@@ -52,15 +53,26 @@ class TCPIPInstrHiSLIP(Session):
         # TODO: is there a way to get this?
         return []
 
+    def after_parsing(self) -> None:
+        # TODO: board_number not handled
+
+        if "," in self.parsed.lan_device_name:
+            _, port_str = self.parsed.lan_device_name.split(",")
+            port = int(port_str)
+        else:
+            port = 4880
+        self.interface = hislip.Instrument(self.parsed.host_address, port=port)
+
     def close(self) -> StatusCode:
         self.interface.close()
         self.interface = None
         return StatusCode.success
 
-    def _timeout_setter(self, attribute: ResourceAttribute, value: int) -> StatusCode:
+    def _set_timeout(self, attribute: ResourceAttribute, value: int) -> StatusCode:
 
         status = super()._set_timeout(attribute, value)
-        self.interface.timeout = 1e-3 * value
+        if hasattr(self.interface, "timeout"):
+            self.interface.timeout = 1e-3 * value
 
         return status
 
@@ -191,8 +203,8 @@ class Vxi11CoreClient(vxi11.CoreClient):
             rpc.RawTCPClient.__init__(self, host, prog, vers, port, open_timeout)
 
 
-@Session.register(constants.InterfaceType.tcpip, "INSTR")
-class TCPIPInstrSession(Session):
+@Session.register(constants.InterfaceType.tcpip, "VXI11")
+class TCPIPInstrVxi11(Session):
     """A TCPIP Session built on socket standard library using VXI-11 protocol."""
 
     #: Maximum size of a chunk of data in bytes.
@@ -220,26 +232,6 @@ class TCPIPInstrSession(Session):
         return []
 
     def after_parsing(self) -> None:
-        # TODO: board_number not handled
-        if self.parsed.lan_device_name.lower().startswith("hislip"):
-            self.init_hislip()
-        else:
-            self.init_vxi11()
-
-    def init_hislip(self) -> None:
-        # TODO: board_number not handled
-
-        if "," in self.parsed.lan_device_name:
-            _, port_str = self.parsed.lan_device_name.split(",")
-            port = int(port_str)
-        else:
-            port = 4880
-        self.interface = hislip.Instrument(self.parsed.host_address, port=port)
-
-        # use read, write, close, etc. methods specific to HiSLIP
-        self.__class__: type = TCPIPInstrHiSLIP
-
-    def init_vxi11(self) -> None:
         # vx11 expect all timeouts to be expressed in ms and should be integers
         lan_device_name = self.parsed.lan_device_name.lower()
         if lan_device_name.startswith("inst0,"):
@@ -598,9 +590,6 @@ class TCPIPInstrSession(Session):
         return VXI11_ERRORS_TO_VISA[error]
 
     def _set_timeout(self, attribute: ResourceAttribute, value: int) -> StatusCode:
-        return self._timeout_setter(attribute, value)
-
-    def _timeout_setter(self, attribute: ResourceAttribute, value: int) -> StatusCode:
         """Sets timeout calculated value from python way to VI_ way"""
         if value == constants.VI_TMO_INFINITE:
             self.timeout = None
@@ -612,6 +601,31 @@ class TCPIPInstrSession(Session):
             self.timeout = value / 1000.0
             self._io_timeout = int(self.timeout * 1000)
         return StatusCode.success
+
+
+@Session.register(constants.InterfaceType.tcpip, "INSTR")
+class TCPIPInstrSession(TCPIPInstrHiSLIP, TCPIPInstrVxi11):
+    """A class to dispatch to either VXI11 or HiSLIP based on the protocol."""
+
+    def __new__(
+        cls,
+        resource_manager_session: VISARMSession,
+        resource_name: str,
+        parsed=None,
+        open_timeout: Optional[float] = None,
+    ):
+
+        if parsed is None:
+            parsed = rname.parse_resource_name(resource_name)
+
+        if parsed.lan_device_name.lower().startswith("hislip"):
+            return TCPIPInstrHiSLIP(
+                resource_manager_session, resource_name, parsed, open_timeout
+            )
+        else:
+            return TCPIPInstrVxi11(
+                resource_manager_session, resource_name, parsed, open_timeout
+            )
 
 
 @Session.register(constants.InterfaceType.tcpip, "SOCKET")
