@@ -40,8 +40,36 @@ VXI11_ERRORS_TO_VISA = {
 }
 
 
+@Session.register(constants.InterfaceType.tcpip, "INSTR")
+class TCPIPInstrSession(Session):
+    """A class to dispatch to either VXI11 or HiSLIP based on the protocol."""
+
+    def __new__(
+        cls,
+        resource_manager_session: VISARMSession,
+        resource_name: str,
+        parsed=None,
+        open_timeout: Optional[float] = None,
+    ):
+
+        if cls is not TCPIPInstrSession:
+            return super().__new__(cls)
+
+        if parsed is None:
+            parsed = rname.parse_resource_name(resource_name)
+
+        if parsed.lan_device_name.lower().startswith("hislip"):
+            return TCPIPInstrHiSLIP(
+                resource_manager_session, resource_name, parsed, open_timeout
+            )
+        else:
+            return TCPIPInstrVxi11(
+                resource_manager_session, resource_name, parsed, open_timeout
+            )
+
+
 @Session.register(constants.InterfaceType.tcpip, "HISLIP")
-class TCPIPInstrHiSLIP(Session):
+class TCPIPInstrHiSLIP(TCPIPInstrSession):
     """A TCPIP Session built on socket standard library using HiSLIP protocol."""
 
     # Override parsed to take into account the fact that this class is only used
@@ -204,7 +232,7 @@ class Vxi11CoreClient(vxi11.CoreClient):
 
 
 @Session.register(constants.InterfaceType.tcpip, "VXI11")
-class TCPIPInstrVxi11(Session):
+class TCPIPInstrVxi11(TCPIPInstrSession):
     """A TCPIP Session built on socket standard library using VXI-11 protocol."""
 
     #: Maximum size of a chunk of data in bytes.
@@ -601,31 +629,6 @@ class TCPIPInstrVxi11(Session):
             self.timeout = value / 1000.0
             self._io_timeout = int(self.timeout * 1000)
         return StatusCode.success
-
-
-@Session.register(constants.InterfaceType.tcpip, "INSTR")
-class TCPIPInstrSession(TCPIPInstrHiSLIP, TCPIPInstrVxi11):
-    """A class to dispatch to either VXI11 or HiSLIP based on the protocol."""
-
-    def __new__(
-        cls,
-        resource_manager_session: VISARMSession,
-        resource_name: str,
-        parsed=None,
-        open_timeout: Optional[float] = None,
-    ):
-
-        if parsed is None:
-            parsed = rname.parse_resource_name(resource_name)
-
-        if parsed.lan_device_name.lower().startswith("hislip"):
-            return TCPIPInstrHiSLIP(
-                resource_manager_session, resource_name, parsed, open_timeout
-            )
-        else:
-            return TCPIPInstrVxi11(
-                resource_manager_session, resource_name, parsed, open_timeout
-            )
 
 
 @Session.register(constants.InterfaceType.tcpip, "SOCKET")
