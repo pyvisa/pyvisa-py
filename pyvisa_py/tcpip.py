@@ -12,7 +12,6 @@ import socket
 import time
 from typing import Any, List, Optional, Tuple
 
-
 from pyvisa import attributes, constants, errors, rname
 from pyvisa.constants import ResourceAttribute, StatusCode
 
@@ -267,9 +266,7 @@ class TCPIPInstrVxi11(TCPIPInstrSession):
         else:
             port = None
         try:
-            self.interface = Vxi11CoreClient(
-                host_address, port, self.open_timeout
-            )
+            self.interface = Vxi11CoreClient(host_address, port, self.open_timeout)
         except rpc.RPCError:
             raise errors.VisaIOError(constants.VI_ERROR_RSRC_NFOUND)
 
