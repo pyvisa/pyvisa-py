@@ -260,26 +260,26 @@ class TCPIPInstrVxi11(TCPIPInstrSession):
         return []
 
     def after_parsing(self) -> None:
-        # vx11 expect all timeouts to be expressed in ms and should be integers
-        lan_device_name = self.parsed.lan_device_name.lower()
-        if lan_device_name.startswith("inst0,"):
-            lan_device_name, port_str = lan_device_name.split(",")
+        host_address = self.parsed.host_address
+        if "," in host_address:
+            host_address, port_str = host_address.split(",")
             port = int(port_str)
         else:
             port = None
         try:
             self.interface = Vxi11CoreClient(
-                self.parsed.host_address, port, self.open_timeout
+                host_address, port, self.open_timeout
             )
         except rpc.RPCError:
             raise errors.VisaIOError(constants.VI_ERROR_RSRC_NFOUND)
 
+        # vx11 expect all timeouts to be expressed in ms and should be integers
         self.lock_timeout = 10000
         self.client_id = random.getrandbits(31)
         self.keepalive = False
 
         error, link, abort_port, max_recv_size = self.interface.create_link(
-            self.client_id, 0, self.lock_timeout, lan_device_name
+            self.client_id, 0, self.lock_timeout, self.parsed.lan_device_name
         )
 
         if error:
