@@ -116,7 +116,7 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
         session: VISARMSession,
         resource_name: str,
         access_mode: constants.AccessModes = constants.AccessModes.no_lock,
-        open_timeout: int = constants.VI_TMO_IMMEDIATE,
+        open_timeout: Optional[int] = constants.VI_TMO_IMMEDIATE,
     ) -> Tuple[VISASession, StatusCode]:
         """Opens a session to the specified resource.
 
@@ -145,7 +145,7 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
 
         """
         try:
-            open_timeout = int(open_timeout)
+            open_timeout = None if open_timeout is None else int(open_timeout)
         except ValueError:
             raise ValueError(
                 "open_timeout (%r) must be an integer (or compatible type)"

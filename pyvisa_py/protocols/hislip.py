@@ -112,23 +112,25 @@ class Struct(dict):
         self.__dict__ = self
 
 
-class Instrument(object):  # pylint: disable=too-many-instance-attributes
+class Instrument:  # pylint: disable=too-many-instance-attributes
     """
     this is the principal export from this module.  it opens up a HiSLIP connection
     to the instrument at the specified IP address.
     """
 
-    def __init__(self, ip_addr, timeout=2.0, port=PORT):
+    def __init__(self, ip_addr, open_timeout=None, port=PORT):
         # init transaction:
         #     C->S: Initialize
         #     S->C: InitializeResponse
         #     C->S: AsyncInitialize
         #     S->C: AsyncInitializeResponse
 
+        timeout = 1e-3 * (open_timeout or 1000)
+
         # open the synchronous socket and send an initialize packet
         self._sync = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self._sync.connect((ip_addr, port))
-        self._sync.settimeout(1)
+        self._sync.settimeout(timeout)
         self._sync.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
         init = self.initialize()
         if init.overlap != 0:
@@ -137,7 +139,7 @@ class Instrument(object):  # pylint: disable=too-many-instance-attributes
         # open the asynchronous socket and send an initialize packet
         self._async = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self._async.connect((ip_addr, port))
-        self._async.settimeout(1)
+        self._async.settimeout(timeout)
         self._async.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
         self._async_init = self.async_initialize(session_id=init.session_id)
 
@@ -147,7 +149,7 @@ class Instrument(object):  # pylint: disable=too-many-instance-attributes
         # print("max_payload_size = %s" % (max_msg_size - HEADER_SIZE))
         self.max_payload_size = max_msg_size - HEADER_SIZE
 
-        self.timeout = timeout
+        self.timeout = 10
         self.rmt = 0
         self.receiver = None
         self.message_id = 0xFFFFFF00
