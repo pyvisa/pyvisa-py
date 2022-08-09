@@ -454,7 +454,7 @@ class RawTCPClient(Client):
 
     def __init__(self, host, prog, vers, port, open_timeout=5000):
         Client.__init__(self, host, prog, vers, port)
-        open_timeout = open_timeout or 5000
+        open_timeout = open_timeout if open_timeout is not None else 5000
         self.connect(1e-3 * open_timeout)
         # self.timeout defaults higher than the default 2 second VISA timeout,
         # ensuring that VISA timeouts take precedence.
