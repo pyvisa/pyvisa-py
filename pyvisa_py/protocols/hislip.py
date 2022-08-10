@@ -112,7 +112,7 @@ class Struct(dict):
         self.__dict__ = self
 
 
-class Instrument:  # pylint: disable=too-many-instance-attributes
+class Instrument:
     """
     this is the principal export from this module.  it opens up a HiSLIP connection
     to the instrument at the specified IP address.
@@ -125,7 +125,8 @@ class Instrument:  # pylint: disable=too-many-instance-attributes
         #     C->S: AsyncInitialize
         #     S->C: AsyncInitializeResponse
 
-        timeout = 1e-3 * (open_timeout or 1000)
+        open_timeout = open_timeout if open_timeout is not None else 1000
+        timeout = 1e-3 * open_timeout
 
         # open the synchronous socket and send an initialize packet
         self._sync = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -145,8 +146,6 @@ class Instrument:  # pylint: disable=too-many-instance-attributes
 
         # get the maximum message size
         max_msg_size = self.async_maximum_message_size(1 << 24)
-        # print("HEADER_SIZE = %s, async_maximum_message_size = %s" % (HEADER_SIZE, max_msg_size))
-        # print("max_payload_size = %s" % (max_msg_size - HEADER_SIZE))
         self.max_payload_size = max_msg_size - HEADER_SIZE
 
         self.timeout = 10
@@ -164,19 +163,22 @@ class Instrument:  # pylint: disable=too-many-instance-attributes
 
     @property
     def timeout(self):
-        """returns the timeout value in seconds for both the sync and async sockets"""
+        """Timeout value in seconds for both the sync and async sockets"""
         return self._timeout
 
     @timeout.setter
     def timeout(self, val):
-        """sets the timeout value in seconds for both the sync and async sockets"""
+        """Timeout value in seconds for both the sync and async sockets"""
         self._timeout = val
         self._sync.settimeout(self._timeout)
         self._async.settimeout(self._timeout)
 
     def send(self, data):
-        """Sends the data on the synchronous channel.  More than one packet
-        may be necessary in order to not exceed max_payload_size."""
+        """Sends the data on the synchronous channel.
+
+        More than one packet may be necessary in order
+        to not exceed max_payload_size.
+        """
         data_view = memoryview(data)
         num_bytes_to_send = len(data)
 
@@ -196,9 +198,9 @@ class Instrument:  # pylint: disable=too-many-instance-attributes
         return len(data)
 
     def receive(self, max_len=4096):
-        """
-        receive data on the synchronous channel, terminating after
-        max_len bytes or after receiving a DataEnd message
+        """Receive data on the synchronous channel.
+
+        Terminate after max_len bytes or after receiving a DataEnd message
         """
 
         # if we don't already have a Receiver object, create one
@@ -279,8 +281,6 @@ class Instrument:  # pylint: disable=too-many-instance-attributes
         response_header = receive_header(
             self._async, expected_message_type="AsyncMaxMsgSizeResponse"
         )
-        # print("max_msg_size = %s, type(%s)" % (response_header.max_msg_size,
-        #                                       type(response_header.max_msg_size)))
         return response_header.max_msg_size
 
     def async_lock_info(self):
@@ -515,9 +515,7 @@ def receive_exact_into(sock, recv_buffer):
         raise MemoryError("socket.recv_into scribbled past end of recv_buffer")
 
 
-def receive_header(  # noqa: C901
-    sock, expected_message_type=None
-):  # pylint: disable=too-many-statements,too-many-branches
+def receive_header(sock, expected_message_type=None):  # noqa: C901
     """receive and decode the HiSLIP message header"""
     header = receive_exact(sock, HEADER_SIZE)
     (

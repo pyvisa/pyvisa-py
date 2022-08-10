@@ -10,7 +10,7 @@ import random
 import select
 import socket
 import time
-from typing import Any, List, Optional, Tuple, Union
+from typing import Any, List, Optional, Tuple, Type
 
 from pyvisa import attributes, constants, errors, rname
 from pyvisa.constants import ResourceAttribute, StatusCode
@@ -41,7 +41,7 @@ VXI11_ERRORS_TO_VISA = {
 
 @Session.register(constants.InterfaceType.tcpip, "INSTR")
 class TCPIPInstrSession(Session):
-    """A class to dispatch to VXI11 or HiSLIP based on the protocol."""
+    """A class to dispatch to VXI11 or HiSLIP, based on the protocol."""
 
     def __new__(
         cls,
@@ -50,20 +50,18 @@ class TCPIPInstrSession(Session):
         parsed=None,
         open_timeout: Optional[int] = None,
     ):
-        obj: Union[TCPIPInstrHiSLIP, TCPIPInstrVxi11]
+        newcls: Type
 
         if parsed is None:
             parsed = rname.parse_resource_name(resource_name)
 
         if parsed.lan_device_name.lower().startswith("hislip"):
-            obj = TCPIPInstrHiSLIP(
-                resource_manager_session, resource_name, parsed, open_timeout
-            )
+            newcls = TCPIPInstrHiSLIP
+
         else:
-            obj = TCPIPInstrVxi11(
-                resource_manager_session, resource_name, parsed, open_timeout
-            )
-        return obj
+            newcls = TCPIPInstrVxi11
+
+        return newcls(resource_manager_session, resource_name, parsed, open_timeout)
 
 
 @Session.register(constants.InterfaceType.tcpip, "HISLIP")
@@ -265,6 +263,8 @@ class TCPIPInstrVxi11(Session):
         return []
 
     def after_parsing(self) -> None:
+        # TODO: board_number not handled
+
         host_address = self.parsed.host_address
         if "," in host_address:
             host_address, port_str = host_address.split(",")
