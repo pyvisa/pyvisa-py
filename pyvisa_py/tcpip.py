@@ -64,9 +64,10 @@ class TCPIPInstrSession(Session):
         return newcls(resource_manager_session, resource_name, parsed, open_timeout)
 
 
-@Session.register(constants.InterfaceType.tcpip, "HISLIP")
 class TCPIPInstrHiSLIP(Session):
     """A TCPIP Session built on socket standard library using HiSLIP protocol."""
+
+    session_type = (constants.InterfaceType.tcpip, "HISLIP")
 
     # Override parsed to take into account the fact that this class is only used
     # for a specific kind of resource
@@ -124,7 +125,7 @@ class TCPIPInstrHiSLIP(Session):
             data = self.interface.receive(count)
             status = (
                 StatusCode.success_termination_character_read
-                if self.interface.rmt
+                if self.interface._rmt
                 else StatusCode.success_max_count_read
                 if len(data) >= count
                 else StatusCode.success
@@ -234,9 +235,10 @@ class Vxi11CoreClient(vxi11.CoreClient):
             rpc.RawTCPClient.__init__(self, host, prog, vers, port, open_timeout)
 
 
-@Session.register(constants.InterfaceType.tcpip, "VXI11")
 class TCPIPInstrVxi11(Session):
     """A TCPIP Session built on socket standard library using VXI-11 protocol."""
+
+    session_type = (constants.InterfaceType.tcpip, "VXI11")
 
     #: Maximum size of a chunk of data in bytes.
     max_recv_size: int

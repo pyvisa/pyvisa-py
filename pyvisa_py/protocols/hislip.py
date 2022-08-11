@@ -7,13 +7,11 @@
 import socket
 import struct
 import time
-from typing import Dict, Union
+from typing import Dict, Optional, Tuple
 
 PORT = 4880
 
-LookupTable = Dict[Union[int, str], Union[int, str]]
-
-MESSAGETYPE: LookupTable = {
+MESSAGETYPE_STR: Dict[int, str] = {
     0: "Initialize",
     1: "InitializeResponse",
     2: "FatalError",
@@ -40,61 +38,71 @@ MESSAGETYPE: LookupTable = {
     23: "AsyncDeviceClearAcknowledge",
     24: "AsyncLockInfo",
     25: "AsyncLockInfoResponse",
-    # reserved for future use         26-127 inclusive
+    26: "GetDescriptors",
+    27: "GetDescriptorsResponse",
+    28: "StartTLS",
+    29: "AsyncStartTLS",
+    30: "AsyncStartTLSResponse",
+    31: "EndTLS",
+    32: "AsyncEndTLS",
+    33: "AsyncEndTLSResponse",
+    34: "GetSaslMechanismList",
+    35: "GetSaslMechanismListResponse",
+    36: "AuthenticationStart",
+    37: "AuthenticationExchange",
+    38: "AuthenticationResult",
+    # reserved for future use         39-127 inclusive
     # VendorSpecific                  128-255 inclusive
 }
-MESSAGETYPE.update({value: key for (key, value) in MESSAGETYPE.items()})
+MESSAGETYPE: Dict[str, int] = {value: key for (key, value) in MESSAGETYPE_STR.items()}
 
-FATALERRORCODE: LookupTable = {
+FATALERRORMESSAGE: Dict[int, str] = {
     0: "Unidentified error",
-    1: "Poorly formed message",
+    1: "Poorly formed message header",
     2: "Attempt to use connection without both channels established",
-    3: "Invalid initialization sequence",
+    3: "Invalid Initialization sequence",
     4: "Server refused connection due to maximum number of clients exceeded",
-    # 5-127:   reserved for HiSLIP extensions
+    5: "Secure connection failed",
+    # 6-127:   reserved for HiSLIP extensions
     # 128-255: device defined errors
 }
-FATALERRORCODE.update({value: key for (key, value) in FATALERRORCODE.items()})
+FATALERRORCODE: Dict[str, int] = {
+    value: key for (key, value) in FATALERRORMESSAGE.items()
+}
 
-ERRORCODE: LookupTable = {
-    0: "Undefined error",
-    1: "Unrecognized message type",
+ERRORMESSAGE: Dict[int, str] = {
+    0: "Unidentified error",
+    1: "Unrecognized Message Type",
     2: "Unrecognized control code",
-    3: "Unrecognized vendor defined message",
+    3: "Unrecognized Vendor Defined Message",
     4: "Message too large",
-    # 5-127:   Reserved
+    5: "Authentication failed",
+    # 6-127:   Reserved
     # 128-255: Device defined errors
 }
-ERRORCODE.update({value: key for (key, value) in ERRORCODE.items()})
+ERRORCODE: Dict[str, int] = {value: key for (key, value) in ERRORMESSAGE.items()}
 
-LOCKCONTROLCODE: LookupTable = {
-    0: "release",
-    1: "request",
+LOCKCONTROLCODE: Dict[str, int] = {
+    "release": 0,
+    "request": 1,
 }
-LOCKCONTROLCODE.update({value: key for (key, value) in LOCKCONTROLCODE.items()})
 
-LOCKRESPONSECONTROLCODE: LookupTable = {
-    0: "fail",
-    1: "success",
-    2: "successSharedLock",
+LOCKRESPONSE: Dict[int, str] = {
+    0: "failure",
+    1: "success",  # or "success exclusive"
+    2: "success shared",
     3: "error",
 }
-LOCKRESPONSECONTROLCODE.update(
-    {value: key for (key, value) in LOCKRESPONSECONTROLCODE.items()}
-)
 
-REMOTELOCALCONTROLCODE: LookupTable = {
-    0: "disableRemote",
-    1: "enableRemote",
-    2: "disableAndGTL",
-    3: "enableAndGotoRemote",
-    4: "enableAndLockoutLocal",
-    5: "enableAndGTRLLO",
-    6: "justGTL",
+REMOTELOCALCONTROLCODE: Dict[str, int] = {
+    "disableRemote": 0,
+    "enableRemote": 1,
+    "disableAndGTL": 2,
+    "enableAndGotoRemote": 3,
+    "enableAndLockoutLocal": 4,
+    "enableAndGTRLLO": 5,
+    "justGTL": 6,
 }
-REMOTELOCALCONTROLCODE.update(
-    {value: key for (key, value) in REMOTELOCALCONTROLCODE.items()}
-)
 
 HEADER_FORMAT = "!2sBBIQ"
 # !  = network order,
@@ -105,20 +113,262 @@ HEADER_FORMAT = "!2sBBIQ"
 # Q  = payload length (unsigned long long)
 HEADER_SIZE = struct.calcsize(HEADER_FORMAT)
 
+MAX_MSG_SIZE = 1 << 24  # maximum message size we will accept
 
-class Struct(dict):
-    def __init__(self, **kwargs):
-        super(Struct, self).__init__(**kwargs)
-        self.__dict__ = self
+
+#########################################################################################
+
+
+def receive_flush(sock: socket.socket, recv_len: int) -> None:
+    """
+    receive exactly 'recv_len' bytes from 'sock'.
+    no explicit timeout is specified, since it is assumed
+    that a call to select indicated that data is available.
+    received data is thrown away and nothing is returned
+    """
+    # limit the size of the recv_buffer to something moderate
+    # in order to limit the impact on virtual memory
+    recv_buffer = bytearray(min(1 << 20, recv_len))
+    bytes_recvd = 0
+
+    while bytes_recvd < recv_len:
+        request_size = min(len(recv_buffer), recv_len - bytes_recvd)
+        data_len = sock.recv_into(recv_buffer, request_size)
+        bytes_recvd += data_len
+
+
+def receive_exact(sock: socket.socket, recv_len: int) -> bytes:
+    """
+    receive exactly 'recv_len' bytes from 'sock'.
+    no explicit timeout is specified, since it is assumed
+    that a call to select indicated that data is available.
+    returns a bytearray containing the received data.
+    """
+    recv_buffer = bytearray(recv_len)
+    receive_exact_into(sock, recv_buffer)
+    return recv_buffer
+
+
+def receive_exact_into(sock: socket.socket, recv_buffer: bytes) -> None:
+    """
+    receive data from 'sock' to exactly fill 'recv_buffer'.
+    no explicit timeout is specified, since it is assumed
+    that a call to select indicated that data is available.
+    """
+    view = memoryview(recv_buffer)
+    recv_len = len(recv_buffer)
+    bytes_recvd = 0
+
+    while bytes_recvd < recv_len:
+        request_size = recv_len - bytes_recvd
+        data_len = sock.recv_into(view, request_size)
+        bytes_recvd += data_len
+        view = view[data_len:]
+
+    if bytes_recvd > recv_len:
+        raise MemoryError("socket.recv_into scribbled past end of recv_buffer")
+
+
+def send_msg(
+    sock: socket.socket,
+    msg_type: str,
+    control_code: int,
+    message_parameter: Optional[int],
+    payload: bytes = b"",
+) -> None:
+    """Send a message on sock w/ payload."""
+    msg = bytearray(
+        struct.pack(
+            HEADER_FORMAT,
+            b"HS",
+            MESSAGETYPE[msg_type],
+            control_code,
+            message_parameter or 0,
+            len(payload),
+        )
+    )
+    # txdecode(msg, payload)
+    msg.extend(payload)
+    sock.sendall(msg)
+
+
+class RxHeader:
+    """Generic base class for receiving messages.
+
+    specific protocol responses subclass this class.
+    """
+
+    def __init__(
+        self,
+        sock: socket.socket,
+        expected_message_type: Optional[str] = None,
+    ) -> None:
+        """receive and decode the HiSLIP message header"""
+        self.header = receive_exact(sock, HEADER_SIZE)
+        # rxdecode(self.header)
+        (
+            prologue,
+            msg_type,
+            self.control_code,
+            self.message_parameter,
+            self.payload_length,
+        ) = struct.unpack(HEADER_FORMAT, self.header)
+
+        if prologue != b"HS":
+            # XXX we should send a 'Fatal Error' to the server, close the
+            # sockets, then raise an exception
+            raise RuntimeError("protocol synchronization error")
+
+        if msg_type not in MESSAGETYPE_STR:
+            # XXX we should send 'Unrecognized message type' to the
+            #     server and discard this packet plus any payload.
+            raise RuntimeError("unrecognized message type: %d" % msg_type)
+
+        self.msg_type = MESSAGETYPE_STR[msg_type]
+
+        if expected_message_type is not None and self.msg_type != expected_message_type:
+            # XXX we should send an 'Error: Unidentified Error' to the server
+            # and discard this packet plus any payload
+            payload = (
+                (": " + str(receive_exact(sock, self.payload_length)))
+                if self.payload_length > 0
+                else b""
+            )
+            raise RuntimeError(
+                "expected message type '%s', received '%s%s'"
+                % (expected_message_type, self.msg_type, payload)
+            )
+
+        if self.msg_type == "DataEnd" or self.msg_type == "Data":
+            assert self.control_code == 0
+            self.message_id = self.message_parameter
+
+
+class InitializeResponse(RxHeader):
+    def __init__(self, sock: socket.socket) -> None:
+        super().__init__(sock, "InitializeResponse")
+        assert self.payload_length == 0
+        self.overlap = bool(self.control_code)
+        self.version, self.session_id = struct.unpack("!4xHH8x", self.header)
+
+
+class AsyncInitializeResponse(RxHeader):
+    def __init__(self, sock: socket.socket) -> None:
+        super().__init__(sock, "AsyncInitializeResponse")
+        assert self.control_code == 0
+        assert self.payload_length == 0
+        self.vendor_id = struct.unpack("!4x4s8x", self.header)
+
+
+class AsyncMaxMsgSizeResponse(RxHeader):
+    def __init__(self, sock: socket.socket) -> None:
+        super().__init__(sock, "AsyncMaxMsgSizeResponse")
+        assert self.control_code == 0
+        assert self.message_parameter == 0
+        assert self.payload_length == 8
+        payload = receive_exact(sock, self.payload_length)
+        self.max_msg_size = struct.unpack("!Q", payload)[0]
+
+
+class AsyncDeviceClearAcknowledge(RxHeader):
+    def __init__(self, sock: socket.socket) -> None:
+        super().__init__(sock, "AsyncDeviceClearAcknowledge")
+        self.feature_bitmap = self.control_code
+        assert self.message_parameter == 0
+        assert self.payload_length == 0
+
+
+class AsyncInterrupted(RxHeader):
+    def __init__(self, sock: socket.socket) -> None:
+        super().__init__(sock, "AsyncInterrupted")
+        assert self.control_code == 0
+        self.message_id = self.message_parameter
+        assert self.payload_length == 0
+
+
+class AsyncLockInfoResponse(RxHeader):
+    def __init__(self, sock: socket.socket) -> None:
+        super().__init__(sock, "AsyncLockInfoResponse")
+        self.exclusive_lock = self.control_code  # 0: no lock, 1: lock granted
+        self.clients_holding_locks = self.message_parameter
+        assert self.payload_length == 0
+
+
+class AsyncLockResponse(RxHeader):
+    def __init__(self, sock: socket.socket) -> None:
+        super().__init__(sock, "AsyncLockResponse")
+        self.lock_response = LOCKRESPONSE[self.control_code]
+        assert self.message_parameter == 0
+        assert self.payload_length == 0
+
+
+class AsyncRemoteLocalResponse(RxHeader):
+    def __init__(self, sock: socket.socket) -> None:
+        super().__init__(sock, "AsyncRemoteLocalResponse")
+        assert self.control_code == 0
+        assert self.message_parameter == 0
+        assert self.payload_length == 0
+
+
+class AsyncServiceRequest(RxHeader):
+    def __init__(self, sock: socket.socket) -> None:
+        super().__init__(sock, "AsyncServiceRequest")
+        self.server_status = self.control_code
+        assert self.message_parameter == 0
+        assert self.payload_length == 0
+
+
+class AsyncStatusResponse(RxHeader):
+    def __init__(self, sock: socket.socket) -> None:
+        super().__init__(sock, "AsyncStatusResponse")
+        self.server_status = self.control_code
+        assert self.message_parameter == 0
+        assert self.payload_length == 0
+
+
+class DeviceClearAcknowledge(RxHeader):
+    def __init__(self, sock: socket.socket) -> None:
+        super().__init__(sock, "DeviceClearAcknowledge")
+        self.feature_bitmap = self.control_code
+        assert self.message_parameter == 0
+        assert self.payload_length == 0
+
+
+class Interrupted(RxHeader):
+    def __init__(self, sock: socket.socket) -> None:
+        super().__init__(sock, "Interrupted")
+        assert self.control_code == 0
+        self.message_id = self.message_parameter
+        assert self.payload_length == 0
+
+
+class Error(RxHeader):
+    def __init__(self, sock: socket.socket) -> None:
+        super().__init__(sock, "Error")
+        self.error_code = ERRORMESSAGE[self.control_code]
+        assert self.message_parameter == 0
+        self.error_message = receive_exact(sock, self.payload_length)
+
+
+class FatalError(RxHeader):
+    def __init__(self, sock: socket.socket) -> None:
+        super().__init__(sock, "FatalError")
+        self.error_code = FATALERRORMESSAGE[self.control_code]
+        assert self.message_parameter == 0
+        self.error_message = receive_exact(sock, self.payload_length)
 
 
 class Instrument:
     """
-    this is the principal export from this module.  it opens up a HiSLIP connection
-    to the instrument at the specified IP address.
+    this is the principal export from this module.  it opens up a HiSLIP
+    connection to the instrument at the specified IP address.
     """
 
-    def __init__(self, ip_addr, open_timeout=None, port=PORT):
+    _msg_type: str
+
+    def __init__(
+        self, ip_addr: str, open_timeout: Optional[int] = None, port: int = PORT
+    ) -> None:
         # init transaction:
         #     C->S: Initialize
         #     S->C: InitializeResponse
@@ -145,74 +395,108 @@ class Instrument:
         self._async_init = self.async_initialize(session_id=init.session_id)
 
         # get the maximum message size
-        max_msg_size = self.async_maximum_message_size(1 << 24)
-        self.max_payload_size = max_msg_size - HEADER_SIZE
+        max_msg_size = self.async_maximum_message_size(MAX_MSG_SIZE)
+        self._max_payload_size = max_msg_size - HEADER_SIZE
 
         self.timeout = 10
-        self.rmt = 0
-        self.receiver = None
-        self.message_id = 0xFFFFFF00
+        self._rmt = 0
+        self._expected_message_id: Optional[int] = None
+        self._message_id = 0xFFFF_FF00
+        self._last_message_id: Optional[int] = None
+        self._payload_remaining: int = 0
 
     # ================ #
     # MEMBER FUNCTIONS #
     # ================ #
 
-    def close(self):
+    def close(self) -> None:
         self._sync.close()
         self._async.close()
 
     @property
-    def timeout(self):
+    def timeout(self) -> float:
         """Timeout value in seconds for both the sync and async sockets"""
         return self._timeout
 
     @timeout.setter
-    def timeout(self, val):
+    def timeout(self, val: float) -> None:
         """Timeout value in seconds for both the sync and async sockets"""
         self._timeout = val
         self._sync.settimeout(self._timeout)
         self._async.settimeout(self._timeout)
 
-    def send(self, data):
-        """Sends the data on the synchronous channel.
+    def send(self, data: bytes) -> int:
+        """Send the data on the synchronous channel.
 
         More than one packet may be necessary in order
-        to not exceed max_payload_size.
+        to not exceed _max_payload_size.
         """
+        # print(f"send({data=})")
         data_view = memoryview(data)
         num_bytes_to_send = len(data)
 
-        # send the data in chunks of self.max_payload_size bytes at a time
+        # send the data in chunks of self._max_payload_size bytes at a time
         while num_bytes_to_send > 0:
-            if num_bytes_to_send <= self.max_payload_size:
+            if num_bytes_to_send <= self._max_payload_size:
                 assert len(data_view) == num_bytes_to_send
-                self.send_data_end_packet(data_view)
+                self._send_data_end_packet(data_view)
                 bytes_sent = num_bytes_to_send
             else:
-                self.send_data_packet(data_view[: self.max_payload_size])
-                bytes_sent = self.max_payload_size
+                self._send_data_packet(data_view[: self._max_payload_size])
+                bytes_sent = self._max_payload_size
 
             data_view = data_view[bytes_sent:]
             num_bytes_to_send -= bytes_sent
 
         return len(data)
 
-    def receive(self, max_len=4096):
+    def receive(self, max_len: int = 4096) -> bytes:
         """Receive data on the synchronous channel.
 
         Terminate after max_len bytes or after receiving a DataEnd message
         """
 
-        # if we don't already have a Receiver object, create one
-        if self.receiver is None:
-            self.receiver = Receiver(self._sync, self.last_message_id)
+        # print(f"receive({max_len=})")
+        # if we aren't already receiving, initialize the _expected_message_id
+        # and the payload length
+        if self._expected_message_id is None:
+            self._expected_message_id = self._last_message_id
+            self._msg_type, self._payload_remaining = self._next_data_header()
+            # print(f"{self._expected_message_id=}")
 
-        # allocate a buffer and receive the data into it
+        # receive data, terminating after len(recv_buffer) bytes or
+        # after receiving a DataEnd message.
+        #
+        # note the use of receive_exact_into (which calls socket.recv_into),
+        # avoiding unnecessary copies.
+        #
         recv_buffer = bytearray(max_len)
-        result = self.receiver.receive(recv_buffer)
+        view = memoryview(recv_buffer)
+        bytes_recvd = 0
 
-        # if there is no data remaining, get rid of the Receiver object and set the RMT flag
-        if self.receiver.payload_remaining == 0 and self.receiver.msg_type == "DataEnd":
+        while bytes_recvd < max_len:
+            # print(f"{self._payload_remaining=}")
+            if self._payload_remaining <= 0:
+                if self._msg_type == "DataEnd":
+                    # truncate to the actual number of bytes received
+                    recv_buffer = recv_buffer[:bytes_recvd]
+                    break
+                self._msg_type, self._payload_remaining = self._next_data_header()
+
+            request_size = min(self._payload_remaining, max_len - bytes_recvd)
+            receive_exact_into(self._sync, view[:request_size])
+            self._payload_remaining -= request_size
+            bytes_recvd += request_size
+            view = view[request_size:]
+
+        if bytes_recvd > max_len:
+            raise MemoryError("scribbled past end of recv_buffer")
+
+        # print(f" -> {recv_buffer=}")
+
+        # if there is no data remaining, set the RMT flag and set the
+        # _expected_message_id to None
+        if self._payload_remaining == 0 and self._msg_type == "DataEnd":
             #
             # From IEEE Std 488.2: Response Message Terminator.
             #
@@ -220,21 +504,56 @@ class Instrument:
             # to the client at the end of a response. Note that with HiSLIP
             # this is implied by the DataEND message.
             #
-            self.rmt = 1
-            self.receiver = None
+            self._rmt = 1
+            self._expected_message_id = None
 
-        return result
+        return recv_buffer
 
-    def device_clear(self):
-        feature = self._async_device_clear()
-        # Abandon pending messages and wait for in-process synchronous messages to complete
+    def _next_data_header(self) -> Tuple[str, int]:
+        """
+        receive the next data header (either Data or DataEnd), check the
+        message_id, and return the msg_type and payload_length.
+        """
+        while True:
+            header = RxHeader(self._sync)
+
+            if header.msg_type in ("Data", "DataEnd"):
+
+                # When receiving Data messages if the MessageID is not 0xffff ffff,
+                # then verify that the MessageID indicated in the Data message is
+                # the MessageID that the client sent to the server with the most
+                # recent Data, DataEND or Trigger message.
+                #
+                # If the MessageIDs do not match, the client shall clear any Data
+                # responses already buffered and discard the offending Data message
+
+                if (
+                    header.message_parameter == 0xFFFF_FFFF
+                    or header.message_parameter == self._expected_message_id
+                ):
+                    break
+
+            # we're out of sync.  flush this message and continue.
+            receive_flush(self._sync, header.payload_length)
+
+        return header.msg_type, header.payload_length
+
+    def device_clear(self) -> None:
+        feature = self.async_device_clear()
+        # Abandon pending messages and wait for in-process synchronous messages
+        # to complete.
         time.sleep(0.1)
         # Indicate to server that synchronous channel is cleared out.
         self.device_clear_complete(feature)
         # reset messageID and resume normal opreation
-        self.message_id = 0xFFFFFF00
+        self._message_id = 0xFFFF_FF00
 
-    def initialize(self, version=(1, 0), vendor_id=b"xx", sub_address=b"hislip0"):
+    def initialize(
+        self,
+        version: tuple = (1, 0),
+        vendor_id: bytes = b"xx",
+        sub_address: bytes = b"hislip0",
+    ):
         """
         perform an Initialize transaction.
         returns the InitializeResponse header.
@@ -250,23 +569,19 @@ class Instrument:
             vendor_id,
             len(sub_address),
         )
+        # txdecode(header, sub_address)
         self._sync.sendall(header + sub_address)
-        return receive_header(self._sync, expected_message_type="InitializeResponse")
+        return InitializeResponse(self._sync)
 
-    def async_initialize(self, session_id):
+    def async_initialize(self, session_id: int) -> AsyncInitializeResponse:
         """
         perform an AsyncInitialize transaction.
         returns the AsyncInitializeResponse header.
         """
-        header = struct.pack(
-            "!2sBBIQ", b"HS", MESSAGETYPE["AsyncInitialize"], 0, session_id, 0
-        )
-        self._async.sendall(header)
-        return receive_header(
-            self._async, expected_message_type="AsyncInitializeResponse"
-        )
+        send_msg(self._async, "AsyncInitialize", 0, session_id)
+        return AsyncInitializeResponse(self._async)
 
-    def async_maximum_message_size(self, size):
+    def async_maximum_message_size(self, size: int) -> int:
         """
         perform an AsyncMaxMsgSize transaction.
         returns the max_msg_size from the AsyncMaxMsgSizeResponse packet.
@@ -274,16 +589,12 @@ class Instrument:
         # maximum_message_size transaction:
         #     C->S: AsyncMaxMsgSize
         #     S->C: AsyncMaxMsgSizeResponse
-        header = struct.pack(
-            "!2sBBIQQ", b"HS", MESSAGETYPE["AsyncMaxMsgSize"], 0, 0, 8, size
-        )
-        self._async.sendall(header)
-        response_header = receive_header(
-            self._async, expected_message_type="AsyncMaxMsgSizeResponse"
-        )
-        return response_header.max_msg_size
+        payload = struct.pack("!Q", size)
+        send_msg(self._async, "AsyncMaxMsgSize", 0, 0, payload)
+        response = AsyncMaxMsgSizeResponse(self._async)
+        return response.max_msg_size
 
-    def async_lock_info(self):
+    def async_lock_info(self) -> int:
         """
         perform an AsyncLockInfo transaction.
         returns the exclusive_lock from the AsyncLockInfoResponse packet.
@@ -291,14 +602,11 @@ class Instrument:
         # async_lock_info transaction:
         #     C->S: AsyncLockInfo
         #     S->C: AsyncLockInfoResponse
-        header = struct.pack("!2sBBIQ", b"HS", MESSAGETYPE["AsyncLockInfo"], 0, 0, 0)
-        self._async.sendall(header)
-        response_header = receive_header(
-            self._async, expected_message_type="AsyncLockInfoResponse"
-        )
-        return response_header.exclusive_lock
+        send_msg(self._async, "AsyncLockInfo", 0, 0)
+        response = AsyncLockInfoResponse(self._async)
+        return response.exclusive_lock
 
-    def async_lock_request(self, timeout, lock_string=""):
+    def async_lock_request(self, timeout: float, lock_string: str = "") -> str:
         """
         perform an AsyncLock request transaction.
         returns the lock_response from the AsyncLockResponse packet.
@@ -306,21 +614,13 @@ class Instrument:
         # async_lock transaction:
         #     C->S: AsyncLock
         #     S->C: AsyncLockResponse
-        header = struct.pack(
-            "!2sBBIQ",
-            b"HS",
-            MESSAGETYPE["AsyncLock"],
-            1,
-            1e3 * timeout,
-            len(lock_string),
-        )
-        self._async.sendall(header + lock_string)
-        response_header = receive_header(
-            self._async, expected_message_type="AsyncLockResponse"
-        )
-        return response_header.lock_response
+        ctrl_code = LOCKCONTROLCODE["request"]
+        timeout_ms = int(1e3 * timeout)
+        send_msg(self._async, "AsyncLock", ctrl_code, timeout_ms, lock_string.encode())
+        response = AsyncLockResponse(self._async)
+        return response.lock_response
 
-    def async_lock_release(self):
+    def async_lock_release(self) -> str:
         """
         perform an AsyncLock release transaction.
         returns the lock_response from the AsyncLockResponse packet.
@@ -328,37 +628,25 @@ class Instrument:
         # async_lock transaction:
         #     C->S: AsyncLock
         #     S->C: AsyncLockResponse
-        header = struct.pack(
-            "!2sBBIQ", b"HS", MESSAGETYPE["AsyncLock"], 0, self.last_message_id, 0
-        )
-        self._async.sendall(header)
-        response_header = receive_header(
-            self._async, expected_message_type="AsyncLockResponse"
-        )
-        return response_header.lock_response
+        ctrl_code = LOCKCONTROLCODE["release"]
+        send_msg(self._async, "AsyncLock", ctrl_code, self._last_message_id)
+        response = AsyncLockResponse(self._async)
+        return response.lock_response
 
-    def async_remote_local_control(self, remotelocalcontrol):
+    def async_remote_local_control(self, remotelocalcontrol: str) -> None:
         """
         perform an AsyncRemoteLocalControl transaction.
         """
         # remote_local transaction:
         #     C->S: AsyncRemoteLocalControl
         #     S->C: AsyncRemoteLocalResponse
-        header = struct.pack(
-            "!2sBBIQ",
-            b"HS",
-            MESSAGETYPE["AsyncRemoteLocalControl"],
-            REMOTELOCALCONTROLCODE[remotelocalcontrol],
-            self.last_message_id,
-            0,
+        ctrl_code = REMOTELOCALCONTROLCODE[remotelocalcontrol]
+        send_msg(
+            self._async, "AsyncRemoteLocalControl", ctrl_code, self._last_message_id
         )
-        self._async.sendall(header)
-        response_header = receive_header(
-            self._async, expected_message_type="AsyncRemoteLocalResponse"
-        )
-        return response_header.server_status
+        _ = AsyncRemoteLocalResponse(self._async)
 
-    def async_status_query(self):
+    def async_status_query(self) -> int:
         """
         perform an AsyncStatusQuery transaction.
         returns the server_status from the AsyncStatusResponse packet.
@@ -366,347 +654,94 @@ class Instrument:
         # async_status_query transaction:
         #     C->S: AsyncStatusQuery
         #     S->C: AsyncStatusResponse
-        header = struct.pack(
-            "!2sBBIQ",
-            b"HS",
-            MESSAGETYPE["AsyncStatusQuery"],
-            self.rmt,
-            self.message_id,
-            0,
-        )
-        self.rmt = 0
-        self._async.sendall(header)
-        response_header = receive_header(
-            self._async, expected_message_type="AsyncStatusResponse"
-        )
-        return response_header.server_status
+        send_msg(self._async, "AsyncStatusQuery", self._rmt, self._message_id)
+        self._rmt = 0
+        response = AsyncStatusResponse(self._async)
+        return response.server_status
 
-    def async_device_clear(self):
+    def async_device_clear(self) -> int:
         """
         perform an AsyncDeviceClear transaction.
         returns the feature_bitmap from the AsyncDeviceClearAcknowledge packet.
         """
-        header = struct.pack("!2sBBIQ", b"HS", MESSAGETYPE["AsyncDeviceClear"], 0, 0, 0)
-        self._async.sendall(header)
-        response_header = receive_header(
-            self._async, expected_message_type="AsyncDeviceClearAcknowledge"
-        )
-        return response_header.feature_bitmap
+        send_msg(self._async, "AsyncDeviceClear", 0, 0)
+        response = AsyncDeviceClearAcknowledge(self._async)
+        return response.feature_bitmap
 
-    def device_clear_complete(self, feature_bitmap):
+    def device_clear_complete(self, feature_bitmap: int) -> int:
         """
         perform a DeviceClear transaction.
         returns the feature_bitmap from the DeviceClearAcknowledge packet.
         """
-        header = struct.pack(
-            "!2sBBIQ", b"HS", MESSAGETYPE["DeviceClearComplete"], feature_bitmap, 0, 0
-        )
-        self._sync.sendall(header)
-        response_header = receive_header(
-            self._sync, expected_message_type="DeviceClearAcknowledge"
-        )
-        return response_header.feature_bitmap
+        send_msg(self._sync, "DeviceClearComplete", feature_bitmap, 0)
+        response = DeviceClearAcknowledge(self._sync)
+        return response.feature_bitmap
 
-    def trigger(self):
-        """sends a Trigger packet on the sync channel"""
-        header = struct.pack(
-            "!2sBBIQ", b"HS", MESSAGETYPE["Trigger"], self.rmt, self.message_id, 0
-        )
-        self.rmt = 0
-        self.message_id = (self.message_id + 2) & 0xFFFFFFFF
-        self._sync.sendall(header)
+    def trigger(self) -> None:
+        """send a Trigger packet on the sync channel"""
+        send_msg(self._sync, "Trigger", self._rmt, self._message_id)
+        self._rmt = 0
+        self._last_message_id = self._message_id
+        self._message_id = (self._message_id + 2) & 0xFFFF_FFFF
 
-    def send_data_packet(self, payload):
-        """sends a Data packet on the sync channel"""
-        header = struct.pack(
-            "!2sBBIQ",
-            b"HS",
-            MESSAGETYPE["Data"],
-            self.rmt,
-            self.message_id,
-            len(payload),
-        )
-        self.rmt = 0
-        self.last_message_id = self.message_id
-        self.message_id = (self.message_id + 2) & 0xFFFFFFFF
-        self._sync.sendall(header + payload)
+    def _send_data_packet(self, payload: bytes) -> None:
+        """send a Data packet on the sync channel"""
+        send_msg(self._sync, "Data", self._rmt, self._message_id, payload)
+        self._rmt = 0
+        self._last_message_id = self._message_id
+        self._message_id = (self._message_id + 2) & 0xFFFF_FFFF
 
-    def send_data_end_packet(self, payload):
-        """sends a DataEnd packet on the sync channel"""
-        header = struct.pack(
-            "!2sBBIQ",
-            b"HS",
-            MESSAGETYPE["DataEnd"],
-            self.rmt,
-            self.message_id,
-            len(payload),
-        )
-        self.rmt = 0
-        self.last_message_id = self.message_id
-        self.message_id = (self.message_id + 2) & 0xFFFFFFFF
-        self._sync.sendall(header + payload)
+    def _send_data_end_packet(self, payload: bytes) -> None:
+        """send a DataEnd packet on the sync channel"""
+        send_msg(self._sync, "DataEnd", self._rmt, self._message_id, payload)
+        self._rmt = 0
+        self._last_message_id = self._message_id
+        self._message_id = (self._message_id + 2) & 0xFFFF_FFFF
 
-    def fatal_error(self, error, error_message=""):
-        header = struct.pack(
-            "!2sBBIQ",
-            b"HS",
-            MESSAGETYPE["FatalError"],
-            FATALERRORCODE[error],
-            0,
-            len(error_message),
-        )
-        self._sync.sendall(header + error_message.encode())
+    def fatal_error(self, error: str, error_message: str = "") -> None:
+        err_msg = (error_message or error).encode()
+        send_msg(self._sync, "FatalError", FATALERRORCODE[error], 0, err_msg)
 
-    def error(self, error, error_message=""):
-        header = struct.pack(
-            "!2sBBIQ",
-            b"HS",
-            MESSAGETYPE["Error"],
-            ERRORCODE[error],
-            0,
-            len(error_message),
-        )
-        self._sync.sendall(header + error_message.encode())
+    def error(self, error: str, error_message: str = "") -> None:
+        err_msg = (error_message or error).encode()
+        send_msg(self._sync, "Error", ERRORCODE[error], 0, err_msg)
 
 
-#########################################################################################
+# def rxdecode(header):
+#     (
+#         prologue,
+#         msg_type,
+#         control_code,
+#         message_parameter,
+#         payload_length,
+#     ) = struct.unpack(HEADER_FORMAT, header)
+#
+#     msg_type = MESSAGETYPE_STR[msg_type]
+#     print(
+#         f"Rx: {prologue=}, "
+#         f"{msg_type=}, "
+#         f"{control_code=}, "
+#         f"{message_parameter=}, "
+#         f"{payload_length=}"
+#     )
 
 
-def receive_flush(sock, recv_len):
-    """
-    receive exactly 'recv_len' bytes from 'sock'.
-    no explicit timeout is specified, since it is assumed
-    that a call to select indicated that data is available.
-    received data is thrown away and nothing is returned
-    """
-    recv_buffer = bytearray(recv_len)
-    receive_exact_into(sock, recv_buffer)
-
-
-def receive_exact(sock, recv_len):
-    """
-    receive exactly 'recv_len' bytes from 'sock'.
-    no explicit timeout is specified, since it is assumed
-    that a call to select indicated that data is available.
-    returns a bytearray containing the received data.
-    """
-    recv_buffer = bytearray(recv_len)
-    receive_exact_into(sock, recv_buffer)
-    return recv_buffer
-
-
-def receive_exact_into(sock, recv_buffer):
-    """
-    receive data from 'sock' to exactly fill 'recv_buffer'.
-    no explicit timeout is specified, since it is assumed
-    that a call to select indicated that data is available.
-    """
-    view = memoryview(recv_buffer)
-    recv_len = len(recv_buffer)
-    bytes_recvd = 0
-
-    while bytes_recvd < recv_len:
-        request_size = recv_len - bytes_recvd
-        data_len = sock.recv_into(view, request_size)
-        bytes_recvd += data_len
-        view = view[data_len:]
-
-    if bytes_recvd > recv_len:
-        raise MemoryError("socket.recv_into scribbled past end of recv_buffer")
-
-
-def receive_header(sock, expected_message_type=None):  # noqa: C901
-    """receive and decode the HiSLIP message header"""
-    header = receive_exact(sock, HEADER_SIZE)
-    (
-        prologue,
-        msg_type,
-        control_code,
-        message_parameter,
-        payload_length,
-    ) = struct.unpack(HEADER_FORMAT, header)
-
-    if prologue != b"HS":
-        # XXX we should send a 'Fatal Error' to the server, close the sockets, then raise an exception
-        raise RuntimeError("protocol synchronization error")
-
-    elif msg_type not in MESSAGETYPE:
-        # XXX we should send 'Unrecognized message type' to the
-        #     server and discard this packet plus any payload.
-        raise RuntimeError("unrecognized message type: %d" % msg_type)
-
-    result = Struct(msg_type=MESSAGETYPE[msg_type])
-
-    if expected_message_type is not None and result.msg_type != expected_message_type:
-        # XXX we should send an 'Error: Unidentified Error' to the server and discard this packet plus any payload
-        payload = (
-            (": " + str(receive_exact(sock, payload_length)))
-            if payload_length > 0
-            else b""
-        )
-        raise RuntimeError(
-            "expected message type '%s', received '%s%s'"
-            % (expected_message_type, result.msg_type, payload)
-        )
-
-    if result.msg_type == "InitializeResponse":
-        assert payload_length == 0
-        result.overlap = bool(control_code)
-        result.version, result.session_id = struct.unpack("!4xHH8x", header)
-
-    elif result.msg_type == "AsyncInitializeResponse":
-        assert control_code == 0
-        assert payload_length == 0
-        result.vendor_id = struct.unpack("!4x4s8x", header)
-
-    elif result.msg_type == "AsyncMaxMsgSizeResponse":
-        assert control_code == 0
-        assert message_parameter == 0
-        assert payload_length == 8
-        payload = receive_exact(sock, payload_length)
-        result.max_msg_size = struct.unpack("!Q", payload)[0]
-
-    elif result.msg_type == "DataEnd" or result.msg_type == "Data":
-        assert control_code == 0
-        result.message_id = message_parameter
-        result.payload_length = payload_length
-
-    elif result.msg_type == "AsyncDeviceClearAcknowledge":
-        result.feature_bitmap = control_code
-        assert message_parameter == 0
-        assert payload_length == 0
-
-    elif result.msg_type == "AsyncInterrupted":
-        assert control_code == 0
-        result.message_id = message_parameter
-        assert payload_length == 0
-
-    elif result.msg_type == "AsyncLockInfoResponse":
-        result.exclusive_lock = control_code  # 0: no lock, 1: lock granted
-        result.clients_holding_locks = message_parameter
-        assert payload_length == 0
-
-    elif result.msg_type == "AsyncLockResponse":
-        result.lock_response = LOCKRESPONSECONTROLCODE[control_code]
-        assert message_parameter == 0
-        assert payload_length == 0
-
-    elif result.msg_type == "AsyncRemoteLocalResponse":
-        assert control_code == 0
-        assert message_parameter == 0
-        assert payload_length == 0
-
-    elif result.msg_type == "AsyncServiceRequest":
-        result.server_status = control_code
-        assert message_parameter == 0
-        assert payload_length == 0
-
-    elif result.msg_type == "AsyncStatusResponse":
-        result.server_status = control_code
-        assert message_parameter == 0
-        assert payload_length == 0
-
-    elif result.msg_type == "DeviceClearAcknowledge":
-        result.feature_bitmap = control_code
-        assert message_parameter == 0
-        assert payload_length == 0
-
-    elif result.msg_type == "Interrupted":
-        assert control_code == 0
-        result.message_id = message_parameter
-        assert payload_length == 0
-
-    elif result.msg_type == "Error":
-        result.error_code = ERRORCODE[control_code]
-        assert message_parameter == 0
-        result.error_message = receive_exact(sock, payload_length)
-
-    elif result.msg_type == "FatalError":
-        result.error_code = FATALERRORCODE[control_code]
-        assert message_parameter == 0
-        result.error_message = receive_exact(sock, payload_length)
-
-    else:
-        # XXX we should send 'FatalError' to the server,
-        #     close the sockets, then raise an exception
-        raise RuntimeError("unrecognized message type")
-
-    return result
-
-
-class Receiver(object):
-    """
-    the Receiver class hides the fact that the data is packetized.
-    we can receive an arbitrary number of bytes without caring
-    how many packets (or partial packets) are received.
-    """
-
-    def __init__(self, sock, expected_message_id):
-        self.sock = sock
-        self.expected_message_id = expected_message_id
-        self.payload_remaining = self.get_data_header()
-
-    def get_data_header(self):
-        """
-        receive a data header (either Data or DataEnd), check the message_id, and
-        return the payload_length.
-        """
-        while True:
-            header = receive_header(self.sock)
-            self.msg_type = header.msg_type
-            assert self.msg_type == "Data" or self.msg_type == "DataEnd"
-
-            # When receiving Data messages if the MessageID is not 0xffff ffff, then verify that the
-            # MessageID indicated in the Data message is the MessageID that the client sent to the
-            # server with the most recent Data, DataEND or Trigger message.
-            #
-            # If the MessageIDs do not match, the client shall clear any Data responses already
-            # buffered and discard the offending Data message.
-
-            if (
-                header.message_id != 0xFFFFFFFF
-                and header.message_id != self.expected_message_id
-            ):
-                if header.message_id < self.expected_message_id:
-                    # we're out of sync.  flush this message and continue.
-                    receive_flush(self.sock, header.payload_length)
-                    continue
-                else:
-                    # XXX we should send a 'Fatal Error' to the server,
-                    #     close the sockets, then raise an exception
-                    err_msg = "expected message ID = 0x%x" % self.expected_message_id
-                    err_msg += ", received message ID = 0x%x" % header.message_id
-                    raise RuntimeError(err_msg)
-            return header.payload_length
-
-    def receive(self, recv_buffer):
-        """
-        receive data, terminating after len(recv_buffer) bytes or
-        after receiving a DataEnd message.
-
-        note the use of receive_exact_into (which calls socket.recv_into),
-        avoiding unnecessary copies.
-        """
-        max_len = len(recv_buffer)
-        view = memoryview(recv_buffer)
-        bytes_recvd = 0
-
-        while bytes_recvd < max_len:
-            if self.payload_remaining <= 0:
-                if self.msg_type == "DataEnd":
-                    # truncate the recv_buffer to the actual number of bytes received
-                    recv_buffer = recv_buffer[:bytes_recvd]
-                    break
-                else:
-                    self.payload_remaining = self.get_data_header()
-
-            request_size = min(self.payload_remaining, max_len - bytes_recvd)
-            receive_exact_into(self.sock, view[:request_size])
-            self.payload_remaining -= request_size
-            bytes_recvd += request_size
-            view = view[request_size:]
-
-        if bytes_recvd > max_len:
-            raise MemoryError("scribbled past end of recv_buffer")
-
-        return recv_buffer
+# def txdecode(header, payload=b""):
+#     (
+#         prologue,
+#         msg_type,
+#         control_code,
+#         message_parameter,
+#         payload_length,
+#     ) = struct.unpack(HEADER_FORMAT, header)
+#
+#     msg_type = MESSAGETYPE_STR[msg_type]
+#     print(
+#         f"Tx: {prologue=}, "
+#         f"{msg_type=}, "
+#         f"{control_code=}, "
+#         f"{message_parameter=}, "
+#         f"{payload_length=}, "
+#         f"{len(payload)=}, "
+#         f"{bytes(payload[:20]).decode('iso-8859-1')!r}"
+#     )
