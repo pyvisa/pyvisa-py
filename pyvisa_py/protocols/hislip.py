@@ -364,8 +364,6 @@ class Instrument:
     connection to the instrument at the specified IP address.
     """
 
-    _msg_type: str
-
     def __init__(
         self, ip_addr: str, open_timeout: Optional[int] = None, port: int = PORT
     ) -> None:
@@ -403,7 +401,6 @@ class Instrument:
         self._expected_message_id: Optional[int] = None
         self._message_id = 0xFFFF_FF00
         self._last_message_id: Optional[int] = None
-        self._payload_remaining: int = 0
 
     # ================ #
     # MEMBER FUNCTIONS #
@@ -461,7 +458,6 @@ class Instrument:
         # and the payload length
         if self._expected_message_id is None:
             self._expected_message_id = self._last_message_id
-            self._msg_type, self._payload_remaining = self._next_data_header()
             # print(f"{self._expected_message_id=}")
 
         # receive data, terminating after len(recv_buffer) bytes or
@@ -473,19 +469,21 @@ class Instrument:
         recv_buffer = bytearray(max_len)
         view = memoryview(recv_buffer)
         bytes_recvd = 0
+        msg_type = ""
+        payload_remaining = 0
 
         while bytes_recvd < max_len:
-            # print(f"{self._payload_remaining=}")
-            if self._payload_remaining <= 0:
-                if self._msg_type == "DataEnd":
+            if payload_remaining <= 0:
+                if msg_type == "DataEnd":
                     # truncate to the actual number of bytes received
                     recv_buffer = recv_buffer[:bytes_recvd]
                     break
-                self._msg_type, self._payload_remaining = self._next_data_header()
+                msg_type, payload_remaining = self._next_data_header()
 
-            request_size = min(self._payload_remaining, max_len - bytes_recvd)
+            request_size = min(payload_remaining, max_len - bytes_recvd)
+            # print(f"{payload_remaining=}, {request_size=}")
             receive_exact_into(self._sync, view[:request_size])
-            self._payload_remaining -= request_size
+            payload_remaining -= request_size
             bytes_recvd += request_size
             view = view[request_size:]
 
@@ -496,7 +494,7 @@ class Instrument:
 
         # if there is no data remaining, set the RMT flag and set the
         # _expected_message_id to None
-        if self._payload_remaining == 0 and self._msg_type == "DataEnd":
+        if payload_remaining == 0 and msg_type == "DataEnd":
             #
             # From IEEE Std 488.2: Response Message Terminator.
             #
