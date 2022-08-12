@@ -67,6 +67,10 @@ class TCPIPInstrSession(Session):
 class TCPIPInstrHiSLIP(Session):
     """A TCPIP Session built on socket standard library using HiSLIP protocol."""
 
+    # we don't decorate this class with Session.register() because we don't
+    # want it to be registered in the _session_classes array, but we still
+    # need to define a unique session_type to make the set_attribute machinery
+    # work.
     session_type = (constants.InterfaceType.tcpip, "HISLIP")
 
     # Override parsed to take into account the fact that this class is only used
@@ -238,6 +242,10 @@ class Vxi11CoreClient(vxi11.CoreClient):
 class TCPIPInstrVxi11(Session):
     """A TCPIP Session built on socket standard library using VXI-11 protocol."""
 
+    # we don't decorate this class with Session.register() because we don't
+    # want it to be registered in the _session_classes array, but we still
+    # need to define a unique session_type to make the set_attribute machinery
+    # work.
     session_type = (constants.InterfaceType.tcpip, "VXI11")
 
     #: Maximum size of a chunk of data in bytes.

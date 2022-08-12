@@ -187,7 +187,7 @@ def send_msg(
             len(payload),
         )
     )
-    # txdecode(msg, payload)
+    # txdecode(msg, payload)  # uncomment for debugging
     msg.extend(payload)
     sock.sendall(msg)
 
@@ -205,7 +205,7 @@ class RxHeader:
     ) -> None:
         """receive and decode the HiSLIP message header"""
         self.header = receive_exact(sock, HEADER_SIZE)
-        # rxdecode(self.header)
+        # rxdecode(self.header)  # uncomment for debugging
         (
             prologue,
             msg_type,
@@ -428,7 +428,7 @@ class Instrument:
         More than one packet may be necessary in order
         to not exceed _max_payload_size.
         """
-        # print(f"send({data=})")
+        # print(f"send({data=})")  # uncomment for debugging
         data_view = memoryview(data)
         num_bytes_to_send = len(data)
 
@@ -453,12 +453,11 @@ class Instrument:
         Terminate after max_len bytes or after receiving a DataEnd message
         """
 
-        # print(f"receive({max_len=})")
+        # print(f"receive({max_len=})")  # uncomment for debugging
         # if we aren't already receiving, initialize the _expected_message_id
         # and the payload length
         if self._expected_message_id is None:
             self._expected_message_id = self._last_message_id
-            # print(f"{self._expected_message_id=}")
 
         # receive data, terminating after len(recv_buffer) bytes or
         # after receiving a DataEnd message.
@@ -481,7 +480,6 @@ class Instrument:
                 msg_type, payload_remaining = self._next_data_header()
 
             request_size = min(payload_remaining, max_len - bytes_recvd)
-            # print(f"{payload_remaining=}, {request_size=}")
             receive_exact_into(self._sync, view[:request_size])
             payload_remaining -= request_size
             bytes_recvd += request_size
@@ -489,8 +487,6 @@ class Instrument:
 
         if bytes_recvd > max_len:
             raise MemoryError("scribbled past end of recv_buffer")
-
-        # print(f" -> {recv_buffer=}")
 
         # if there is no data remaining, set the RMT flag and set the
         # _expected_message_id to None
@@ -567,7 +563,7 @@ class Instrument:
             vendor_id,
             len(sub_address),
         )
-        # txdecode(header, sub_address)
+        # txdecode(header, sub_address)  # uncomment for debugging
         self._sync.sendall(header + sub_address)
         return InitializeResponse(self._sync)
 
@@ -704,6 +700,10 @@ class Instrument:
         err_msg = (error_message or error).encode()
         send_msg(self._sync, "Error", ERRORCODE[error], 0, err_msg)
 
+
+# the following two routines are only used for debugging.
+# they are commented out because their f-strings use a feature
+# that is a syntax error in Python versions < 3.7
 
 # def rxdecode(header):
 #     (
