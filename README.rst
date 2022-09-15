@@ -64,11 +64,13 @@ Requirements
 - Python (tested with 3.6+)
 - PyVISA 1.11+
 
-Optionally
+Optionally:
+
 - PySerial (to interface with Serial instruments)
 - PyUSB (to interface with USB instruments)
 - linux-gpib (to interface with gpib instruments, only on linux)
 - gpib-ctypes (to interface with GPIB instruments on Windows and Linux)
+- psutil (to discover TCPIP devices across multiple interfaces)
 
 
 Installation

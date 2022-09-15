@@ -629,6 +629,52 @@ class RawBroadcastUDPClient(RawUDPClient):
                 self.reply_handler(reply, fromaddr)
         return replies
 
+    def send_call(self, proc, args, pack_func):
+        if pack_func is None and args is not None:
+            raise TypeError("non-null args with null pack_func")
+        self.start_call(proc)
+        if pack_func:
+            pack_func(args)
+        call = self.packer.get_buf()
+        try:
+            _sendto(self.sock, call, (self.host, self.port))
+        except OSError as exc:
+            raise RPCError("unable to send broadcast") from exc
+
+    def recv_call(self, unpack_func):
+        BUFSIZE = 8192  # Max UDP buffer size (for reply)
+        replies = []
+        if unpack_func is None:
+
+            def dummy():
+                pass
+
+            unpack_func = dummy
+        while 1:
+            r, w, x = [self.sock], [], []
+            if select:
+                if self.timeout is None:
+                    r, w, x = select.select(r, w, x)
+                else:
+                    r, w, x = select.select(r, w, x, self.timeout)
+            if self.sock not in r:
+                break
+            try:
+                reply, fromaddr = self.sock.recvfrom(BUFSIZE)
+            except OSError as exc:
+                raise RPCError("unable to recieve broadcast") from exc
+            u = self.unpacker
+            u.reset(reply)
+            xid, verf = u.unpack_replyheader()
+            if xid != self.lastxid:
+                continue
+            reply = unpack_func()
+            self.unpacker.done()
+            replies.append((reply, fromaddr))
+            if self.reply_handler:
+                self.reply_handler(reply, fromaddr)
+        return replies
+
 
 # Port mapper interface
 
@@ -726,6 +772,18 @@ class PartialPortMapperClient(object):
             PortMapperVersion.get_port,
             mapping,
             self.packer.pack_mapping,
+            self.unpacker.unpack_uint,
+        )
+
+    def send_port(self, mapping):
+        return self.send_call(
+            PortMapperVersion.get_port,
+            mapping,
+            self.packer.pack_mapping,
+        )
+
+    def recv_port(self, mapping):
+        return self.recv_call(
             self.unpacker.unpack_uint,
         )
 
