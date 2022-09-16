@@ -326,11 +326,11 @@ class Session(metaclass=abc.ABCMeta):
 
     def after_parsing(self) -> None:
         """Override this method to provide custom initialization code, to be
-        called after the resourcename is properly parsed
+        called after the resource name is properly parsed
 
         ResourceSession can register resource specific attributes handling of
         them into self.attrs.
-        It is also possible to change handling of already registerd common
+        It is also possible to change handling of already registered common
         attributes. List of attributes is available in pyvisa package:
         * name is in constants module as: VI_ATTR_<NAME>
         * validity of attribute for resource is defined module attributes,
