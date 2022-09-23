@@ -76,9 +76,8 @@ class TCPIPInstrHiSLIP(Session):
 
     # we don't decorate this class with Session.register() because we don't
     # want it to be registered in the _session_classes array, but we still
-    # need to define a unique session_type to make the set_attribute machinery
-    # work.
-    session_type = (constants.InterfaceType.tcpip, "HISLIP")
+    # need to define session_type to make the set_attribute machinery work.
+    session_type = (constants.InterfaceType.tcpip, "INSTR")
 
     # Override parsed to take into account the fact that this class is only used
     # for a specific kind of resource
@@ -251,9 +250,8 @@ class TCPIPInstrVxi11(Session):
 
     # we don't decorate this class with Session.register() because we don't
     # want it to be registered in the _session_classes array, but we still
-    # need to define a unique session_type to make the set_attribute machinery
-    # work.
-    session_type = (constants.InterfaceType.tcpip, "VXI11")
+    # need to define session_type to make the set_attribute machinery work.
+    session_type = (constants.InterfaceType.tcpip, "INSTR")
 
     #: Maximum size of a chunk of data in bytes.
     max_recv_size: int
@@ -336,7 +334,7 @@ class TCPIPInstrVxi11(Session):
         except rpc.RPCError:
             raise errors.VisaIOError(constants.VI_ERROR_RSRC_NFOUND)
 
-        # vx11 expect all timeouts to be expressed in ms and should be integers
+        # vxi11 expect all timeouts to be expressed in ms and should be integers
         self.lock_timeout = 10000
         self.client_id = random.getrandbits(31)
         self.keepalive = False
