@@ -225,8 +225,10 @@ class USBRaw(object):
         # set one only if there is more than one.
         if (
             len(
-                usb.util.find_descriptor(
-                    cfg, find_all=True, bInterfaceNumber=intf.bInterfaceNumber
+                tuple(
+                    usb.util.find_descriptor(
+                        cfg, find_all=True, bInterfaceNumber=intf.bInterfaceNumber
+                    )
                 )
             )
             > 1
