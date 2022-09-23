@@ -640,7 +640,7 @@ class Instrument:
         send_msg(
             self._async, "AsyncRemoteLocalControl", ctrl_code, self._last_message_id
         )
-        _ = AsyncRemoteLocalResponse(self._async)
+       AsyncRemoteLocalResponse(self._async)
 
     def async_status_query(self) -> int:
         """
