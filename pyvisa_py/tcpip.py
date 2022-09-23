@@ -6,11 +6,18 @@
 :license: MIT, see LICENSE for more details.
 
 """
+import ipaddress
 import random
 import select
 import socket
 import time
 from typing import Any, List, Optional, Tuple, Type
+
+# Let psutil be optional dependency
+try:
+    import psutil  # type: ignore
+except ImportError:
+    psutil = None
 
 from pyvisa import attributes, constants, errors, rname
 from pyvisa.constants import ResourceAttribute, StatusCode
@@ -269,8 +276,51 @@ class TCPIPInstrVxi11(Session):
 
     @staticmethod
     def list_resources() -> List[str]:
-        # TODO: is there a way to get this?
-        return []
+        broadcast_addr = []
+        if psutil is not None:
+            # Get broadcast address for each interface
+            for interface, snics in psutil.net_if_addrs().items():
+                for snic in snics:
+                    if snic.family is socket.AF_INET:
+                        addr = snic.address
+                        mask = snic.netmask
+                        network = ipaddress.IPv4Network(addr + "/" + mask, strict=False)
+                        broadcast_addr.append(str(network.broadcast_address))
+        else:
+            # If psutil unavailable fallback to default interface
+            broadcast_addr.append("255.255.255.255")
+
+        pmap_list = [rpc.BroadcastUDPPortMapperClient(ip) for ip in broadcast_addr]
+        for pmap in list(pmap_list):
+            pmap.set_timeout(0)
+            try:
+                pmap.send_port(
+                    (vxi11.DEVICE_CORE_PROG, vxi11.DEVICE_CORE_VERS, rpc.IPPROTO_TCP, 0)
+                )
+            except rpc.RPCError:
+                pmap_list.remove(pmap)
+
+        # Timeout for responses
+        time.sleep(1)
+
+        all_res = []
+        for pmap in pmap_list:
+            try:
+                resp = pmap.recv_port(
+                    (vxi11.DEVICE_CORE_PROG, vxi11.DEVICE_CORE_VERS, rpc.IPPROTO_TCP, 0)
+                )
+            except rpc.RPCError:
+                pass
+            else:
+                res = [r[1][0] for r in resp if r[0] > 0]
+                res = sorted(
+                    res, key=lambda ip: tuple(int(part) for part in ip.split("."))
+                )
+                # TODO: Detect GPIB over TCPIP
+                res = ["TCPIP::{}::INSTR".format(host) for host in res]
+                all_res.extend(res)
+
+        return all_res
 
     def after_parsing(self) -> None:
         # TODO: board_number not handled

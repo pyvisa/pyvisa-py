@@ -23,6 +23,9 @@ Pyvisa-py relies on :py:mod:`socket` module in the Python Standard Library to
 interact with the instrument which you do not need to install any extra library
 to access those resources.
 
+To discover devices on all interfaces, please install `psutil`_. Otherwise, 
+discovery will only occur on the default network interface. 
+
 
 Serial resources: ASRL INSTR
 ----------------------------
@@ -98,3 +101,4 @@ form GitHub_::
 .. _`issue tracker`: https://github.com/pyvisa/pyvisa-py/issues
 .. _`linux-gpib`: http://linux-gpib.sourceforge.net/
 .. _`gpib-ctypes`: https://pypi.org/project/gpib-ctypes/
+.. _`psutil`: https://pypi.org/project/psutil/
