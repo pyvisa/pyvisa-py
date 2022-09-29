@@ -100,6 +100,17 @@ class TCPIPInstrHiSLIP(Session):
             self.parsed.host_address, port=port, open_timeout=self.open_timeout
         )
 
+        self.attrs[ResourceAttribute.tcpip_is_hislip] = True
+        self.attrs[ResourceAttribute.tcpip_address] = self.parsed.host_address
+        self.attrs[ResourceAttribute.tcpip_hostname] = ""
+        self.attrs[ResourceAttribute.tcpip_device_name] = self.parsed.lan_device_name
+        self.attrs[ResourceAttribute.tcpip_port] = port
+        self.attrs[ResourceAttribute.tcpip_nodelay] = True
+        self.attrs[ResourceAttribute.tcpip_keepalive] = False
+        self.attrs[ResourceAttribute.tcpip_hislip_version] = 0x00101000
+        self.attrs[ResourceAttribute.tcpip_hislip_overlap_enable] = True
+        self.attrs[ResourceAttribute.tcpip_hislip_max_message_kb] = hislip.MAX_MSG_SIZE
+
     def close(self) -> StatusCode:
         self.interface.close()
         self.interface = None
@@ -349,6 +360,10 @@ class TCPIPInstrVxi11(Session):
         self.link = link
         self.max_recv_size = min(max_recv_size, 2**30)  # 1GB
 
+        self.attrs[ResourceAttribute.tcpip_is_hislip] = False
+        self.attrs[ResourceAttribute.tcpip_address] = self.parsed.host_address
+        self.attrs[ResourceAttribute.tcpip_hostname] = ""
+        self.attrs[ResourceAttribute.tcpip_device_name] = self.parsed.lan_device_name
         for name in ("SEND_END_EN", "TERMCHAR", "TERMCHAR_EN"):
             attribute = getattr(constants, "VI_ATTR_" + name)
             self.attrs[attribute] = attributes.AttributesByID[attribute].default
@@ -496,23 +511,9 @@ class TCPIPInstrVxi11(Session):
             Return value of the library call.
 
         """
-        if attribute == constants.VI_ATTR_TCPIP_ADDR:
-            return self.parsed.host_address, StatusCode.success
-
-        elif attribute == constants.VI_ATTR_TCPIP_DEVICE_NAME:
-            raise NotImplementedError
-
-        elif attribute == constants.VI_ATTR_TCPIP_HOSTNAME:
-            raise NotImplementedError
-
-        elif attribute == constants.VI_ATTR_TCPIP_KEEPALIVE:
+        # This is an abuse of the VISA standard
+        if attribute == constants.VI_ATTR_TCPIP_KEEPALIVE:
             return self.keepalive, StatusCode.success
-
-        elif attribute == constants.VI_ATTR_TCPIP_NODELAY:
-            raise NotImplementedError
-
-        elif attribute == constants.VI_ATTR_TCPIP_PORT:
-            raise NotImplementedError
 
         elif attribute == constants.VI_ATTR_SUPPRESS_END_EN:
             raise NotImplementedError
