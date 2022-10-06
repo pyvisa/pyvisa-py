@@ -13,18 +13,19 @@ import socket
 import time
 from typing import Any, List, Optional, Tuple, Type
 
-# Let psutil be optional dependency
-try:
-    import psutil  # type: ignore
-except ImportError:
-    psutil = None
-
 from pyvisa import attributes, constants, errors, rname
 from pyvisa.constants import ResourceAttribute, StatusCode
 
 from . import common
 from .protocols import hislip, rpc, vxi11
 from .sessions import Session, UnknownAttribute, VISARMSession
+
+# Let psutil be optional dependency
+try:
+    import psutil  # type: ignore
+except ImportError:
+    psutil = None
+
 
 # Conversion between VXI11 error codes and VISA status
 # TODO this is so far a best guess, in particular 6 and 29 are likely wrong
@@ -97,19 +98,86 @@ class TCPIPInstrHiSLIP(Session):
         else:
             port = 4880
         self.interface = hislip.Instrument(
-            self.parsed.host_address, port=port, open_timeout=self.open_timeout
+            self.parsed.host_address, port=port, timeout=self.timeout
         )
 
-        self.attrs[ResourceAttribute.tcpip_is_hislip] = True
+        # initialize the constant attributes
+        self.attrs[ResourceAttribute.dma_allow_enabled] = constants.VI_FALSE
+        self.attrs[ResourceAttribute.file_append_enabled] = constants.VI_FALSE
+        self.attrs[ResourceAttribute.interface_instrument_name] = "TCPIP0 (HiSLIP)"
+        self.attrs[ResourceAttribute.interface_number] = 0
+        self.attrs[ResourceAttribute.io_prot] = constants.VI_PROT_NORMAL
+        self.attrs[
+            ResourceAttribute.read_buffer_operation_mode
+        ] = constants.VI_FLUSH_DISABLE
+        self.attrs[ResourceAttribute.resource_lock_state] = constants.VI_NO_LOCK
+        self.attrs[ResourceAttribute.send_end_enabled] = constants.VI_TRUE
+        self.attrs[ResourceAttribute.suppress_end_enabled] = constants.VI_FALSE
         self.attrs[ResourceAttribute.tcpip_address] = self.parsed.host_address
-        self.attrs[ResourceAttribute.tcpip_hostname] = ""
         self.attrs[ResourceAttribute.tcpip_device_name] = self.parsed.lan_device_name
+        self.attrs[ResourceAttribute.tcpip_hislip_overlap_enable] = constants.VI_FALSE
+        self.attrs[ResourceAttribute.tcpip_hislip_version] = 0x0010_0000
+        self.attrs[ResourceAttribute.tcpip_hostname] = self.parsed.host_address
+        self.attrs[ResourceAttribute.tcpip_is_hislip] = constants.VI_TRUE
+        self.attrs[ResourceAttribute.tcpip_nodelay] = constants.VI_TRUE
         self.attrs[ResourceAttribute.tcpip_port] = port
-        self.attrs[ResourceAttribute.tcpip_nodelay] = True
-        self.attrs[ResourceAttribute.tcpip_keepalive] = False
-        self.attrs[ResourceAttribute.tcpip_hislip_version] = 0x00101000
-        self.attrs[ResourceAttribute.tcpip_hislip_overlap_enable] = True
-        self.attrs[ResourceAttribute.tcpip_hislip_max_message_kb] = hislip.MAX_MSG_SIZE
+        self.attrs[ResourceAttribute.termchar] = ord("\n")
+        self.attrs[ResourceAttribute.termchar_enabled] = constants.VI_FALSE
+        self.attrs[
+            ResourceAttribute.write_buffer_operation_mode
+        ] = constants.VI_FLUSH_WHEN_FULL
+
+        # configure the variable attributes
+        self.attrs[ResourceAttribute.tcpip_hislip_max_message_kb] = (
+            self.get_max_message_kb,
+            self.set_max_message_kb,
+        )
+        self.attrs[ResourceAttribute.tcpip_keepalive] = (
+            self.get_keepalive,
+            self.set_keepalive,
+        )
+
+        # TODO: additional attributes (someday)
+        # self.attrs[ResourceAttribute.manufacturer_id] = 16711
+        # self.attrs[ResourceAttribute.max_queue_length] = 50
+        # self.attrs[ResourceAttribute.read_buffer_size] = 4096
+        # self.attrs[ResourceAttribute.resource_impl_version] = 0x0050_0c01
+        # self.attrs[ResourceAttribute.resource_manufacturer_id] = 4015
+        # self.attrs[ResourceAttribute.resource_manufacturer_name] = 'Rohde & Schwarz GmbH'
+        # self.attrs[ResourceAttribute.resource_spec_version] = 0x0050_0800
+        # self.attrs[ResourceAttribute.user_data] = 0
+        # self.attrs[ResourceAttribute.write_buffer_size] = 4096
+
+    def get_max_message_kb(
+        self, attribute: ResourceAttribute
+    ) -> Tuple[int, StatusCode]:
+        """returns the maximum HiSLIP message size in kilobytes"""
+        max_msg_size_kb = int(round(self.interface.max_msg_size / 1024))
+        return max_msg_size_kb, StatusCode.success
+
+    def set_max_message_kb(
+        self, attribute: ResourceAttribute, size_kb: int
+    ) -> StatusCode:
+        """sets the maximum HiSLIP message size in kilobytes"""
+        if size_kb < 1:
+            raise ValueError("size must be >= 1 kilobyte")
+
+        if size_kb > 0xFFFF_FFFF:
+            raise ValueError("size exceeds the range in the VISA spec")
+
+        self.interface.max_msg_size = int(round(size_kb * 1024))
+        return StatusCode.success
+
+    def get_keepalive(self, attribute: ResourceAttribute) -> Tuple[bool, StatusCode]:
+        """returns the status of the TCP keepalive"""
+        return self.interface.keepalive, StatusCode.success
+
+    def set_keepalive(
+        self, attribute: ResourceAttribute, keepalive: bool
+    ) -> StatusCode:
+        """turns TCP keepalive on/off for this connection"""
+        self.interface.keepalive = keepalive
+        return StatusCode.success
 
     def close(self) -> StatusCode:
         self.interface.close()

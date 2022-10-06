@@ -113,7 +113,7 @@ HEADER_FORMAT = "!2sBBIQ"
 # Q  = payload length (unsigned long long)
 HEADER_SIZE = struct.calcsize(HEADER_FORMAT)
 
-MAX_MSG_SIZE = 1 << 24  # maximum message size we will accept
+DEFAULT_MAX_MSG_SIZE = 1 << 20  # from VISA spec
 
 
 #########################################################################################
@@ -365,7 +365,7 @@ class Instrument:
     """
 
     def __init__(
-        self, ip_addr: str, open_timeout: Optional[int] = None, port: int = PORT
+        self, ip_addr: str, timeout: Optional[float] = None, port: int = PORT
     ) -> None:
         # init transaction:
         #     C->S: Initialize
@@ -373,8 +373,7 @@ class Instrument:
         #     C->S: AsyncInitialize
         #     S->C: AsyncInitializeResponse
 
-        open_timeout = open_timeout if open_timeout is not None else 1000
-        timeout = 1e-3 * open_timeout
+        timeout = timeout or 5.0
 
         # open the synchronous socket and send an initialize packet
         self._sync = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -392,11 +391,10 @@ class Instrument:
         self._async.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
         self._async_init = self.async_initialize(session_id=init.session_id)
 
-        # get the maximum message size
-        max_msg_size = self.async_maximum_message_size(MAX_MSG_SIZE)
-        self._max_payload_size = max_msg_size - HEADER_SIZE
-
-        self.timeout = 10
+        # initialize variables
+        self.max_msg_size = DEFAULT_MAX_MSG_SIZE
+        self.keepalive = False
+        self.timeout = timeout
         self._rmt = 0
         self._expected_message_id: Optional[int] = None
         self._message_id = 0xFFFF_FF00
@@ -424,25 +422,50 @@ class Instrument:
         self._sync.settimeout(self._timeout)
         self._async.settimeout(self._timeout)
 
+    @property
+    def max_msg_size(self) -> int:
+        """the maximum HiSLIP message size in bytes"""
+        return self._max_msg_size
+
+    @max_msg_size.setter
+    def max_msg_size(self, size: int) -> None:
+        """the maximum HiSLIP message size in bytes"""
+        self._max_msg_size = self.async_maximum_message_size(size)
+
+    @property
+    def keepalive(self) -> bool:
+        """returns the status of the TCP keepalive.  If a connection is dropped
+        as a result of “keepalives,” the error code VI_ERROR_CONN_LOST is
+        returned to current and subsequent I/O calls on the session"""
+        return self._keepalive
+
+    @keepalive.setter
+    def keepalive(self, keepalive: bool) -> None:
+        """turns keepalive on/off for both the sync and async sockets"""
+        self._keepalive = bool(keepalive)
+        self._sync.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, bool(keepalive))
+        self._async.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, bool(keepalive))
+
     def send(self, data: bytes) -> int:
         """Send the data on the synchronous channel.
 
         More than one packet may be necessary in order
-        to not exceed _max_payload_size.
+        to not exceed max_payload_size.
         """
         # print(f"send({data=})")  # uncomment for debugging
         data_view = memoryview(data)
         num_bytes_to_send = len(data)
+        max_payload_size = self._max_msg_size - HEADER_SIZE
 
-        # send the data in chunks of self._max_payload_size bytes at a time
+        # send the data in chunks of max_payload_size bytes at a time
         while num_bytes_to_send > 0:
-            if num_bytes_to_send <= self._max_payload_size:
+            if num_bytes_to_send <= max_payload_size:
                 assert len(data_view) == num_bytes_to_send
                 self._send_data_end_packet(data_view)
                 bytes_sent = num_bytes_to_send
             else:
-                self._send_data_packet(data_view[: self._max_payload_size])
-                bytes_sent = self._max_payload_size
+                self._send_data_packet(data_view[:max_payload_size])
+                bytes_sent = max_payload_size
 
             data_view = data_view[bytes_sent:]
             num_bytes_to_send -= bytes_sent
@@ -549,7 +572,7 @@ class Instrument:
         version: tuple = (1, 0),
         vendor_id: bytes = b"xx",
         sub_address: bytes = b"hislip0",
-    ):
+    ) -> InitializeResponse:
         """
         perform an Initialize transaction.
         returns the InitializeResponse header.
