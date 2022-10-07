@@ -26,6 +26,12 @@ try:
 except ImportError:
     psutil = None
 
+# Let zeroconf be optional dependency
+try:
+    import zeroconf  # type: ignore
+except ImportError:
+    zeroconf = None
+
 
 # Conversion between VXI11 error codes and VISA status
 # TODO this is so far a best guess, in particular 6 and 29 are likely wrong
@@ -85,9 +91,11 @@ class TCPIPInstrHiSLIP(Session):
     parsed: rname.TCPIPInstr
 
     @staticmethod
-    def list_resources() -> List[str]:
-        # TODO: is there a way to get this?
-        return []
+    def list_resources(wait_time=1.0) -> List[str]:
+        resources = []
+        for host in get_services("_hislip._tcp.local.", wait_time=wait_time):
+            resources.append(f"TCPIP::{host}::hislip0,4880::INSTR")
+        return sorted(resources)
 
     def after_parsing(self) -> None:
         # TODO: board_number not handled
@@ -1099,3 +1107,40 @@ class TCPIPSocketSession(Session):
 
         """
         raise UnknownAttribute(attribute)
+
+
+def get_services(service_type, wait_time=0.1):
+    if zeroconf is None:
+        raise NotImplementedError(
+            "zeroconf package not found...try 'pip install zeroconf'"
+        )
+
+    class MyListener(zeroconf.ServiceListener):
+        def __init__(self, /, *args, **kwargs):
+            self.services = {}
+            super().__init__(*args, **kwargs)
+
+        def remove_service(self, zc: zeroconf.Zeroconf, type_: str, name: str) -> None:
+            del self.services[name]
+
+        def add_service(self, zc: zeroconf.Zeroconf, type_: str, name: str) -> None:
+            info = zc.get_service_info(type_, name)
+            if info is None:
+                return
+            properties = {}
+            for key, val in info.properties.items():
+                if key == b"txtvers":
+                    continue
+                properties[key.decode()] = val.decode()
+            ipaddr = ipaddress.ip_address(info.addresses[0])
+            self.services[str(ipaddr)] = properties
+
+        update_service = add_service
+
+    zero_conf = zeroconf.Zeroconf()
+    listener = MyListener()
+    browser = zeroconf.ServiceBrowser(zero_conf, service_type, listener, delay=0)
+    time.sleep(wait_time)
+    browser.cancel()
+    zero_conf.close()
+    return listener.services
