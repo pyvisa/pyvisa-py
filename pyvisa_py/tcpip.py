@@ -28,9 +28,9 @@ except ImportError:
 
 # Let zeroconf be optional dependency
 try:
-    import zeroconf  # type: ignore
+    import zeroconf
 except ImportError:
-    zeroconf = None
+    zeroconf = None  # type: ignore
 
 
 # Conversion between VXI11 error codes and VISA status
