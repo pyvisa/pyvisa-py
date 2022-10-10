@@ -429,7 +429,6 @@ class Instrument:
 
     @max_msg_size.setter
     def max_msg_size(self, size: int) -> None:
-        """the maximum HiSLIP message size in bytes"""
         self._max_msg_size = self.async_maximum_message_size(size)
 
     @property
