@@ -159,7 +159,7 @@ class TCPIPInstrHiSLIP(Session):
     def get_max_message_kb(
         self, attribute: ResourceAttribute
     ) -> Tuple[int, StatusCode]:
-        """returns the maximum HiSLIP message size in kilobytes"""
+        """Get the maximum HiSLIP message size in kilobytes."""
         max_msg_size_kb = int(round(self.interface.max_msg_size / 1024))
         return max_msg_size_kb, StatusCode.success
 
