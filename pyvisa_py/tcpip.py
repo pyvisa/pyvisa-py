@@ -183,7 +183,7 @@ class TCPIPInstrHiSLIP(Session):
     def set_keepalive(
         self, attribute: ResourceAttribute, keepalive: bool
     ) -> StatusCode:
-        """turns TCP keepalive on/off for this connection"""
+        """Turns TCP keepalive on/off for this connection."""
         self.interface.keepalive = keepalive
         return StatusCode.success
 
