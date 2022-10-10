@@ -446,7 +446,6 @@ class Instrument:
 
     @keepalive.setter
     def keepalive(self, keepalive: bool) -> None:
-        """turns keepalive on/off for both the sync and async sockets"""
         self._keepalive = bool(keepalive)
         self._sync.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, bool(keepalive))
         self._async.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, bool(keepalive))
