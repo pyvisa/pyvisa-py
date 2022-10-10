@@ -1112,7 +1112,8 @@ class TCPIPSocketSession(Session):
 def get_services(service_type, wait_time=0.1):
     if zeroconf is None:
         raise NotImplementedError(
-            "zeroconf package not found...try 'pip install zeroconf'"
+            "HiSLIP instrument discovery requires the zeroconf package to be installed... "
+            "try 'pip install zeroconf'"
         )
 
     class MyListener(zeroconf.ServiceListener):
