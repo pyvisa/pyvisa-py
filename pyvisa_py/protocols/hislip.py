@@ -424,7 +424,7 @@ class Instrument:
 
     @property
     def max_msg_size(self) -> int:
-        """the maximum HiSLIP message size in bytes"""
+        """Maximum HiSLIP message size in bytes."""
         return self._max_msg_size
 
     @max_msg_size.setter
