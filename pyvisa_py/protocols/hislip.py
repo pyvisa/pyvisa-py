@@ -433,9 +433,15 @@ class Instrument:
 
     @property
     def keepalive(self) -> bool:
-        """returns the status of the TCP keepalive.  If a connection is dropped
-        as a result of “keepalives,” the error code VI_ERROR_CONN_LOST is
-        returned to current and subsequent I/O calls on the session"""
+        """Status of the TCP keepalive.  
+        
+        Keepalive is on/off for both the sync and async sockets
+
+        If a connection is dropped as a result of “keepalives,” the error code 
+        VI_ERROR_CONN_LOST is returned to current and subsequent I/O 
+        calls on the session.
+
+        """
         return self._keepalive
 
     @keepalive.setter
