@@ -177,7 +177,7 @@ class TCPIPInstrHiSLIP(Session):
         return StatusCode.success
 
     def get_keepalive(self, attribute: ResourceAttribute) -> Tuple[bool, StatusCode]:
-        """returns the status of the TCP keepalive"""
+        """Is TCP keepalive enabled for the resource."""
         return self.interface.keepalive, StatusCode.success
 
     def set_keepalive(
