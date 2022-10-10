@@ -166,7 +166,7 @@ class TCPIPInstrHiSLIP(Session):
     def set_max_message_kb(
         self, attribute: ResourceAttribute, size_kb: int
     ) -> StatusCode:
-        """sets the maximum HiSLIP message size in kilobytes"""
+        """Set the maximum HiSLIP message size in kilobytes."""
         if size_kb < 1:
             raise ValueError("size must be >= 1 kilobyte")
 
