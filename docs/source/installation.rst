@@ -23,8 +23,14 @@ Pyvisa-py relies on :py:mod:`socket` module in the Python Standard Library to
 interact with the instrument which you do not need to install any extra library
 to access those resources.
 
-To discover devices on all interfaces, please install `psutil`_. Otherwise, 
-discovery will only occur on the default network interface. 
+To discover VXI-11 devices on all network interfaces, please install
+`psutil`_. Otherwise, discovery will only occur on the default network
+interface.
+
+Discovery of HiSLIP devices relies on `mDNS`_, which is a protocol for
+service discovery in a local area network.  To enable resource
+discovery for HiSLIP, you should install `zeroconf`_.
+
 
 
 Serial resources: ASRL INSTR
@@ -102,3 +108,5 @@ form GitHub_::
 .. _`linux-gpib`: http://linux-gpib.sourceforge.net/
 .. _`gpib-ctypes`: https://pypi.org/project/gpib-ctypes/
 .. _`psutil`: https://pypi.org/project/psutil/
+.. _`mDNS`: https://en.wikipedia.org/wiki/Multicast_DNS
+.. _`zeroconf`: https://pypi.org/project/zeroconf/

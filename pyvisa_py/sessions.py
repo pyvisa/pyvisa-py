@@ -122,8 +122,8 @@ class Session(metaclass=abc.ABCMeta):
     #: Session type as (Interface Type, Resource Class)
     session_type: Tuple[constants.InterfaceType, str]
 
-    #: Timeout in seconds to use when opening the resource.
-    open_timeout: Optional[float]
+    #: Timeout in milliseconds to use when opening the resource.
+    open_timeout: Optional[int]
 
     #: Value of the timeout in seconds used for general operation
     timeout: Optional[float]
@@ -290,7 +290,7 @@ class Session(metaclass=abc.ABCMeta):
         resource_manager_session: VISARMSession,
         resource_name: str,
         parsed: Optional[rname.ResourceName] = None,
-        open_timeout: Optional[float] = None,
+        open_timeout: Optional[int] = None,
     ) -> None:
         if parsed is None:
             parsed = rname.parse_resource_name(resource_name)
