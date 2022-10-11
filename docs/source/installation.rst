@@ -27,10 +27,13 @@ To discover VXI-11 devices on all network interfaces, please install
 `psutil`_. Otherwise, discovery will only occur on the default network
 interface.
 
-Discovery of HiSLIP devices relies on `mDNS`_, which is a protocol for
+Discovery of both HiSLIP  and VICP devices relies on `mDNS`_, which is a protocol for
 service discovery in a local area network.  To enable resource
 discovery for HiSLIP, you should install `zeroconf`_.
 
+The TCP/IP VICP protocol (proprietary to Teledyne LeCroy) depends on
+the `pyvicp`_ package.  You should install this package if you need to
+use VICP.
 
 
 Serial resources: ASRL INSTR
@@ -110,3 +113,4 @@ form GitHub_::
 .. _`psutil`: https://pypi.org/project/psutil/
 .. _`mDNS`: https://en.wikipedia.org/wiki/Multicast_DNS
 .. _`zeroconf`: https://pypi.org/project/zeroconf/
+.. _`pyvicp`: https://pypi.org/project/pyvicp/

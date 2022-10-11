@@ -71,6 +71,8 @@ Optionally:
 - linux-gpib (to interface with gpib instruments, only on linux)
 - gpib-ctypes (to interface with GPIB instruments on Windows and Linux)
 - psutil (to discover TCPIP devices across multiple interfaces)
+- zeroconf (for mDNS based service discovery)
+- pyvicp (to enable the Teledyne LeCroy proprietary VICP protocol)
 
 
 Installation
