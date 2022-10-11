@@ -47,7 +47,7 @@ gpib-ctypes = ["gpib-ctypes>=0.3.0"]
 serial = ["pyserial>=3.0"]
 usb = ["pyusb"]
 psutil = ["psutil"]
-zeroconf = ["zeroconf"]
+hislip-discovery = ["zeroconf"]
 
 
 [project.urls]
