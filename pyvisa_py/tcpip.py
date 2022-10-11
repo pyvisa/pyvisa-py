@@ -28,7 +28,7 @@ except ImportError:
 
 # Let zeroconf be optional dependency
 try:
-    import zeroconf
+    import zeroconf  # type: ignore
 except ImportError:
     zeroconf = None  # type: ignore
 
