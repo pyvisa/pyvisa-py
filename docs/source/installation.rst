@@ -29,7 +29,7 @@ interface.
 
 Discovery of both HiSLIP  and VICP devices relies on `mDNS`_, which is a protocol for
 service discovery in a local area network.  To enable resource
-discovery for HiSLIP, you should install `zeroconf`_.
+discovery for HiSLIP and VICP, you should install `zeroconf`_.
 
 The TCP/IP VICP protocol (proprietary to Teledyne LeCroy) depends on
 the `pyvicp`_ package.  You should install this package if you need to
