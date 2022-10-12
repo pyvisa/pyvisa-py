@@ -61,7 +61,7 @@ VXI11_ERRORS_TO_VISA = {
 
 @Session.register(constants.InterfaceType.tcpip, "INSTR")
 class TCPIPInstrSession(Session):
-    """A class to dispatch to VXI11, HiSLIP, or VICP, based on the protocol."""
+    """A class to dispatch to VXI11 or HiSLIP, based on the protocol."""
 
     def __new__(
         cls,
@@ -77,9 +77,6 @@ class TCPIPInstrSession(Session):
 
         if parsed.lan_device_name.lower().startswith("hislip"):
             newcls = TCPIPInstrHiSLIP
-
-        elif parsed.lan_device_name.lower().startswith("vicp"):
-            newcls = TCPIPInstrVicp
 
         else:
             newcls = TCPIPInstrVxi11
@@ -778,19 +775,15 @@ class TCPIPInstrVxi11(Session):
         return StatusCode.success
 
 
+@Session.register(constants.InterfaceType.vicp, "INSTR")
 class TCPIPInstrVicp(Session):
     """A VICP Session that uses the network standard library to do the low
     level communication.
     """
 
-    # we don't decorate this class with Session.register() because we don't
-    # want it to be registered in the _session_classes array, but we still
-    # need to define session_type to make the set_attribute machinery work.
-    session_type = (constants.InterfaceType.tcpip, "INSTR")
-
     # Override parsed to take into account the fact that this class is only used
     # for a specific kind of resource
-    parsed: rname.TCPIPInstr
+    parsed: rname.VICPInstr
 
     @staticmethod
     def list_resources(wait_time=1.0) -> List[str]:
@@ -798,7 +791,7 @@ class TCPIPInstrVicp(Session):
         services = get_services("_lxi._tcp.local.", wait_time=wait_time)
         for host, properties in services.items():
             if properties["Manufacturer"].lower().startswith("lecroy"):
-                resources.append(f"TCPIP::{host}::VICP::INSTR")
+                resources.append(f"VICP::{host}::INSTR")
         return sorted(resources)
 
     def after_parsing(self) -> None:
@@ -809,11 +802,13 @@ class TCPIPInstrVicp(Session):
                 "try 'pip install pyvicp'"
             )
 
-        if "," in self.parsed.lan_device_name:
-            _, port_str = self.parsed.lan_device_name.split(",")
+        host_address = self.parsed.host_address
+        if "," in host_address:
+            host_address, port_str = host_address.split(",")
             port = int(port_str)
         else:
             port = 1861
+
         self.interface = pyvicp.Client(
             self.parsed.host_address, port, timeout=self.timeout
         )
@@ -834,7 +829,6 @@ class TCPIPInstrVicp(Session):
         self.attrs[ResourceAttribute.resource_lock_state] = constants.VI_NO_LOCK
         self.attrs[ResourceAttribute.suppress_end_enabled] = constants.VI_FALSE
         self.attrs[ResourceAttribute.tcpip_address] = self.parsed.host_address
-        self.attrs[ResourceAttribute.tcpip_device_name] = self.parsed.lan_device_name
         self.attrs[ResourceAttribute.tcpip_hostname] = self.parsed.host_address
         self.attrs[ResourceAttribute.tcpip_is_hislip] = constants.VI_FALSE
         self.attrs[ResourceAttribute.tcpip_nodelay] = constants.VI_TRUE
