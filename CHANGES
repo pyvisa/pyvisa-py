@@ -1,9 +1,15 @@
 PyVISA-py Changelog
 ===================
 
-0.5.4 (Unreleased)
+0.6.0 (unreleased)
 ------------------
-- Implement list_resources for TCPIP instruments
+
+- add support for the hislip protocol over TCPIP PR #331
+- allow to list TCPIP resources PR #326
+  In order to discover resources over all subnets psutil needs to be installed
+- attempt to stabilize access to USBTMC resources PR #335
+  Reduce the number of device reset performed and only set all settings if it
+  is meaningful (more than one settings exist.)
 
 0.5.3 (12-05-2022)
 ------------------

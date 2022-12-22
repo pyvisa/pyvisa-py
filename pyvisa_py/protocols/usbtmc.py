@@ -217,10 +217,26 @@ class USBRaw(object):
         except usb.core.USBError as e:
             raise Exception("failed to set configuration\n %s" % e)
 
-        try:
-            self.usb_dev.set_interface_altsetting()
-        except usb.core.USBError:
-            pass
+        # Get the active configuration for our device
+        cfg = self.usb_dev.get_active_configuration()
+        intf = cfg[(0, 0)]
+
+        # Check if teh interface exposes multiple alternative setting and
+        # set one only if there is more than one.
+        if (
+            len(
+                tuple(
+                    usb.util.find_descriptor(
+                        cfg, find_all=True, bInterfaceNumber=intf.bInterfaceNumber
+                    )
+                )
+            )
+            > 1
+        ):
+            try:
+                self.usb_dev.set_interface_altsetting()
+            except usb.core.USBError:
+                pass
 
         self.usb_intf = self._find_interface(self.usb_dev, self.INTERFACE)
 
@@ -288,9 +304,6 @@ class USBTMC(USBRaw):
         self.usb_intr_in = find_endpoint(
             self.usb_intf, usb.ENDPOINT_IN, usb.ENDPOINT_TYPE_INTERRUPT
         )
-
-        self.usb_dev.reset()
-        self.usb_dev.set_configuration()
 
         time.sleep(0.01)
 
