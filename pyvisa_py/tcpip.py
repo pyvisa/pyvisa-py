@@ -543,16 +543,13 @@ class TCPIPInstrVxi11(Session):
             Return value of the library call.
 
         """
-        send_end, _ = self.get_attribute(ResourceAttribute.send_end_enabled)
-        chunk_size = 1024
-
         try:
             flags = 0
             num = len(data)
             offset = 0
 
             while num > 0:
-                if num <= chunk_size:
+                if num <= self.max_recv_size:
                     flags |= vxi11.OP_FLAG_END
 
                 block = data[offset : offset + self.max_recv_size]
