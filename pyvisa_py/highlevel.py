@@ -752,7 +752,7 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
             Return value of the library call.
 
         """
-        pass
+        return StatusCode.error_nonimplemented_operation
 
     def discard_events(
         self,
@@ -779,4 +779,4 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
             Return value of the library call.
 
         """
-        pass
+        return StatusCode.error_nonimplemented_operation
