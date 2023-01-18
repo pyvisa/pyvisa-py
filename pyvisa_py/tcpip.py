@@ -88,6 +88,16 @@ class TCPIPInstrSession(Session):
     def list_resources(wait_time=1.0) -> List[str]:
         return TCPIPInstrVxi11.list_resources() + TCPIPInstrHiSLIP.list_resources()
 
+    @classmethod
+    def get_low_level_info(cls) -> str:
+        vxi11 = "ok" if psutil is not None else "partial (psutil not installed)"
+        hislip = "ok" if zeroconf is not None else "disabled (zeroconf not installed)"
+        return (
+            "\n         Resource discovery:"
+            f"\n         - VXI-11: {vxi11}"
+            f"\n         - hislip: {hislip}"
+        )
+
 
 class TCPIPInstrHiSLIP(Session):
     """A TCPIP Session built on socket standard library using HiSLIP protocol."""
@@ -1003,6 +1013,16 @@ class TCPIPInstrVicp(Session):
 
         """
         raise UnknownAttribute(attribute)
+
+
+if pyvicp is not None:
+    Session.register(constants.InterfaceType.vicp, "INSTR")(TCPIPInstrVicp)
+else:
+    Session.register_unavailable(
+        constants.InterfaceType.vicp,
+        "INSTR",
+        "Please install PyVICP to use this resource type.",
+    )
 
 
 @Session.register(constants.InterfaceType.tcpip, "SOCKET")
