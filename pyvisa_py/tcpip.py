@@ -12,7 +12,7 @@ import select
 import socket
 import time
 import warnings
-from typing import Any, List, Optional, Tuple, Type
+from typing import Any, Dict, List, Optional, Tuple, Type
 
 from pyvisa import attributes, constants, errors, rname
 from pyvisa.constants import ResourceAttribute, StatusCode
@@ -1365,7 +1365,7 @@ class TCPIPSocketSession(Session):
         raise UnknownAttribute(attribute)
 
 
-def get_services(service_type: str, wait_time: float = 0.1) -> dict[str, dict]:
+def get_services(service_type: str, wait_time: float = 0.1) -> Dict[str, dict]:
     if zeroconf is None:
         raise NotImplementedError(
             "Service discovery requires the zeroconf package to be installed... "
