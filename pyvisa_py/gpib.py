@@ -22,16 +22,27 @@ try:
     from gpib_ctypes.Gpib import Gpib  # typing: ignore
     from gpib_ctypes.gpib.gpib import _lib as gpib_lib  # typing: ignore
 
-    # Add some extra binding not available by default
-    extra_funcs = [
-        ("ibcac", [ctypes.c_int, ctypes.c_int], ctypes.c_int),
-        ("ibgts", [ctypes.c_int, ctypes.c_int], ctypes.c_int),
-        ("ibpct", [ctypes.c_int], ctypes.c_int),
-    ]
-    for name, argtypes, restype in extra_funcs:
-        libfunction = gpib_lib[name]
-        libfunction.argtypes = argtypes
-        libfunction.restype = restype
+    try:
+        # Add some extra binding not available by default
+        extra_funcs = [
+            ("ibcac", [ctypes.c_int, ctypes.c_int], ctypes.c_int),
+            ("ibgts", [ctypes.c_int, ctypes.c_int], ctypes.c_int),
+            ("ibpct", [ctypes.c_int], ctypes.c_int),
+        ]
+        for name, argtypes, restype in extra_funcs:
+            libfunction = gpib_lib[name]
+            libfunction.argtypes = argtypes
+            libfunction.restype = restype
+    except TypeError:
+        Session.register_unavailable(
+            constants.InterfaceType.gpib,
+            "INSTR",
+            "gpib_ctypes is installed but could not locate the gpib library.\n"
+            "Please manually load it using:\n"
+            "  gpib_ctypes.gpib.gpib._load_lib(filename)\n"
+            "before importing pyvisa.",
+        )
+        raise
 
 except ImportError:
     GPIB_CTYPES = False
