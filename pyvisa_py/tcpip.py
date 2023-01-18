@@ -11,6 +11,7 @@ import random
 import select
 import socket
 import time
+import warnings
 from typing import Any, List, Optional, Tuple, Type
 
 from pyvisa import attributes, constants, errors, rname
@@ -83,6 +84,10 @@ class TCPIPInstrSession(Session):
 
         return newcls(resource_manager_session, resource_name, parsed, open_timeout)
 
+    @staticmethod
+    def list_resources(wait_time=1.0) -> List[str]:
+        return TCPIPInstrVxi11.list_resources() + TCPIPInstrHiSLIP.list_resources()
+
 
 class TCPIPInstrHiSLIP(Session):
     """A TCPIP Session built on socket standard library using HiSLIP protocol."""
@@ -99,8 +104,15 @@ class TCPIPInstrHiSLIP(Session):
     @staticmethod
     def list_resources(wait_time=1.0) -> List[str]:
         resources = []
-        for host in get_services("_hislip._tcp.local.", wait_time=wait_time):
-            resources.append(f"TCPIP::{host}::hislip0,4880::INSTR")
+        try:
+            for host in get_services("_hislip._tcp.local.", wait_time=wait_time):
+                resources.append(f"TCPIP::{host}::hislip0,4880::INSTR")
+        except NotImplementedError:
+            warnings.warn(
+                "TCPIP::hislip resource discovery requires the zeroconf package "
+                "to be installed... try 'pip install zeroconf'",
+                UserWarning,
+            )
         return sorted(resources)
 
     def after_parsing(self) -> None:
@@ -380,6 +392,11 @@ class TCPIPInstrVxi11(Session):
         else:
             # If psutil unavailable fallback to default interface
             broadcast_addr.append("255.255.255.255")
+            warnings.warn(
+                "TCPIP:instr resource discovery is limited to the default interface."
+                "Install psutil: pip install psutil if you want to scan all interfaces.",
+                UserWarning,
+            )
 
         pmap_list = [rpc.BroadcastUDPPortMapperClient(ip) for ip in broadcast_addr]
         for pmap in list(pmap_list):
@@ -785,10 +802,20 @@ class TCPIPInstrVicp(Session):
     @staticmethod
     def list_resources(wait_time=1.0) -> List[str]:
         resources = []
-        services = get_services("_lxi._tcp.local.", wait_time=wait_time)
+        try:
+            services = get_services("_lxi._tcp.local.", wait_time=wait_time)
+        except NotImplementedError:
+            warnings.warn(
+                "VICP resources discovery requires the zeroconf package to be "
+                "installed... try 'pip install zeroconf'",
+                UserWarning,
+            )
+            return []
+
         for host, properties in services.items():
             if properties["Manufacturer"].lower().startswith("lecroy"):
                 resources.append(f"VICP::{host}::INSTR")
+
         return sorted(resources)
 
     def after_parsing(self) -> None:
@@ -1318,7 +1345,7 @@ class TCPIPSocketSession(Session):
         raise UnknownAttribute(attribute)
 
 
-def get_services(service_type, wait_time=0.1):
+def get_services(service_type: str, wait_time: float = 0.1) -> dict[str, dict]:
     if zeroconf is None:
         raise NotImplementedError(
             "Service discovery requires the zeroconf package to be installed... "
@@ -1326,7 +1353,7 @@ def get_services(service_type, wait_time=0.1):
         )
 
     class MyListener(zeroconf.ServiceListener):
-        def __init__(self, /, *args, **kwargs):
+        def __init__(self, *args, **kwargs):
             self.services = {}
             super().__init__(*args, **kwargs)
 
