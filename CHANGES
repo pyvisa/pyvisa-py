@@ -1,6 +1,13 @@
 PyVISA-py Changelog
 ===================
 
+0.6.1 (unreleased)
+------------------
+
+- fix listing resources when some optional dependencies are missing PR #349
+- properly list discovered TCPIP resources PR #349
+- fix pyvisa-info output for TCPIP and GPIB resources PR #349
+
 0.6.0 (22-12-2022)
 ------------------
 
