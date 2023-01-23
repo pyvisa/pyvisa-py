@@ -1286,7 +1286,7 @@ class TCPIPSocketSession(Session):
             or mask & BufferOperation.discard_receive_buffer
             or mask & BufferOperation.discard_receive_buffer2
         ):
-            return self.clear()
+            self.clear()
         if (
             mask & BufferOperation.flush_write_buffer
             or mask & BufferOperation.flush_transmit_buffer
