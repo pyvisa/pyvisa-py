@@ -22,7 +22,7 @@ PyVISA-py Changelog
 0.6.1 (25-01-2023)
 ------------------
 
-- add support for the flush operation with TCPIP sockets PR #350
+- add support for the flush operation with TCPIP::SOCKET resources PR #350
 - fix listing resources when some optional dependencies are missing PR #349
 - properly list discovered TCPIP resources PR #349
 - fix pyvisa-info output for TCPIP and GPIB resources PR #349
