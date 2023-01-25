@@ -1,7 +1,7 @@
 PyVISA-py Changelog
 ===================
 
-0.6.1 (unreleased)
+0.6.1 (25-01-2023)
 ------------------
 
 - fix listing resources when some optional dependencies are missing PR #349
