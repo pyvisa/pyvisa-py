@@ -1280,13 +1280,14 @@ class TCPIPSocketSession(Session):
         constants.StatusCode
             Return value of the library call.
         """
+        if mask & BufferOperation.discard_read_buffer:
+            self.clear()
         if (
-            mask & BufferOperation.discard_read_buffer
-            or mask & BufferOperation.discard_read_buffer_no_io
+            mask & BufferOperation.discard_read_buffer_no_io
             or mask & BufferOperation.discard_receive_buffer
             or mask & BufferOperation.discard_receive_buffer2
         ):
-            self.clear()
+            self._pending_buffer.clear()
         if (
             mask & BufferOperation.flush_write_buffer
             or mask & BufferOperation.flush_transmit_buffer
