@@ -236,12 +236,7 @@ class SerialSession(Session):
             Return value of the library call.
 
         """
-        if (
-            mask & BufferOperation.discard_read_buffer
-            or mask & BufferOperation.discard_read_buffer_no_io
-            or mask & BufferOperation.discard_receive_buffer
-            or mask & BufferOperation.discard_receive_buffer2
-        ):
+        if mask & BufferOperation.discard_read_buffer:
             self.interface.reset_input_buffer()
         if (
             mask & BufferOperation.flush_write_buffer
