@@ -1,6 +1,11 @@
 PyVISA-py Changelog
 ===================
 
+0.6.2 (07-02-2023)
+------------------
+
+- fix usb resource handling by avoiding multiple calls to set_configuration PR #352
+
 0.6.1 (25-01-2023)
 ------------------
 
