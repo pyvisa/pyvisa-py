@@ -221,7 +221,6 @@ class TCPIPInstrHiSLIP(Session):
         return StatusCode.success
 
     def _set_timeout(self, attribute: ResourceAttribute, value: int) -> StatusCode:
-
         status = super()._set_timeout(attribute, value)
         if hasattr(self.interface, "timeout"):
             self.interface.timeout = 1e-3 * value
@@ -965,7 +964,6 @@ class TCPIPInstrVicp(Session):
         return StatusCode.success
 
     def _set_timeout(self, attribute: ResourceAttribute, value: int) -> StatusCode:
-
         status = super()._set_timeout(attribute, value)
         if hasattr(self.interface, "timeout"):
             self.interface.timeout = 1e-3 * value
@@ -1169,7 +1167,6 @@ class TCPIPSocketSession(Session):
         # data arrives
         finish_time = None if self.timeout is None else (time.time() + self.timeout)
         while True:
-
             # check, if we have any data received (from pending buffer or
             # further reading)
             if term_char_en and term_byte in self._pending_buffer:
@@ -1240,7 +1237,6 @@ class TCPIPSocketSession(Session):
         offset = 0
 
         while num > 0:
-
             block = data[offset : min(offset + chunk_size, sz)]
 
             try:
