@@ -28,7 +28,6 @@ def find_raw_devices(
 
 
 class USBRawDevice(USBRaw):
-
     RECV_CHUNK = 1024**2
 
     find_devices = staticmethod(find_raw_devices)

@@ -182,7 +182,7 @@ class USBRaw(object):
         serial_number=None,
         device_filters=None,
         timeout=None,
-        **kwargs
+        **kwargs,
     ):
         super(USBRaw, self).__init__()
 
@@ -213,12 +213,17 @@ class USBRaw(object):
             pass
 
         try:
-            self.usb_dev.set_configuration()
-        except usb.core.USBError as e:
-            raise Exception("failed to set configuration\n %s" % e)
+            cfg = self.usb_dev.get_active_configuration()
+        except usb.core.USBError:
+            cfg = None
 
-        # Get the active configuration for our device
-        cfg = self.usb_dev.get_active_configuration()
+        if cfg is None:
+            try:
+                self.usb_dev.set_configuration()
+                cfg = self.usb_dev.get_active_configuration()
+            except usb.core.USBError as e:
+                raise Exception("failed to set configuration\n %s" % e)
+
         intf = cfg[(0, 0)]
 
         # Check if teh interface exposes multiple alternative setting and
@@ -293,7 +298,6 @@ class USBRaw(object):
 
 
 class USBTMC(USBRaw):
-
     # Maximum number of bytes per transfer (for sending and receiving).
     RECV_CHUNK = 1024**2
 
@@ -451,7 +455,6 @@ class USBTMC(USBRaw):
         return size
 
     def read(self, size):
-
         recv_chunk = self.RECV_CHUNK
         if size > 0 and size < recv_chunk:
             recv_chunk = size

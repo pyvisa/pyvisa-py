@@ -259,7 +259,6 @@ class Session(metaclass=abc.ABCMeta):
         """
 
         class _internal(Session):
-
             #: Message detailing why no session is available.
             session_issue: str = msg
 

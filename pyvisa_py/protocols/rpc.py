@@ -37,7 +37,6 @@ class MessagegType(enum.IntEnum):
 
 
 class AuthorizationFlavor(enum.IntEnum):
-
     null = 0
     unix = 1
     short = 2
@@ -45,13 +44,11 @@ class AuthorizationFlavor(enum.IntEnum):
 
 
 class ReplyStatus(enum.IntEnum):
-
     accepted = 0
     denied = 1
 
 
 class AcceptStatus(enum.IntEnum):
-
     #: RPC executed successfully
     success = 0
 
@@ -69,7 +66,6 @@ class AcceptStatus(enum.IntEnum):
 
 
 class RejectStatus(enum.IntEnum):
-
     #: RPC version number != 2
     rpc_mismatch = 0
 
@@ -322,7 +318,6 @@ def _sendrecord(sock, record, fragsize=None, timeout=None):
 
 
 def _recvrecord(sock, timeout, read_fun=None, min_packages=0):
-
     record = bytearray()
     buffer = bytearray()
     if not read_fun:
@@ -351,7 +346,6 @@ def _recvrecord(sock, timeout, read_fun=None, min_packages=0):
     # time, when loop shall finish
     finish_time = time.time() + timeout if timeout is not None else 0
     while True:
-
         # if more data for the current fragment is needed, use select
         # to wait for read ready, max `select_timeout` seconds
         if len(buffer) < exp_length:

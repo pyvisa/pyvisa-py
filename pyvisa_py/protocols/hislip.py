@@ -541,7 +541,6 @@ class Instrument:
             header = RxHeader(self._sync)
 
             if header.msg_type in ("Data", "DataEnd"):
-
                 # When receiving Data messages if the MessageID is not 0xffff ffff,
                 # then verify that the MessageID indicated in the Data message is
                 # the MessageID that the client sent to the server with the most
