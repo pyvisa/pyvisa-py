@@ -226,7 +226,7 @@ class USBRaw(object):
 
         intf = cfg[(0, 0)]
 
-        # Check if teh interface exposes multiple alternative setting and
+        # Check if the interface exposes multiple alternative setting and
         # set one only if there is more than one.
         if (
             len(
