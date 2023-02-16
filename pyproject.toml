@@ -2,7 +2,7 @@
 name = "PyVISA-py"
 description = "Pure Python implementation of a VISA library."
 readme = "README.rst"
-requires-python = ">=3.8"
+requires-python = ">=3.7"
 license = {file = "LICENSE"}
 authors = [
   {name = "Hernan E. Grecco", email = "hernan.grecco@gmail.com"},

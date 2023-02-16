@@ -798,229 +798,234 @@ class TCPIPInstrVxi11(Session):
         return StatusCode.success
 
 
-@Session.register(constants.InterfaceType.vicp, "INSTR")
-class TCPIPInstrVicp(Session):
-    """A VICP Session that uses the network standard library to do the low
-    level communication.
-    """
+# Requires Pyvisa >= 1.13
+if hasattr(rname, "VICPInstr"):
 
-    # Override parsed to take into account the fact that this class is only used
-    # for a specific kind of resource
-    parsed: rname.VICPInstr
+    class TCPIPInstrVicp(Session):
+        """VICP Session that uses pyvicp to do the low level communication."""
 
-    @staticmethod
-    def list_resources(wait_time=1.0) -> List[str]:
-        resources = []
-        try:
-            services = get_services("_lxi._tcp.local.", wait_time=wait_time)
-        except NotImplementedError:
-            warnings.warn(
-                "VICP resources discovery requires the zeroconf package to be "
-                "installed... try 'pip install zeroconf'",
-                UserWarning,
+        # Override parsed to take into account the fact that this class is only used
+        # for a specific kind of resource
+        parsed: rname.VICPInstr
+
+        @staticmethod
+        def list_resources(wait_time=1.0) -> List[str]:
+            resources = []
+            try:
+                services = get_services("_lxi._tcp.local.", wait_time=wait_time)
+            except NotImplementedError:
+                warnings.warn(
+                    "VICP resources discovery requires the zeroconf package to be "
+                    "installed... try 'pip install zeroconf'",
+                    UserWarning,
+                )
+                return []
+
+            for host, properties in services.items():
+                if properties["Manufacturer"].lower().startswith("lecroy"):
+                    resources.append(f"VICP::{host}::INSTR")
+
+            return sorted(resources)
+
+        def after_parsing(self) -> None:
+            # TODO: board_number not handled
+            if pyvicp is None:
+                raise NotImplementedError(
+                    "VICP requires the pyvicp package to be installed... "
+                    "try 'pip install pyvicp'"
+                )
+
+            host_address = self.parsed.host_address
+            if "," in host_address:
+                host_address, port_str = host_address.split(",")
+                port = int(port_str)
+            else:
+                port = 1861
+
+            self.interface = pyvicp.Client(
+                self.parsed.host_address, port, timeout=self.timeout
             )
-            return []
 
-        for host, properties in services.items():
-            if properties["Manufacturer"].lower().startswith("lecroy"):
-                resources.append(f"VICP::{host}::INSTR")
+            # initialize the constant attributes
+            for name in ("SEND_END_EN", "TERMCHAR", "TERMCHAR_EN"):
+                attribute = getattr(constants, "VI_ATTR_" + name)
+                self.attrs[attribute] = attributes.AttributesByID[attribute].default
 
-        return sorted(resources)
+            self.attrs[ResourceAttribute.dma_allow_enabled] = constants.VI_FALSE
+            self.attrs[ResourceAttribute.file_append_enabled] = constants.VI_FALSE
+            self.attrs[ResourceAttribute.interface_instrument_name] = "TCPIP0 (VICP)"
+            self.attrs[ResourceAttribute.interface_number] = 0
+            self.attrs[ResourceAttribute.io_prot] = constants.VI_PROT_NORMAL
+            self.attrs[
+                ResourceAttribute.read_buffer_operation_mode
+            ] = constants.VI_FLUSH_DISABLE
+            self.attrs[ResourceAttribute.resource_lock_state] = constants.VI_NO_LOCK
+            self.attrs[ResourceAttribute.suppress_end_enabled] = constants.VI_FALSE
+            self.attrs[ResourceAttribute.tcpip_address] = self.parsed.host_address
+            self.attrs[ResourceAttribute.tcpip_hostname] = self.parsed.host_address
+            self.attrs[ResourceAttribute.tcpip_is_hislip] = constants.VI_FALSE
+            self.attrs[ResourceAttribute.tcpip_nodelay] = constants.VI_TRUE
+            self.attrs[ResourceAttribute.tcpip_port] = port
+            self.attrs[
+                ResourceAttribute.write_buffer_operation_mode
+            ] = constants.VI_FLUSH_WHEN_FULL
 
-    def after_parsing(self) -> None:
-        # TODO: board_number not handled
-        if pyvicp is None:
-            raise NotImplementedError(
-                "VICP requires the pyvicp package to be installed... "
-                "try 'pip install pyvicp'"
+            # configure the variable attributes
+            self.attrs[ResourceAttribute.tcpip_keepalive] = (
+                self.get_keepalive,
+                self.set_keepalive,
             )
 
-        host_address = self.parsed.host_address
-        if "," in host_address:
-            host_address, port_str = host_address.split(",")
-            port = int(port_str)
-        else:
-            port = 1861
+            # TODO: additional attributes (someday)
+            # self.attrs[ResourceAttribute.manufacturer_id] = 16711
+            # self.attrs[ResourceAttribute.max_queue_length] = 50
+            # self.attrs[ResourceAttribute.read_buffer_size] = 4096
+            # self.attrs[ResourceAttribute.resource_impl_version] = 0x0050_0c01
+            # self.attrs[ResourceAttribute.resource_manufacturer_id] = 4015
+            # self.attrs[ResourceAttribute.resource_manufacturer_name] = 'Rohde & Schwarz GmbH'
+            # self.attrs[ResourceAttribute.resource_spec_version] = 0x0050_0800
+            # self.attrs[ResourceAttribute.user_data] = 0
+            # self.attrs[ResourceAttribute.write_buffer_size] = 4096
 
-        self.interface = pyvicp.Client(
-            self.parsed.host_address, port, timeout=self.timeout
+        def get_keepalive(
+            self, attribute: ResourceAttribute
+        ) -> Tuple[bool, StatusCode]:
+            """Is TCP keepalive enabled for the resource."""
+            return self.interface.keepalive, StatusCode.success
+
+        def set_keepalive(
+            self, attribute: ResourceAttribute, keepalive: bool
+        ) -> StatusCode:
+            """Turns TCP keepalive on/off for this connection."""
+            self.interface.keepalive = keepalive
+            return StatusCode.success
+
+        def close(self) -> StatusCode:
+            self.interface.close()
+            self.interface = None
+            return StatusCode.success
+
+        def read(self, count: int) -> Tuple[bytes, StatusCode]:
+            """Reads data from device or interface synchronously.
+
+            Corresponds to viRead function of the VISA library.
+
+            Parameters
+            -----------
+            count : int
+                Number of bytes to be read.
+
+            Returns
+            -------
+            bytes
+                Data read from the device
+            StatusCode
+                Return value of the library call.
+
+            """
+            try:
+                data = self.interface.receive(count)
+            except socket.timeout:
+                return b"", StatusCode.error_timeout
+
+            if len(data) >= count:
+                return data, StatusCode.success_max_count_read
+            else:
+                return data, StatusCode.success_termination_character_read
+
+        def write(self, data: bytes) -> Tuple[int, StatusCode]:
+            """Writes data to device or interface synchronously.
+
+            Corresponds to viWrite function of the VISA library.
+
+            Parameters
+            ----------
+            data : bytes
+                Data to be written.
+
+            Returns
+            -------
+            int
+                Number of bytes actually transferred
+            StatusCode
+                Return value of the library call.
+
+            """
+            self.interface.send(data)
+
+            return len(data), StatusCode.success
+
+        def clear(self) -> StatusCode:
+            """Clears a device.
+
+            Corresponds to viClear function of the VISA library.
+
+            """
+            self.interface.device_clear()
+
+            return StatusCode.success
+
+        def _set_timeout(self, attribute: ResourceAttribute, value: int) -> StatusCode:
+            status = super()._set_timeout(attribute, value)
+            if hasattr(self.interface, "timeout"):
+                self.interface.timeout = 1e-3 * value
+
+            return status
+
+        def _get_attribute(
+            self, attribute: ResourceAttribute
+        ) -> Tuple[Any, StatusCode]:
+            """Get the value for a given VISA attribute for this session.
+
+            Use to implement custom logic for attributes.
+
+            Parameters
+            ----------
+            attribute : ResourceAttribute
+                Attribute for which the state query is made
+
+            Returns
+            -------
+            Any
+                State of the queried attribute for a specified resource
+            StatusCode
+                Return value of the library call.
+
+            """
+            raise UnknownAttribute(attribute)
+
+        def _set_attribute(
+            self, attribute: ResourceAttribute, attribute_state: Any
+        ) -> StatusCode:
+            """Sets the state of an attribute.
+
+            Corresponds to viSetAttribute function of the VISA library.
+
+            Parameters
+            ----------
+            attribute : constants.ResourceAttribute
+                Attribute for which the state is to be modified. (Attributes.*)
+            attribute_state : Any
+                The state of the attribute to be set for the specified object.
+
+            Returns
+            -------
+            StatusCode
+                Return value of the library call.
+
+            """
+            raise UnknownAttribute(attribute)
+
+
+if hasattr(constants.InterfaceType, "vicp"):
+    if pyvicp is not None:
+        Session.register(constants.InterfaceType.vicp, "INSTR")(TCPIPInstrVicp)
+    else:
+        Session.register_unavailable(
+            constants.InterfaceType.vicp,
+            "INSTR",
+            "Please install PyVICP to use this resource type.",
         )
-
-        # initialize the constant attributes
-        for name in ("SEND_END_EN", "TERMCHAR", "TERMCHAR_EN"):
-            attribute = getattr(constants, "VI_ATTR_" + name)
-            self.attrs[attribute] = attributes.AttributesByID[attribute].default
-
-        self.attrs[ResourceAttribute.dma_allow_enabled] = constants.VI_FALSE
-        self.attrs[ResourceAttribute.file_append_enabled] = constants.VI_FALSE
-        self.attrs[ResourceAttribute.interface_instrument_name] = "TCPIP0 (VICP)"
-        self.attrs[ResourceAttribute.interface_number] = 0
-        self.attrs[ResourceAttribute.io_prot] = constants.VI_PROT_NORMAL
-        self.attrs[
-            ResourceAttribute.read_buffer_operation_mode
-        ] = constants.VI_FLUSH_DISABLE
-        self.attrs[ResourceAttribute.resource_lock_state] = constants.VI_NO_LOCK
-        self.attrs[ResourceAttribute.suppress_end_enabled] = constants.VI_FALSE
-        self.attrs[ResourceAttribute.tcpip_address] = self.parsed.host_address
-        self.attrs[ResourceAttribute.tcpip_hostname] = self.parsed.host_address
-        self.attrs[ResourceAttribute.tcpip_is_hislip] = constants.VI_FALSE
-        self.attrs[ResourceAttribute.tcpip_nodelay] = constants.VI_TRUE
-        self.attrs[ResourceAttribute.tcpip_port] = port
-        self.attrs[
-            ResourceAttribute.write_buffer_operation_mode
-        ] = constants.VI_FLUSH_WHEN_FULL
-
-        # configure the variable attributes
-        self.attrs[ResourceAttribute.tcpip_keepalive] = (
-            self.get_keepalive,
-            self.set_keepalive,
-        )
-
-        # TODO: additional attributes (someday)
-        # self.attrs[ResourceAttribute.manufacturer_id] = 16711
-        # self.attrs[ResourceAttribute.max_queue_length] = 50
-        # self.attrs[ResourceAttribute.read_buffer_size] = 4096
-        # self.attrs[ResourceAttribute.resource_impl_version] = 0x0050_0c01
-        # self.attrs[ResourceAttribute.resource_manufacturer_id] = 4015
-        # self.attrs[ResourceAttribute.resource_manufacturer_name] = 'Rohde & Schwarz GmbH'
-        # self.attrs[ResourceAttribute.resource_spec_version] = 0x0050_0800
-        # self.attrs[ResourceAttribute.user_data] = 0
-        # self.attrs[ResourceAttribute.write_buffer_size] = 4096
-
-    def get_keepalive(self, attribute: ResourceAttribute) -> Tuple[bool, StatusCode]:
-        """Is TCP keepalive enabled for the resource."""
-        return self.interface.keepalive, StatusCode.success
-
-    def set_keepalive(
-        self, attribute: ResourceAttribute, keepalive: bool
-    ) -> StatusCode:
-        """Turns TCP keepalive on/off for this connection."""
-        self.interface.keepalive = keepalive
-        return StatusCode.success
-
-    def close(self) -> StatusCode:
-        self.interface.close()
-        self.interface = None
-        return StatusCode.success
-
-    def read(self, count: int) -> Tuple[bytes, StatusCode]:
-        """Reads data from device or interface synchronously.
-
-        Corresponds to viRead function of the VISA library.
-
-         Parameters
-        -----------
-        count : int
-            Number of bytes to be read.
-
-        Returns
-        -------
-        bytes
-            Data read from the device
-        StatusCode
-            Return value of the library call.
-
-        """
-        try:
-            data = self.interface.receive(count)
-        except socket.timeout:
-            return b"", StatusCode.error_timeout
-
-        if len(data) >= count:
-            return data, StatusCode.success_max_count_read
-        else:
-            return data, StatusCode.success_termination_character_read
-
-    def write(self, data: bytes) -> Tuple[int, StatusCode]:
-        """Writes data to device or interface synchronously.
-
-        Corresponds to viWrite function of the VISA library.
-
-        Parameters
-        ----------
-        data : bytes
-            Data to be written.
-
-        Returns
-        -------
-        int
-            Number of bytes actually transferred
-        StatusCode
-            Return value of the library call.
-
-        """
-        self.interface.send(data)
-
-        return len(data), StatusCode.success
-
-    def clear(self) -> StatusCode:
-        """Clears a device.
-
-        Corresponds to viClear function of the VISA library.
-
-        """
-        self.interface.device_clear()
-
-        return StatusCode.success
-
-    def _set_timeout(self, attribute: ResourceAttribute, value: int) -> StatusCode:
-        status = super()._set_timeout(attribute, value)
-        if hasattr(self.interface, "timeout"):
-            self.interface.timeout = 1e-3 * value
-
-        return status
-
-    def _get_attribute(self, attribute: ResourceAttribute) -> Tuple[Any, StatusCode]:
-        """Get the value for a given VISA attribute for this session.
-
-        Use to implement custom logic for attributes.
-
-        Parameters
-        ----------
-        attribute : ResourceAttribute
-            Attribute for which the state query is made
-
-        Returns
-        -------
-        Any
-            State of the queried attribute for a specified resource
-        StatusCode
-            Return value of the library call.
-
-        """
-        raise UnknownAttribute(attribute)
-
-    def _set_attribute(
-        self, attribute: ResourceAttribute, attribute_state: Any
-    ) -> StatusCode:
-        """Sets the state of an attribute.
-
-        Corresponds to viSetAttribute function of the VISA library.
-
-        Parameters
-        ----------
-        attribute : constants.ResourceAttribute
-            Attribute for which the state is to be modified. (Attributes.*)
-        attribute_state : Any
-            The state of the attribute to be set for the specified object.
-
-        Returns
-        -------
-        StatusCode
-            Return value of the library call.
-
-        """
-        raise UnknownAttribute(attribute)
-
-
-if pyvicp is not None:
-    Session.register(constants.InterfaceType.vicp, "INSTR")(TCPIPInstrVicp)
-else:
-    Session.register_unavailable(
-        constants.InterfaceType.vicp,
-        "INSTR",
-        "Please install PyVICP to use this resource type.",
-    )
 
 
 @Session.register(constants.InterfaceType.tcpip, "SOCKET")
