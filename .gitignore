@@ -19,3 +19,6 @@ _test/
 .cache/
 .vscode
 .dmypy.json
+
+# auto-generated version file
+version.py
