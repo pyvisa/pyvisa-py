@@ -1,6 +1,12 @@
 PyVISA-py Changelog
 ===================
 
+0.6.3 (17-02-2023)
+------------------
+
+- fix bad behavior on PyVISA 1.12 and hence on Python 3.7 PR #357
+  0.6.x is the last version that will support Python 3.7
+
 0.6.2 (08-02-2023)
 ------------------
 
