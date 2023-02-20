@@ -365,7 +365,11 @@ class Instrument:
     """
 
     def __init__(
-        self, ip_addr: str, timeout: Optional[float] = None, port: int = PORT
+        self,
+        ip_addr: str,
+        timeout: Optional[float] = None,
+        port: int = PORT,
+        sub_address: str = "hislip0",
     ) -> None:
         # init transaction:
         #     C->S: Initialize
@@ -380,7 +384,7 @@ class Instrument:
         self._sync.connect((ip_addr, port))
         self._sync.settimeout(timeout)
         self._sync.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
-        init = self.initialize()
+        init = self.initialize(sub_address=sub_address.encode("ascii"))
         if init.overlap != 0:
             print("**** prefer overlap = %d" % init.overlap)
 
