@@ -1,6 +1,11 @@
 PyVISA-py Changelog
 ===================
 
+0.7.0 (unreleased)
+------------------
+
+- drop support for Python 3.7 PR 362
+
 0.6.3 (17-02-2023)
 ------------------
 
