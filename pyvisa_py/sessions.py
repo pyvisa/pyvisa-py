@@ -8,7 +8,18 @@
 """
 import abc
 import time
-from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple, Type, TypeVar
+from typing import (
+    Any,
+    Callable,
+    ClassVar,
+    Dict,
+    Iterator,
+    List,
+    Optional,
+    Tuple,
+    Type,
+    TypeVar,
+)
 
 from pyvisa import attributes, constants, logger, rname
 from pyvisa.constants import ResourceAttribute, StatusCode
@@ -158,7 +169,7 @@ class Session(metaclass=abc.ABCMeta):
     ) -> Iterator[Tuple[Tuple[constants.InterfaceType, str], Type["Session"]]]:
         """Iterator over valid sessions classes infos."""
         for key, val in cls._session_classes.items():
-            if issubclass(val, Session):
+            if not issubclass(val, UnavailableSession):
                 yield key, val
 
     @classmethod
@@ -167,10 +178,8 @@ class Session(metaclass=abc.ABCMeta):
     ) -> Iterator[Tuple[Tuple[constants.InterfaceType, str], str]]:
         """Iterator over invalid sessions classes (i.e. those with import errors)."""
         for key, val in cls._session_classes.items():
-            try:
+            if issubclass(val, UnavailableSession):
                 yield key, getattr(val, "session_issue")
-            except AttributeError:
-                pass
 
     @classmethod
     def get_session_class(
@@ -258,21 +267,9 @@ class Session(metaclass=abc.ABCMeta):
 
         """
 
-        class _internal(Session):
+        class _internal(UnavailableSession):
             #: Message detailing why no session is available.
-            session_issue: str = msg
-
-            def __init__(self, *args, **kwargs) -> None:
-                raise ValueError(msg)
-
-            def _get_attribute(self, attr):
-                raise NotImplementedError()
-
-            def _set_attribute(self, attr, value):
-                raise NotImplementedError()
-
-            def close(self):
-                raise NotImplementedError()
+            session_issue = msg
 
         if (interface_type, resource_class) in cls._session_classes:
             logger.warning(
@@ -854,3 +851,19 @@ class Session(metaclass=abc.ABCMeta):
         else:
             self.timeout = value / 1000.0
         return StatusCode.success
+
+
+class UnavailableSession(Session):
+    session_issue: ClassVar[str]
+
+    def __init__(self, *args, **kwargs) -> None:
+        raise ValueError(self.session_issue)
+
+    def _get_attribute(self, attr):
+        raise NotImplementedError()
+
+    def _set_attribute(self, attr, value):
+        raise NotImplementedError()
+
+    def close(self):
+        raise NotImplementedError()

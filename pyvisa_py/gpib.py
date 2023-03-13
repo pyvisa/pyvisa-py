@@ -34,14 +34,14 @@ try:
             libfunction.argtypes = argtypes
             libfunction.restype = restype
     except TypeError:
-        Session.register_unavailable(
-            constants.InterfaceType.gpib,
-            "INSTR",
+        msg = (
             "gpib_ctypes is installed but could not locate the gpib library.\n"
             "Please manually load it using:\n"
             "  gpib_ctypes.gpib.gpib._load_lib(filename)\n"
-            "before importing pyvisa.",
+            "before importing pyvisa."
         )
+        Session.register_unavailable(constants.InterfaceType.gpib, "INSTR", msg)
+        Session.register_unavailable(constants.InterfaceType.gpib, "INTFC", msg)
         raise
 
 except ImportError:
@@ -50,15 +50,13 @@ except ImportError:
         import gpib  # typing: ignore
         from Gpib import Gpib  # typing: ignore
     except ImportError as e:
-        Session.register_unavailable(
-            constants.InterfaceType.gpib,
-            "INSTR",
-            "Please install linux-gpib (Linux) or "
-            "gpib-ctypes (Windows, Linux) to use "
-            "this resource type. Note that installing"
-            " gpib-ctypes will give you access to a "
-            "broader range of funcionality.\n%s" % e,
+        msg = (
+            "Please install linux-gpib (Linux) or gpib-ctypes (Windows, Linux) "
+            "to use this resource type. Note that installing gpib-ctypes will "
+            "give you access to a broader range of functionalities.\n%s" % e
         )
+        Session.register_unavailable(constants.InterfaceType.gpib, "INSTR", msg)
+        Session.register_unavailable(constants.InterfaceType.gpib, "INTFC", msg)
         raise
 
 
