@@ -35,12 +35,15 @@ jobs:
         run: |
           isort pyvisa_py -c;
       - name: Black
+        if: always()
         run: |
           black pyvisa_py --check;
       - name: Flake8
+        if: always()
         run: |
           flake8 pyvisa_py;
       - name: Mypy
+        if: always()
         run: |
           mypy pyvisa_py;
   tests:
