@@ -6,6 +6,7 @@
 
 """
 import ctypes
+
 from pyvisa.constants import InterfaceType
 from pyvisa.testsuite import BaseTestCase
 
@@ -24,6 +25,7 @@ class TestSessions(BaseTestCase):
         usbs = [(InterfaceType.usb, "INSTR"), (InterfaceType.usb, "RAW")]
         try:
             import usb
+
             _ = usb.core.find()
 
             expected.extend(usbs)
@@ -33,12 +35,12 @@ class TestSessions(BaseTestCase):
         gpibs = [(InterfaceType.gpib, "INSTR"), (InterfaceType.gpib, "INTFC")]
         try:
             try:
-                from gpib_ctypes import gpib  # typing: ignore
-                from gpib_ctypes.Gpib import Gpib  # typing: ignore
-                from gpib_ctypes.gpib.gpib import _lib as gpib_lib  # typing: ignore
+                from gpib_ctypes import gpib  # noqa
+                from gpib_ctypes.Gpib import Gpib  # noqa
+                from gpib_ctypes.gpib.gpib import _lib as gpib_lib
             except ImportError:
-                import gpib  # typing: ignore
-                from Gpib import Gpib  # typing: ignore
+                import gpib  # noqa
+                from Gpib import Gpib  # noqa
             else:
                 # Add some extra binding not available by default
                 extra_funcs = [
@@ -57,7 +59,7 @@ class TestSessions(BaseTestCase):
 
         asrl = (InterfaceType.asrl, "INSTR")
         try:
-            import serial
+            import serial  # noqa
 
             expected.append(asrl)
         except Exception:
@@ -65,7 +67,7 @@ class TestSessions(BaseTestCase):
 
         vicp = (InterfaceType.vicp, "INSTR")
         try:
-            import pyvicp
+            import pyvicp  # noqa
 
             expected.append(vicp)
         except Exception:

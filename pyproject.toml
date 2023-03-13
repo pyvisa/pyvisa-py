@@ -102,6 +102,7 @@ module = [
     "gpib.*",
     "Gpib.*",
     "gpib_ctypes.*",
+    "pyvicp.*",
 
 ]
 ignore_missing_imports = true

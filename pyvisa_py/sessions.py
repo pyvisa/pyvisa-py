@@ -854,7 +854,6 @@ class Session(metaclass=abc.ABCMeta):
 
 
 class UnavailableSession(Session):
-
     session_issue: ClassVar[str]
 
     def __init__(self, *args, **kwargs) -> None:
