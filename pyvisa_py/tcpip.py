@@ -33,7 +33,7 @@ try:
 except ImportError:
     zeroconf = None  # type: ignore
 
-# Let pyvicp be optional dependency
+# Let pyvicp be an optional dependency
 try:
     import pyvicp  # type: ignore
 except ImportError:
