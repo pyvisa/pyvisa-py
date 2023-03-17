@@ -129,12 +129,16 @@ class TCPIPInstrHiSLIP(Session):
         # TODO: board_number not handled
 
         if "," in self.parsed.lan_device_name:
-            _, port_str = self.parsed.lan_device_name.split(",")
+            sub_address, port_str = self.parsed.lan_device_name.split(",")
             port = int(port_str)
         else:
+            sub_address = self.parsed.lan_device_name
             port = 4880
         self.interface = hislip.Instrument(
-            self.parsed.host_address, port=port, timeout=self.timeout
+            self.parsed.host_address,
+            timeout=self.timeout,
+            port=port,
+            sub_address=sub_address,
         )
 
         # initialize the constant attributes
