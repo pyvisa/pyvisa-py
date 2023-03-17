@@ -15,7 +15,7 @@ import warnings
 from typing import Any, Dict, List, Optional, Tuple, Type
 
 from pyvisa import attributes, constants, errors, rname
-from pyvisa.constants import ResourceAttribute, StatusCode
+from pyvisa.constants import BufferOperation, ResourceAttribute, StatusCode
 
 from . import common
 from .protocols import hislip, rpc, vxi11
@@ -1267,6 +1267,38 @@ class TCPIPSocketSession(Session):
             if not r:
                 break
             r[0].recv(4096)
+
+        return StatusCode.success
+
+    def flush(self, mask: BufferOperation) -> StatusCode:
+        """Flush the specified buffers.
+        Corresponds to viFlush function of the VISA library.
+        Parameters
+        ----------
+        mask : constants.BufferOperation
+            Specifies the action to be taken with flushing the buffer.
+            The values can be combined using the | operator. However multiple
+            operations on a single buffer cannot be combined.
+        Returns
+        -------
+        constants.StatusCode
+            Return value of the library call.
+        """
+        if mask & BufferOperation.discard_read_buffer:
+            self.clear()
+        if (
+            mask & BufferOperation.discard_read_buffer_no_io
+            or mask & BufferOperation.discard_receive_buffer
+            or mask & BufferOperation.discard_receive_buffer2
+        ):
+            self._pending_buffer.clear()
+        if (
+            mask & BufferOperation.flush_write_buffer
+            or mask & BufferOperation.flush_transmit_buffer
+            or mask & BufferOperation.discard_write_buffer
+            or mask & BufferOperation.discard_transmit_buffer
+        ):
+            pass
 
         return StatusCode.success
 
