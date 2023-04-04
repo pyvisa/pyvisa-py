@@ -71,14 +71,12 @@ On Unix system, one may have to modify udev rules to allow non-root access to
 the device you are trying to connect to. The following tutorial describes how
 to do it http://ask.xmodulo.com/change-usb-device-permission-linux.html.
 
-On Windows, you may have to uninstall the USBTMC specific driver installed by
-Windows and re-install a generic driver.
+On Windows, you may have to uninstall the USBTMC-specific driver installed by
+Windows and re-install a generic driver. Please check `libusb's guide`_ for more
+details, but installing a ``WinUSB`` driver with Zadig_ should be a good start.
 
 Note that on Windows, devices that are already open cannot be detected and will
 not be returned by ``ResourceManager.list_resources``.
-
-Another useful reference for how to configure your system is h
-ttps://github.com/python-ivi/python-usbtmc.
 
 
 How do I know if PyVISA-py is properly installed?
@@ -114,3 +112,5 @@ form GitHub_::
 .. _`mDNS`: https://en.wikipedia.org/wiki/Multicast_DNS
 .. _`zeroconf`: https://pypi.org/project/zeroconf/
 .. _`pyvicp`: https://pypi.org/project/pyvicp/
+.. _`libusb's guide`: https://github.com/libusb/libusb/wiki/Windows#user-content-How_to_use_libusb_on_Windows
+.. _`Zadig`: https://zadig.akeo.ie/
