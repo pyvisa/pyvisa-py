@@ -814,7 +814,10 @@ class Session(metaclass=abc.ABCMeta):
                         return (bytes(out[:count]), StatusCode.success_max_count_read)
 
             if finish_time and time.time() > finish_time:
-                return bytes(out), StatusCode.error_timeout
+                if termination_char_en:
+                    return bytes(out), StatusCode.error_timeout
+                else:
+                    return bytes(out), StatusCode.success
 
     def _get_timeout(self, attribute: ResourceAttribute) -> Tuple[int, StatusCode]:
         """Returns timeout calculated value from python way to VI_ way
