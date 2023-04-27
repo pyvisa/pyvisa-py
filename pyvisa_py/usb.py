@@ -315,7 +315,7 @@ class USBRawSession(USBSession):
 
             try:
                 serial = dev.serial_number
-            except (NotImplementedError, ValueError):
+            except (NotImplementedError, ValueError, usb.USBError):
                 msg = (
                     "Found a device whose serial number cannot be read."
                     " The partial VISA resource name is: " + fmt
