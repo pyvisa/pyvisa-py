@@ -1,14 +1,14 @@
 PyVISA-py Changelog
 ===================
 
-0.7.0 (unreleased)
+0.7.0 (05/05/2023)
 ------------------
 
 - add support for the flush operation with TCPIP::SOCKET resources PR #350
 - drop support for Python 3.7 PR #362
 - fix listing of available resources PR #362
 - fix hislip support for custom sub_addresses PR #359
-- fix bad USBRaw resource preventing enumeration of other resources
+- fix bad USBRaw resource preventing enumeration of other resources PR #370
 
 0.6.3 (17-02-2023)
 ------------------
