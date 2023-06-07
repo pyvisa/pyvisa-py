@@ -15,8 +15,8 @@ and some well developed, easy to deploy and cross platform libraries.
 You can select the PyVISA-py backend using **@py** when instantiating the
 visa Resource Manager:
 
-    >>> import visa
-    >>> rm = visa.ResourceManager('@py')
+    >>> import pyvisa
+    >>> rm = pyvisa.ResourceManager('@py')
     >>> rm.list_resources()
     ('USB0::0x1AB1::0x0588::DS1K00005888::INSTR')
     >>> inst = rm.open_resource('USB0::0x1AB1::0x0588::DS1K00005888::INSTR')
