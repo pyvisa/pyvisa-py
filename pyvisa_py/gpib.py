@@ -273,6 +273,7 @@ class _GPIBCommon(Session):
         self.interface = None
         if isinstance(self.parsed, GPIBInstr):
             pad = int(self.parsed.primary_address)
+            sad = int(self.parsed.secondary_address) + 0x60
             # Used to talk to a specific resource
             self.interface = Gpib(
                 name=minor,
