@@ -35,6 +35,16 @@ from a pure primary address like `GPIB0::9::INSTR`.
 ``ResourceManager.list_resources()`` has become slower as a result,
 as it now needs to check 992 addresses per GPIB controller instead of just 31.
 
+For every primary address where no listener is detected, all
+secondary addresses are checked for listeners as well to find, for example,
+VXI modules controlled by an HP E1406A.
+
+For primary addresses where a listener is detected, no secondary addresses are
+checked as most devices simply ignore secondary addressing.
+
+If you have a device that reacts to the primary address and has different
+functionality on some secondary addresses, please leave a bug report.
+
 
 Can PyVISA-py be used from a VM?
 --------------------------------
