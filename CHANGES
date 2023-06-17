@@ -1,6 +1,11 @@
 PyVISA-py Changelog
 ===================
 
+0.7.1 (unreleased)
+------------------
+
+- add support for GPIB secondary addresses
+
 0.7.0 (05/05/2023)
 ------------------
 

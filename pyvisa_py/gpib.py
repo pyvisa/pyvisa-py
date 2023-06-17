@@ -85,18 +85,24 @@ def _find_boards() -> Iterator[Tuple[int, int]]:
             logger.debug("GPIB board %i error in _find_boards(): %s", board, repr(e))
 
 
-def _find_listeners() -> Iterator[Tuple[int, int]]:
+def _find_listeners() -> Iterator[Tuple[int, int, int]]:
     """Find GPIB listeners."""
     for board, boardpad in _find_boards():
         for i in range(31):
+            j = 0
             try:
                 if boardpad != i and gpib.listener(board, i):
-                    yield board, i
+                    yield board, i, j
+                elif boardpad != i:
+                    for j in range(96, 126):
+                        if gpib.listener(board, i, j):
+                            yield board, i, j
             except gpib.GpibError as e:
                 logger.debug(
-                    "GPIB board %i addr %i error in _find_listeners(): %s",
+                    "GPIB board %i paddr %i saddr %i error in _find_listeners(): %s",
                     board,
                     i,
+                    j,
                     repr(e),
                 )
 
@@ -273,6 +279,8 @@ class _GPIBCommon(Session):
         self.interface = None
         if isinstance(self.parsed, GPIBInstr):
             pad = int(self.parsed.primary_address)
+            if self.parsed.secondary_address is not None:
+                sad = int(self.parsed.secondary_address) + 0x60
             # Used to talk to a specific resource
             self.interface = Gpib(
                 name=minor,
@@ -636,7 +644,12 @@ class GPIBSession(_GPIBCommon):
 
     @staticmethod
     def list_resources() -> List[str]:
-        return ["GPIB%d::%d::INSTR" % (board, pad) for board, pad in _find_listeners()]
+        return [
+            "GPIB%d::%d::INSTR" % (board, pad)
+            if sad == 0
+            else "GPIB%d::%d::%d::INSTR" % (board, pad, sad - 0x60)
+            for board, pad, sad in _find_listeners()
+        ]
 
     def clear(self) -> StatusCode:
         """Clears a device.

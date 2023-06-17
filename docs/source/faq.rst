@@ -21,6 +21,31 @@ The IVI compliant VISA implementations available (`National Instruments NI-VISA`
 certain systems. We wanted to provide a compatible alternative.
 
 
+Are GBIP secondary addresses supported?
+---------------------------------------
+
+GPIB secondary addresses are supported in NI-VISA fashion, meaning that the
+secondary address is not 96 to 126 as transmitted on the bus, but 0 to 30.
+
+For expample, `GPIB0::9::1::INSTR` is the address of the first VXI module
+controlled by a GPIB VXI command module set to primary address `9`, while
+the command module itself is found at `GPIB0::9::0::INSTR`, which is distinct
+from a pure primary address like `GPIB0::9::INSTR`.
+
+``ResourceManager.list_resources()`` has become slower as a result,
+as it now needs to check 992 addresses per GPIB controller instead of just 31.
+
+For every primary address where no listener is detected, all
+secondary addresses are checked for listeners as well to find, for example,
+VXI modules controlled by an HP E1406A.
+
+For primary addresses where a listener is detected, no secondary addresses are
+checked as most devices simply ignore secondary addressing.
+
+If you have a device that reacts to the primary address and has different
+functionality on some secondary addresses, please leave a bug report.
+
+
 Can PyVISA-py be used from a VM?
 --------------------------------
 
