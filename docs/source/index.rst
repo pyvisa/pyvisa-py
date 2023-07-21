@@ -35,6 +35,16 @@ Currently Pyvisa-py support the following resources:
 - USB INSTR
 - USB RAW
 
+    Note:
+    ASRL INSTR supports also URL Handlers like 
+    
+    - loop:// --> ASLRloop://::INSTR
+    - socket:// --> ASRLsocket://::INSTR
+
+    These entries will not be listed during the device discovery `rm.list_resources()`.
+    For further details see https://pyserial.readthedocs.io/en/latest/url_handlers.html
+    
+
 You can report a problem or ask for features in the `issue tracker`_.
 Or get the code in GitHub_.
 
