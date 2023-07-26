@@ -31,10 +31,10 @@ class TestSerial(BaseTestCase):
             dut.write(str(msg))
             ret_val = dut.read()
             if str(msg) == ret_val:
-                expected.append("loop://")
+                expected = ["loop://"]
 
         except Exception:
-            exp_missing.append("loop://")
+            exp_missing = ["loop://"]
 
         assert sorted(available) == sorted(expected)
         assert sorted(missing) == sorted(exp_missing)
