@@ -437,6 +437,7 @@ def _connect(sock, host, port, timeout=0):
 
         if time.time() >= finish_time:
             # reached timeout
+            sock.close()
             return False
 
         # `select_timout` decreased to 50% of previous or min_select_timeout
