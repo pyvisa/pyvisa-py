@@ -32,9 +32,12 @@ steps:
       source $HOME/miniconda3/bin/activate
       echo Activate environment
       call conda activate test_
+      echo Install support packages
+      pip install pyserial
       echo Install project
       pip install git+https://github.com/pyvisa/pyvisa.git#egg=pyvisa
       pip install -e .
+      
     displayName: "Install dependencies"
 
   - script: |
