@@ -5,12 +5,15 @@
 :license: MIT, see LICENSE for more details.
 
 """
+import pytest
 from pyvisa import ResourceManager
 from pyvisa.testsuite import BaseTestCase
 
 
 class TestSerial(BaseTestCase):
     """Test generic property of PyVisaLibrary."""
+
+    serial = pytest.importorskip("serial", reason="PySerial not installed")
 
     def test_serial(self):
         """Test loop://"""
