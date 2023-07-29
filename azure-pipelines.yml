@@ -32,9 +32,10 @@ steps:
       source $HOME/miniconda3/bin/activate
       echo Activate environment
       call conda activate test_
-      echo Install project
+      echo Install project and required dependencies
       pip install git+https://github.com/pyvisa/pyvisa.git#egg=pyvisa
-      pip install -e .
+      pip install -e .[serial]
+      
     displayName: "Install dependencies"
 
   - script: |

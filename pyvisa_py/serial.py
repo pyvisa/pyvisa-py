@@ -84,10 +84,8 @@ class SerialSession(Session):
         return "via PySerial (%s)" % ver
 
     def after_parsing(self) -> None:
-        cls = serial.Serial
-
-        self.interface = cls(
-            port=("COM" if IS_WIN else "") + self.parsed.board,
+        self.interface = serial.serial_for_url(
+            ("COM" if IS_WIN else "") + self.parsed.board,
             timeout=self.timeout,
             write_timeout=self.timeout,
         )
