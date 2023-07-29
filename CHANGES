@@ -4,6 +4,7 @@ PyVISA-py Changelog
 0.7.1 (unreleased)
 ------------------
 
+- addd URL-support to ASLR devices PR #386
 - add support for GPIB secondary addresses
 
 0.7.0 (05/05/2023)
