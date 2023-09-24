@@ -1146,7 +1146,7 @@ class TCPIPSocketSession(Session):
             chunk_length = self.max_recv_size
 
         term_char, _ = self.get_attribute(ResourceAttribute.termchar)
-        term_byte = common.int_to_byte(term_char) if term_char else b""
+        term_byte = common.int_to_byte(term_char) if term_char is not None else b""
         term_char_en, _ = self.get_attribute(ResourceAttribute.termchar_enabled)
         suppress_end_en, _ = self.get_attribute(ResourceAttribute.suppress_end_enabled)
 
