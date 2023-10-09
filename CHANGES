@@ -7,7 +7,8 @@ PyVISA-py Changelog
 - addd URL-support to ASLR devices PR #386
 - add support for GPIB secondary addresses
 - fix missing sock.close() in rpc _connect()
-- handle read_termination of null in tcipip
+- fix HiSLIP message tracking after read timeout PR #376
+- handle read_termination of null in tcipip PR #394
 
 0.7.0 (05/05/2023)
 ------------------
