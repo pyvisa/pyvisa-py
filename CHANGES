@@ -9,6 +9,7 @@ PyVISA-py Changelog
 - fix missing sock.close() in rpc _connect()
 - fix HiSLIP message tracking after read timeout PR #376
 - handle read_termination of null in tcipip PR #394
+- fix tcpip keepalive PR #396
 
 0.7.0 (05/05/2023)
 ------------------
