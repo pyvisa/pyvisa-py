@@ -134,7 +134,7 @@ class TCPIPInstrHiSLIP(Session):
         else:
             sub_address = self.parsed.lan_device_name
             port = 4880
-        self.interface: hislip.Instrument = hislip.Instrument(
+        self.interface = hislip.Instrument(
             self.parsed.host_address,
             timeout=self.timeout,
             port=port,
@@ -453,9 +453,7 @@ class TCPIPInstrVxi11(Session):
         else:
             port = None
         try:
-            self.interface: Vxi11CoreClient = Vxi11CoreClient(
-                host_address, port, self.open_timeout
-            )
+            self.interface = Vxi11CoreClient(host_address, port, self.open_timeout)
         except rpc.RPCError:
             raise errors.VisaIOError(constants.VI_ERROR_RSRC_NFOUND)
 
@@ -845,7 +843,7 @@ class TCPIPInstrVicp(Session):
         else:
             port = 1861
 
-        self.interface: pyvicp.Client = pyvicp.Client(
+        self.interface = pyvicp.Client(
             self.parsed.host_address, port, timeout=self.timeout
         )
 
@@ -1088,9 +1086,7 @@ class TCPIPSocketSession(Session):
     def _connect(self) -> StatusCode:
         timeout = self.open_timeout / 1000.0 if self.open_timeout else 10.0
         try:
-            self.interface: socket.socket = socket.socket(
-                socket.AF_INET, socket.SOCK_STREAM
-            )
+            self.interface = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.interface.setblocking(False)
             self.interface.connect_ex((self.parsed.host_address, int(self.parsed.port)))
         except Exception as e:
