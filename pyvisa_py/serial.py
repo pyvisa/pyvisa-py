@@ -34,13 +34,6 @@ except ImportError as e:
 IS_WIN = sys.platform == "win32"
 
 
-def iter_bytes(
-    data: bytes, mask: Optional[int] = None, send_end: Optional[bool] = False
-):
-    """Wrapper around new ``common.iter_bytes`` that supports old API."""
-    return common.iter_bytes(data=data, data_bits=mask, send_end=send_end)
-
-
 def to_state(boolean_input: bool) -> constants.LineState:
     """Convert a boolean input into a LineState value."""
     if boolean_input:
