@@ -1146,7 +1146,7 @@ class TCPIPSocketSession(Session):
             chunk_length = self.max_recv_size
 
         term_char, _ = self.get_attribute(ResourceAttribute.termchar)
-        term_byte = common.int_to_byte(term_char) if term_char else b""
+        term_byte = common.int_to_byte(term_char) if term_char is not None else b""
         term_char_en, _ = self.get_attribute(ResourceAttribute.termchar_enabled)
         suppress_end_en, _ = self.get_attribute(ResourceAttribute.suppress_end_enabled)
 
@@ -1345,9 +1345,9 @@ class TCPIPSocketSession(Session):
             self.interface.setsockopt(
                 socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1 if attribute_state else 0
             )
-            self.interface.sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, 60)
-            self.interface.sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, 60)
-            self.interface.sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 5)
+            self.interface.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, 60)
+            self.interface.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, 60)
+            self.interface.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 5)
             return StatusCode.success
         return StatusCode.error_nonsupported_attribute
 

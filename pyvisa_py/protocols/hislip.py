@@ -400,7 +400,6 @@ class Instrument:
         self.keepalive = False
         self.timeout = timeout
         self._rmt = 0
-        self._expected_message_id: Optional[int] = None
         self._message_id = 0xFFFF_FF00
         self._last_message_id: Optional[int] = None
         self._msg_type: str = ""
@@ -434,6 +433,18 @@ class Instrument:
     @max_msg_size.setter
     def max_msg_size(self, size: int) -> None:
         self._max_msg_size = self.async_maximum_message_size(size)
+
+    @property
+    def last_message_id(self) -> Optional[int]:
+        return self._last_message_id
+
+    @last_message_id.setter
+    def last_message_id(self, message_id: Optional[int]) -> None:
+        """Re-set last message id and related attributes"""
+        self._last_message_id = message_id
+        self._rmt = 0
+        self._payload_remaining = 0
+        self._msg_type = ""
 
     @property
     def keepalive(self) -> bool:
@@ -487,12 +498,6 @@ class Instrument:
         """
 
         # print(f"receive({max_len=})")  # uncomment for debugging
-        # if we aren't already receiving, initialize the _expected_message_id
-        # and the payload length
-        if self._expected_message_id is None:
-            self._expected_message_id = self._last_message_id
-            self._msg_type = ""
-            self._payload_remaining = 0
 
         # receive data, terminating after len(recv_buffer) bytes or
         # after receiving a DataEnd message.
@@ -521,8 +526,7 @@ class Instrument:
         if bytes_recvd > max_len:
             raise MemoryError("scribbled past end of recv_buffer")
 
-        # if there is no data remaining, set the RMT flag and set the
-        # _expected_message_id to None
+        # if there is no data remaining, set the RMT flag
         if self._payload_remaining == 0 and self._msg_type == "DataEnd":
             #
             # From IEEE Std 488.2: Response Message Terminator.
@@ -532,7 +536,6 @@ class Instrument:
             # this is implied by the DataEND message.
             #
             self._rmt = 1
-            self._expected_message_id = None
 
         return recv_buffer
 
@@ -555,7 +558,7 @@ class Instrument:
 
                 if (
                     header.message_parameter == 0xFFFF_FFFF
-                    or header.message_parameter == self._expected_message_id
+                    or header.message_parameter == self.last_message_id
                 ):
                     break
 
@@ -655,7 +658,7 @@ class Instrument:
         #     C->S: AsyncLock
         #     S->C: AsyncLockResponse
         ctrl_code = LOCKCONTROLCODE["release"]
-        send_msg(self._async, "AsyncLock", ctrl_code, self._last_message_id)
+        send_msg(self._async, "AsyncLock", ctrl_code, self.last_message_id)
         response = AsyncLockResponse(self._async)
         return response.lock_response
 
@@ -668,7 +671,7 @@ class Instrument:
         #     S->C: AsyncRemoteLocalResponse
         ctrl_code = REMOTELOCALCONTROLCODE[remotelocalcontrol]
         send_msg(
-            self._async, "AsyncRemoteLocalControl", ctrl_code, self._last_message_id
+            self._async, "AsyncRemoteLocalControl", ctrl_code, self.last_message_id
         )
         AsyncRemoteLocalResponse(self._async)
 
@@ -706,22 +709,19 @@ class Instrument:
     def trigger(self) -> None:
         """send a Trigger packet on the sync channel"""
         send_msg(self._sync, "Trigger", self._rmt, self._message_id)
-        self._rmt = 0
-        self._last_message_id = self._message_id
+        self.last_message_id = self._message_id
         self._message_id = (self._message_id + 2) & 0xFFFF_FFFF
 
     def _send_data_packet(self, payload: bytes) -> None:
         """send a Data packet on the sync channel"""
         send_msg(self._sync, "Data", self._rmt, self._message_id, payload)
-        self._rmt = 0
-        self._last_message_id = self._message_id
+        self.last_message_id = self._message_id
         self._message_id = (self._message_id + 2) & 0xFFFF_FFFF
 
     def _send_data_end_packet(self, payload: bytes) -> None:
         """send a DataEnd packet on the sync channel"""
         send_msg(self._sync, "DataEnd", self._rmt, self._message_id, payload)
-        self._rmt = 0
-        self._last_message_id = self._message_id
+        self.last_message_id = self._message_id
         self._message_id = (self._message_id + 2) & 0xFFFF_FFFF
 
     def fatal_error(self, error: str, error_message: str = "") -> None:
