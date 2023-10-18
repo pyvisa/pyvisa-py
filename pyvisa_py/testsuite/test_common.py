@@ -1,6 +1,7 @@
 from typing import List, Optional
 
 import pytest
+
 from pyvisa_py import common
 
 

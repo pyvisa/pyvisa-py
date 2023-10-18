@@ -7,7 +7,7 @@
 
 """
 import sys
-from typing import Any, List, Optional, Tuple
+from typing import Any, List, Tuple
 
 from pyvisa import attributes, constants, logger, rname
 from pyvisa.constants import (
