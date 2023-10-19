@@ -7,7 +7,7 @@
 
 """
 import sys
-from typing import Any, List, Optional, Tuple
+from typing import Any, List, Tuple
 
 from pyvisa import attributes, constants, logger, rname
 from pyvisa.constants import (
@@ -32,24 +32,6 @@ except ImportError as e:
     raise
 
 IS_WIN = sys.platform == "win32"
-
-
-def iter_bytes(data: bytes, mask: Optional[int] = None, send_end: bool = False):
-    if send_end and mask is None:
-        raise ValueError("send_end requires a valid mask.")
-
-    if mask is None:
-        for d in data:
-            yield bytes([d])
-
-    else:
-        for d in data[:-1]:
-            yield bytes([d & ~mask])
-
-        if send_end:
-            yield bytes([data[-1] | ~mask])
-        else:
-            yield bytes([data[-1] & ~mask])
 
 
 def to_state(boolean_input: bool) -> constants.LineState:
@@ -184,20 +166,20 @@ class SerialSession(Session):
 
         """
         logger.debug("Serial.write %r" % data)
-        end_out, _ = self.get_attribute(ResourceAttribute.asrl_end_out)
         send_end, _ = self.get_attribute(ResourceAttribute.send_end_enabled)
+        end_out, _ = self.get_attribute(ResourceAttribute.asrl_end_out)
+        data_bits, _ = self.get_attribute(constants.ResourceAttribute.asrl_data_bits)
 
-        if end_out in (SerialTermination.none, SerialTermination.termination_break):
+        if end_out == SerialTermination.none:
             pass
         elif end_out == SerialTermination.last_bit:
-            last_bit, _ = self.get_attribute(ResourceAttribute.asrl_data_bits)
-            mask = 1 << (last_bit - 1)
-            data = bytes(iter_bytes(data, mask, send_end))
-
+            data = b"".join(common.iter_bytes(data, data_bits, send_end))
         elif end_out == SerialTermination.termination_char:
             term_char, _ = self.get_attribute(ResourceAttribute.termchar)
+            data = b"".join(common.iter_bytes(data, data_bits, send_end=None))
             data = data + common.int_to_byte(term_char)
-
+        elif end_out == SerialTermination.termination_break:
+            data = b"".join(common.iter_bytes(data, data_bits, send_end=None))
         else:
             raise ValueError("Unknown value for VI_ATTR_ASRL_END_OUT: %s" % end_out)
 
