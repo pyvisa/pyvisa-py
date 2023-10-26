@@ -4,7 +4,7 @@ PyVISA-py Changelog
 0.7.1 (unreleased)
 ------------------
 
-- addd URL-support to ASLR devices PR #386
+- add URL-support to ASLR devices PR #386
 - add support for GPIB secondary addresses
 - fix missing sock.close() in rpc _connect()
 - Adjusted how `iter_bytes` works to be more accurate to the VISA spec and removed
@@ -12,6 +12,7 @@ PyVISA-py Changelog
 - fix HiSLIP message tracking after read timeout PR #376
 - handle read_termination of null in tcipip PR #394
 - fix tcpip keepalive PR #396
+- store more attributes for USB resources PR #399
 
 0.7.0 (05/05/2023)
 ------------------
