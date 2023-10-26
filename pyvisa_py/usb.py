@@ -84,6 +84,15 @@ class USBSession(Session):
             self.parsed.serial_number,
         )
 
+        self.attrs.update(
+            {
+                "VI_ATTR_MANF_ID": int(self.parsed.manufacturer_id, 0),
+                "VI_ATTR_MODEL_CODE": int(self.parsed.model_code, 0),
+                "VI_ATTR_USB_SERIAL_NUM": self.parsed.serial_number,
+                "VI_ATTR_USB_INTFC_NUM": int(self.parsed.usb_interface_number),
+            }
+        )
+
         for name in ("SEND_END_EN", "SUPPRESS_END_EN", "TERMCHAR", "TERMCHAR_EN"):
             attribute = getattr(constants, "VI_ATTR_" + name)
             self.attrs[attribute] = attributes.AttributesByID[attribute].default
