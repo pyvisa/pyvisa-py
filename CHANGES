@@ -1,7 +1,7 @@
 PyVISA-py Changelog
 ===================
 
-0.7.1 (unreleased)
+0.7.1 (26/10/2023)
 ------------------
 
 - add URL-support to ASLR devices PR #386
