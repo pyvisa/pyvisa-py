@@ -84,13 +84,31 @@ class USBSession(Session):
             self.parsed.serial_number,
         )
 
-        for name in ("SEND_END_EN", "SUPPRESS_END_EN", "TERMCHAR", "TERMCHAR_EN"):
+        self.attrs.update(
+            {
+                ResourceAttribute.manufacturer_id: int(self.parsed.manufacturer_id, 0),
+                ResourceAttribute.model_code: int(self.parsed.model_code, 0),
+                ResourceAttribute.usb_serial_number: self.parsed.serial_number,
+                ResourceAttribute.usb_interface_number: int(
+                    self.parsed.usb_interface_number
+                ),
+            }
+        )
+
+        for name, attr in (
+            ("SEND_END_EN", ResourceAttribute.send_end_enabled),
+            ("SUPPRESS_END_EN", ResourceAttribute.suppress_end_enabled),
+            ("TERMCHAR", ResourceAttribute.termchar),
+            ("TERMCHAR_EN", ResourceAttribute.termchar_enabled),
+        ):
             attribute = getattr(constants, "VI_ATTR_" + name)
-            self.attrs[attribute] = attributes.AttributesByID[attribute].default
+            self.attrs[attr] = attributes.AttributesByID[attribute].default
 
         # Force setting the timeout to get the proper value
-        attribute = constants.VI_ATTR_TMO_VALUE
-        self.set_attribute(attribute, attributes.AttributesByID[attribute].default)
+        self.set_attribute(
+            ResourceAttribute.timeout_value,
+            attributes.AttributesByID[attribute].default,
+        )
 
     def _get_timeout(self, attribute: ResourceAttribute) -> Tuple[int, StatusCode]:
         if self.interface:
