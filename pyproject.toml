@@ -34,11 +34,11 @@ classifiers = [
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
 ]
 dependencies = [
     "pyvisa>=1.13.0",
     "typing_extensions",
-    "importlib-metadata; python_version<'3.8'",
 ]
 dynamic=["version"]
 
