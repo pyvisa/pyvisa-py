@@ -7,8 +7,8 @@ See: RFC 1014
 """
 
 import struct
-from io import BytesIO
 from functools import wraps
+from io import BytesIO
 
 __all__ = ["Error", "Packer", "Unpacker", "ConversionError"]
 
