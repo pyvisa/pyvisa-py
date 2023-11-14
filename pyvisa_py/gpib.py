@@ -15,8 +15,8 @@ from pyvisa import attributes, constants, logger
 from pyvisa.constants import ResourceAttribute, StatusCode
 from pyvisa.rname import GPIBInstr, GPIBIntfc
 
-from .sessions import Session, UnknownAttribute
 from .common import int_to_byte
+from .sessions import Session, UnknownAttribute
 
 try:
     GPIB_CTYPES = True
@@ -512,13 +512,18 @@ class _GPIBCommon(Session):
                 # Only fro INSTR hence sel.interface exists
                 self.interface.ibloc()
             elif mode == constants.VI_GPIB_REN_ASSERT_ADDRESS_LLO:
+                assert isinstance(self.parsed, GPIBInstr)
                 # Make the board the controller, unlisten all devices, address
                 # the target device and send LLO
                 # Closely inspired from linux-glib implementation of ibloc but
                 # in the VISA spec the board cannot have a secondary address
                 board_pad = int(self.controller.ask(0x1))  # Request PAD of controller
                 device_pad = int(self.parsed.primary_address)
-                device_sad = int(self.parsed.secondary_address)
+                device_sad = (
+                    int(self.parsed.secondary_address)
+                    if self.parsed.secondary_address is not None
+                    else 0
+                )
                 self.controller.command(
                     GPIBCommand.MTA(board_pad)
                     + GPIBCommand.UNL
@@ -537,7 +542,11 @@ class _GPIBCommon(Session):
                 ):
                     # Address the specified device,
                     device_pad = int(self.parsed.primary_address)
-                    device_sad = int(self.parsed.secondary_address)
+                    device_sad = (
+                        int(self.parsed.secondary_address)
+                        if self.parsed.secondary_address is not None
+                        else 0
+                    )
                     self.controller.command(
                         GPIBCommand.UNL
                         + GPIBCommand.MLA(device_pad)
