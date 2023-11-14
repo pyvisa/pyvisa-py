@@ -418,9 +418,11 @@ class _GPIBCommon(Session):
         ifc = self.interface or self.controller
 
         # END 0x2000
-        checker = lambda current: ifc.ibsta() & 0x2000
+        def checker(current):
+            return ifc.ibsta() & 0x2000
 
-        reader = lambda: ifc.read(count)
+        def reader():
+            return lambda: ifc.read(count)
 
         return self._read(reader, count, checker, False, None, False, gpib.GpibError)
 
@@ -514,9 +516,9 @@ class _GPIBCommon(Session):
                 # the target device and send LLO
                 # Closely inspired from linux-glib implementation of ibloc but
                 # in the VISA spec the board cannot have a secondary address
-                board_pad = int(self.controller.parsed.primary_address)
-                device_pad = int(self.interface.parsed.primary_address)
-                device_sad = int(self.interface.parsed.secondary_address)
+                board_pad = int(self.controller.ask(0x1))  # Request PAD of controller
+                device_pad = int(self.parsed.primary_address)
+                device_sad = int(self.parsed.secondary_address)
                 self.controller.command(
                     GPIBCommand.MTA(board_pad)
                     + GPIBCommand.UNL
@@ -533,9 +535,9 @@ class _GPIBCommon(Session):
                     isinstance(self.parsed, GPIBInstr)
                     and mode == constants.VI_GPIB_REN_ASSERT_ADDRESS
                 ):
-                    # Address teh specified device,
-                    device_pad = int(self.interface.parsed.primary_address)
-                    device_sad = int(self.interface.parsed.secondary_address)
+                    # Address the specified device,
+                    device_pad = int(self.parsed.primary_address)
+                    device_sad = int(self.parsed.secondary_address)
                     self.controller.command(
                         GPIBCommand.UNL
                         + GPIBCommand.MLA(device_pad)
