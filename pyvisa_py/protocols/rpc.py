@@ -23,9 +23,9 @@ import socket
 import struct
 import sys
 import time
-import xdrlib
 
 from ..common import logger
+from . import xdrlib
 
 #: Version of the protocol
 RPCVERSION = 2
