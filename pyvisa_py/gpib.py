@@ -12,6 +12,7 @@ from typing import Any, Iterator, List, Tuple, Union
 
 from pyvisa import attributes, constants, logger
 from pyvisa.constants import ResourceAttribute, StatusCode
+from pyvisa.resources.gpib import GPIBCommand
 from pyvisa.rname import GPIBInstr, GPIBIntfc
 
 from .sessions import Session, UnknownAttribute
@@ -385,9 +386,11 @@ class _GPIBCommon(Session):
         ifc = self.interface or self.controller
 
         # END 0x2000
-        checker = lambda current: ifc.ibsta() & 0x2000
+        def checker(current):
+            return ifc.ibsta() & 0x2000
 
-        reader = lambda: ifc.read(count)
+        def reader():
+            return lambda: ifc.read(count)
 
         return self._read(reader, count, checker, False, None, False, gpib.GpibError)
 
@@ -449,12 +452,16 @@ class _GPIBCommon(Session):
             ):
                 return constants.StatusCode.error_nonsupported_operation
 
-        # INTFC don't have an interface so use the controller
-        ifc = self.interface or self.controller
+        # Commands and remote enable operation are common to the whole bus and
+        # are hence handled by the board (ie self.controller)
         try:
             if mode == constants.VI_GPIB_REN_DEASSERT_GTL:
-                # Send GTL command byte (cf linux-gpib documentation)
-                ifc.command(chr(1))
+                # Make the instrument Go To Local
+                # Using ibloc is a nice way to avoid manually sending all the
+                # right commands but under the hood it does send GTL to the
+                # proper device.
+                # Only for INSTR hence sel.interface exists
+                self.interface.ibloc()
             if mode in (
                 constants.VI_GPIB_REN_DEASSERT,
                 constants.VI_GPIB_REN_DEASSERT_GTL,
@@ -462,25 +469,56 @@ class _GPIBCommon(Session):
                 self.controller.remote_enable(0)
 
             if mode == constants.VI_GPIB_REN_ASSERT_LLO:
-                # LLO
-                ifc.command(b"0x11")
+                # Send LLO to all devices addressed to listen as per the
+                # specification.
+                self.controller.command(b"\x11")
             elif mode == constants.VI_GPIB_REN_ADDRESS_GTL:
-                # GTL
-                ifc.command(b"0x1")
+                # Make the instrument Go To Local
+                # Using ibloc is a nice way to avoid manually sending all the
+                # right commands but under the hood it does send GTL to the
+                # proper device.
+                # Only fro INSTR hence sel.interface exists
+                self.interface.ibloc()
             elif mode == constants.VI_GPIB_REN_ASSERT_ADDRESS_LLO:
-                pass
+                assert isinstance(self.parsed, GPIBInstr)
+                # Make the board the controller, unlisten all devices, address
+                # the target device and send LLO
+                # Closely inspired from linux-glib implementation of ibloc but
+                # in the VISA spec the board cannot have a secondary address
+                board_pad = int(self.controller.ask(0x1))  # Request PAD of controller
+                device_pad = int(self.parsed.primary_address)
+                device_sad = (
+                    int(self.parsed.secondary_address)
+                    if self.parsed.secondary_address is not None
+                    else 0
+                )
+                self.controller.command(
+                    GPIBCommand.MTA(board_pad)  # type: ignore
+                    + GPIBCommand.UNL
+                    + GPIBCommand.MLA(device_pad)  # type: ignore
+                    + GPIBCommand.MSA(device_sad)  # type: ignore
+                    + GPIBCommand.LLO
+                )
             elif mode in (
                 constants.VI_GPIB_REN_ASSERT,
                 constants.VI_GPIB_REN_ASSERT_ADDRESS,
             ):
-                ifc.remote_enable(1)
+                self.controller.remote_enable(1)
                 if (
                     isinstance(self.parsed, GPIBInstr)
                     and mode == constants.VI_GPIB_REN_ASSERT_ADDRESS
                 ):
-                    # 0 for the secondary address means don't use it
-                    ifc.listener(
-                        self.parsed.primary_address, self.parsed.secondary_address
+                    # Address the specified device,
+                    device_pad = int(self.parsed.primary_address)
+                    device_sad = (
+                        int(self.parsed.secondary_address)
+                        if self.parsed.secondary_address is not None
+                        else 0
+                    )
+                    self.controller.command(
+                        GPIBCommand.UNL
+                        + GPIBCommand.MLA(device_pad)  # type: ignore
+                        + GPIBCommand.MSA(device_sad)  # type: ignore
                     )
         except gpib.GpibError as e:
             return convert_gpib_error(e, self.interface.ibsta(), "perform control REN")

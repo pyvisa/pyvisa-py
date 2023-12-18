@@ -20,7 +20,7 @@ except PackageNotFoundError:
     # package is not installed
     pass
 
-# noqa: we need to import so that __init_subclass__() is executed once
+# We need to import so that __init_subclass__() is executed once
 from . import attributes  # noqa: F401
 from .highlevel import PyVisaLibrary
 
