@@ -14,6 +14,7 @@ from typing import Any, Iterator, List, Tuple, Union
 from pyvisa import attributes, constants, logger
 from pyvisa.constants import ResourceAttribute, StatusCode
 from pyvisa.rname import GPIBInstr, GPIBIntfc
+from pyvisa.resources.gpib import GPIBCommand
 
 from .common import int_to_byte
 from .sessions import Session, UnknownAttribute
@@ -76,37 +77,6 @@ def _patch_Gpib() -> None:
 
 
 _patch_Gpib()
-
-
-class GPIBCommand(bytes, Enum):
-    """GPIB commands to use in send_command."""
-
-    #: GO TO LOCAL affects only addressed devices
-    GTL = b"\x01"
-
-    #: LOCAL LOCKOUT
-    LLO = b"\x11"
-
-    #: UNLISTEN
-    UNL = b"\x3F"
-
-    # Talker
-    @staticmethod
-    def MTA(board_pad) -> bytes:
-        return int_to_byte(40 + board_pad)
-
-    # Listener
-    @staticmethod
-    def MLA(device_pad) -> bytes:
-        return int_to_byte(20 + device_pad)
-
-    # Listener secondary address
-    # for VISA SAD range from 1 to 31 and 0 is not SAD
-    @staticmethod
-    def MSA(device_sad) -> bytes:
-        if device_sad == 0:
-            return b""
-        return int_to_byte(95 + device_sad)
 
 
 def _find_boards() -> Iterator[Tuple[int, int]]:
