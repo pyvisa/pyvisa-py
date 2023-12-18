@@ -493,10 +493,10 @@ class _GPIBCommon(Session):
                     else 0
                 )
                 self.controller.command(
-                    GPIBCommand.MTA(board_pad)
+                    GPIBCommand.MTA(board_pad)  # type: ignore
                     + GPIBCommand.UNL
-                    + GPIBCommand.MLA(device_pad)
-                    + GPIBCommand.MSA(device_sad)
+                    + GPIBCommand.MLA(device_pad)  # type: ignore
+                    + GPIBCommand.MSA(device_sad)  # type: ignore
                     + GPIBCommand.LLO
                 )
             elif mode in (
@@ -517,8 +517,8 @@ class _GPIBCommon(Session):
                     )
                     self.controller.command(
                         GPIBCommand.UNL
-                        + GPIBCommand.MLA(device_pad)
-                        + GPIBCommand.MSA(device_sad)
+                        + GPIBCommand.MLA(device_pad)  # type: ignore
+                        + GPIBCommand.MSA(device_sad)  # type: ignore
                     )
         except gpib.GpibError as e:
             return convert_gpib_error(e, self.interface.ibsta(), "perform control REN")
