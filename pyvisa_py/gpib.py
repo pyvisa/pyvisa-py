@@ -8,7 +8,6 @@
 """
 import ctypes  # Used for missing bindings not ideal
 from bisect import bisect
-from enum import Enum
 from typing import Any, Iterator, List, Tuple, Union
 
 from pyvisa import attributes, constants, logger
@@ -16,7 +15,6 @@ from pyvisa.constants import ResourceAttribute, StatusCode
 from pyvisa.rname import GPIBInstr, GPIBIntfc
 from pyvisa.resources.gpib import GPIBCommand
 
-from .common import int_to_byte
 from .sessions import Session, UnknownAttribute
 
 try:
