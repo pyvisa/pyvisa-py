@@ -12,8 +12,8 @@ from typing import Any, Iterator, List, Tuple, Union
 
 from pyvisa import attributes, constants, logger
 from pyvisa.constants import ResourceAttribute, StatusCode
-from pyvisa.rname import GPIBInstr, GPIBIntfc
 from pyvisa.resources.gpib import GPIBCommand
+from pyvisa.rname import GPIBInstr, GPIBIntfc
 
 from .sessions import Session, UnknownAttribute
 
