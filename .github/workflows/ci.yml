@@ -31,9 +31,9 @@ jobs:
           python -m pip install --upgrade pip
           pip install ruff mypy pytest
           pip install git+https://github.com/pyvisa/pyvisa.git@main
-          - name: Formatting
-          run: |
-            ruff format pyvisa_py --check;
+      - name: Formatting
+        run: |
+          ruff format pyvisa_py --check;
       - name: Linting
         if: always()
         run: |
