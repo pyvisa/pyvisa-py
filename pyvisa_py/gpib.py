@@ -385,9 +385,9 @@ class _GPIBCommon(Session):
         ifc = self.interface or self.controller
 
         # END 0x2000
-        checker = lambda current: ifc.ibsta() & 0x2000
+        checker = lambda current: ifc.ibsta() & 0x2000  # noqa: E731
 
-        reader = lambda: ifc.read(count)
+        reader = lambda: ifc.read(count)  # noqa: E731
 
         return self._read(reader, count, checker, False, None, False, gpib.GpibError)
 

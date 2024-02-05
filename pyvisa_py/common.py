@@ -28,7 +28,8 @@ class NamedObject(object):
     __str__ = __repr__
 
 
-int_to_byte = lambda val: val.to_bytes(1, "big")
+def int_to_byte(val):
+    return val.to_bytes(1, "big")
 
 
 # TODO(anyone): This is copypasta from `pyvisa-sim` project - find a way to

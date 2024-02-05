@@ -5,6 +5,7 @@
 import socket
 
 import pytest
+
 from pyvisa.constants import ResourceAttribute
 from pyvisa.testsuite.keysight_assisted_tests import copy_func, require_virtual_instr
 from pyvisa.testsuite.keysight_assisted_tests.test_tcpip_resources import (

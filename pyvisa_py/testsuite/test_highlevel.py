@@ -7,7 +7,6 @@
 """
 from pyvisa.highlevel import list_backends
 from pyvisa.testsuite import BaseTestCase
-
 from pyvisa_py import highlevel
 
 

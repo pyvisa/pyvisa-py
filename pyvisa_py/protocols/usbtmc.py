@@ -200,8 +200,8 @@ class USBRaw(object):
         elif len(devices) > 1:
             desc = "\n".join(str(dev) for dev in devices)
             raise ValueError(
-                "{} devices found:\n{}\nPlease narrow the search"
-                " criteria".format(len(devices), desc)
+                f"{len(devices)} devices found:\n{desc}\nPlease narrow the search"
+                " criteria"
             )
 
         self.usb_dev = devices[0]
