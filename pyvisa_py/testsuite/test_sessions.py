@@ -9,7 +9,6 @@ import ctypes
 
 from pyvisa.constants import InterfaceType
 from pyvisa.testsuite import BaseTestCase
-
 from pyvisa_py.sessions import Session
 
 
@@ -35,8 +34,8 @@ class TestSessions(BaseTestCase):
         gpibs = [(InterfaceType.gpib, "INSTR"), (InterfaceType.gpib, "INTFC")]
         try:
             try:
-                from gpib_ctypes import gpib  # noqa
-                from gpib_ctypes.Gpib import Gpib  # noqa
+                from gpib_ctypes import gpib
+                from gpib_ctypes.Gpib import Gpib
                 from gpib_ctypes.gpib.gpib import _lib as gpib_lib
             except ImportError:
                 import gpib  # noqa

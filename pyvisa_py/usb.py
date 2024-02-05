@@ -283,25 +283,25 @@ class USBInstrSession(USBSession):
                 )
                 logger.warning(
                     msg,
-                    dict(
-                        board=0,
-                        manufacturer_id=dev.idVendor,
-                        model_code=dev.idProduct,
-                        serial_number="???",
-                        usb_interface_number=intfc,
-                    ),
+                    {
+                        "board": 0,
+                        "manufacturer_id": dev.idVendor,
+                        "model_code": dev.idProduct,
+                        "serial_number": "???",
+                        "usb_interface_number": intfc,
+                    },
                 )
                 continue
 
             out.append(
                 fmt
-                % dict(
-                    board=0,
-                    manufacturer_id=dev.idVendor,
-                    model_code=dev.idProduct,
-                    serial_number=serial,
-                    usb_interface_number=intfc,
-                )
+                % {
+                    "board": 0,
+                    "manufacturer_id": dev.idVendor,
+                    "model_code": dev.idProduct,
+                    "serial_number": serial,
+                    "usb_interface_number": intfc,
+                }
             )
         return out
 
@@ -340,24 +340,24 @@ class USBRawSession(USBSession):
                 )
                 logger.warning(
                     msg,
-                    dict(
-                        board=0,
-                        manufacturer_id=dev.idVendor,
-                        model_code=dev.idProduct,
-                        serial_number="???",
-                        usb_interface_number=intfc,
-                    ),
+                    {
+                        "board": 0,
+                        "manufacturer_id": dev.idVendor,
+                        "model_code": dev.idProduct,
+                        "serial_number": "???",
+                        "usb_interface_number": intfc,
+                    },
                 )
                 continue
 
             out.append(
                 fmt
-                % dict(
-                    board=0,
-                    manufacturer_id=dev.idVendor,
-                    model_code=dev.idProduct,
-                    serial_number=serial,
-                    usb_interface_number=intfc,
-                )
+                % {
+                    "board": 0,
+                    "manufacturer_id": dev.idVendor,
+                    "model_code": dev.idProduct,
+                    "serial_number": serial,
+                    "usb_interface_number": intfc,
+                }
             )
         return out

@@ -6,6 +6,7 @@
 
 """
 import pytest
+
 from pyvisa import ResourceManager
 from pyvisa.testsuite import BaseTestCase
 

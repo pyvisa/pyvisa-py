@@ -3,6 +3,7 @@
 
 """
 import pytest
+
 from pyvisa.rname import ResourceName
 from pyvisa.testsuite.keysight_assisted_tests import (
     RESOURCE_ADDRESSES,

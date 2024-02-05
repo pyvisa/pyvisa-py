@@ -120,19 +120,19 @@ class SerialSession(Session):
         end_in, _ = self.get_attribute(ResourceAttribute.asrl_end_in)
         suppress_end_en, _ = self.get_attribute(ResourceAttribute.suppress_end_enabled)
 
-        reader = lambda: self.interface.read(1)
+        reader = lambda: self.interface.read(1)  # noqa: E731
 
         if end_in == SerialTermination.none:
-            checker = lambda current: False
+            checker = lambda current: False  # noqa: E731
 
         elif end_in == SerialTermination.last_bit:
             mask = 2**self.interface.bytesize
-            checker = lambda current: bool(current[-1] & mask)
+            checker = lambda current: bool(current[-1] & mask)  # noqa: E731
 
         elif end_in == SerialTermination.termination_char:
             end_char, _ = self.get_attribute(ResourceAttribute.termchar)
 
-            checker = lambda current: current[-1] == end_char
+            checker = lambda current: current[-1] == end_char  # noqa: E731
 
         else:
             raise ValueError("Unknown value for VI_ATTR_ASRL_END_IN: %s" % end_in)
@@ -231,7 +231,7 @@ class SerialSession(Session):
 
         return StatusCode.success
 
-    def _get_attribute(
+    def _get_attribute(  # noqa: C901
         self, attribute: constants.ResourceAttribute
     ) -> Tuple[Any, StatusCode]:
         """Get the value for a given VISA attribute for this session.
@@ -337,7 +337,7 @@ class SerialSession(Session):
 
         raise UnknownAttribute(attribute)
 
-    def _set_attribute(
+    def _set_attribute(  # noqa: C901
         self, attribute: constants.ResourceAttribute, attribute_state: Any
     ) -> StatusCode:
         """Sets the state of an attribute.
