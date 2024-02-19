@@ -113,7 +113,9 @@ class BulkInMessage(
         msgid, btag, btaginverse = struct.unpack_from("BBBx", data)
         if msgid != MsgID.dev_dep_msg_in:
             warnings.warn(
-                "Unexpected MsgID format. Consider updating the device's firmware. See https://github.com/pyvisa/pyvisa-py/issues/20"
+                "Unexpected MsgID format. Consider updating the device's firmware. "
+                "See https://github.com/pyvisa/pyvisa-py/issues/20"
+                f"Expected message id was {MsgID.dev_dep_msg_in}, got {msgid}."
             )
             return BulkInMessage.from_quirky(data)
 
