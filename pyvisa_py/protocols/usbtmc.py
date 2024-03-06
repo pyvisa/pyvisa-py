@@ -298,9 +298,6 @@ class USBRaw(object):
 
 
 class USBTMC(USBRaw):
-    # Maximum number of bytes per transfer (for sending and receiving).
-    RECV_CHUNK = 1024**2
-
     find_devices = staticmethod(find_tmc_devices)
 
     def __init__(self, vendor=None, product=None, serial_number=None, **kwargs):
@@ -403,7 +400,7 @@ class USBTMC(USBRaw):
             return
 
         # Read remaining data from Bulk-IN endpoint.
-        self.usb_recv_ep.read(self.RECV_CHUNK, abort_timeout_ms)
+        self.usb_recv_ep.read(self.usb_recv_ep.wMaxPacketSize, abort_timeout_ms)
 
         # Send CHECK_ABORT_BULK_IN_STATUS until it completes.
         # According to USBTMC 1.00 4.2.1.5:
@@ -443,7 +440,7 @@ class USBTMC(USBRaw):
         # Set the EOM flag on the last transfer only.
         # Send at least one transfer (possibly empty).
         while (end == 0) or (end < size):
-            begin, end = end, begin + self.RECV_CHUNK
+            begin, end = end, begin + self.usb_send_ep.wMaxPacketSize
 
             self._btag = (self._btag % 255) + 1
 
@@ -455,12 +452,12 @@ class USBTMC(USBRaw):
         return size
 
     def read(self, size):
-        recv_chunk = self.RECV_CHUNK
-        if size > 0 and size < recv_chunk:
-            recv_chunk = size
-
         header_size = 12
         max_padding = 511
+        recv_chunk = self.usb_recv_ep.wMaxPacketSize - header_size
+
+        if size > 0 and size < recv_chunk:
+            recv_chunk = size
 
         eom = False
 
