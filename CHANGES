@@ -1,10 +1,10 @@
 PyVISA-py Changelog
 ===================
 
-0.7.2 (unreleased)
+0.7.2 (07/03/2024)
 ------------------
 
-- fix usbtmc to use MaxPacketSize reported by endpoint
+- fix usbtmc to use MaxPacketSize reported by endpoint PR #417
 
 0.7.1 (26/10/2023)
 ------------------
