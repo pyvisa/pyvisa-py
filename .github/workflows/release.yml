@@ -103,6 +103,7 @@ jobs:
         with:
           pattern: artifact-*
           path: dist
+          merge-multiple: true
 
       - uses: pypa/gh-action-pypi-publish@master
         with:
