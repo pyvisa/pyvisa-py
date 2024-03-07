@@ -97,7 +97,7 @@ class BulkOutMessage(object):
 class BulkInMessage(
     namedtuple(
         "BulkInMessage",
-        "msgid btag btaginverse " "transfer_size transfer_attributes data",
+        "msgid btag btaginverse transfer_size transfer_attributes data",
     )
 ):
     """The Host uses the Bulk-IN endpoint to read USBTMC response messages from
