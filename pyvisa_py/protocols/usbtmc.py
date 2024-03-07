@@ -10,6 +10,7 @@ This file is an offspring of the Lantz Project.
 :license: MIT, see LICENSE for more details.
 
 """
+
 import enum
 import struct
 import time

@@ -6,6 +6,7 @@
 :license: MIT, see LICENSE for more details.
 
 """
+
 import random
 from collections import OrderedDict
 from typing import Any, Dict, Iterable, List, Optional, Tuple, Union, cast

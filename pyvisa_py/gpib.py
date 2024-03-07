@@ -6,6 +6,7 @@
 :license: MIT, see LICENSE for more details.
 
 """
+
 import ctypes  # Used for missing bindings not ideal
 from bisect import bisect
 from typing import Any, Iterator, List, Tuple, Union

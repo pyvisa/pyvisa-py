@@ -6,6 +6,7 @@
 :license: MIT, see LICENSE for more details.
 
 """
+
 import sys
 from typing import Any, List, Tuple
 

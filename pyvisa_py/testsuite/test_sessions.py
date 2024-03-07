@@ -5,6 +5,7 @@
 :license: MIT, see LICENSE for more details.
 
 """
+
 import ctypes
 
 from pyvisa.constants import InterfaceType
