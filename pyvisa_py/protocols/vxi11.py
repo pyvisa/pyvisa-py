@@ -9,6 +9,7 @@ This file is an offspring of the Lantz project.
 :license: MIT, see LICENSE for more details.
 
 """
+
 import enum
 import socket
 

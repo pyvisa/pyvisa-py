@@ -10,6 +10,7 @@ This file is an offspring of the Lantz Project.
 :license: MIT, see LICENSE for more details.
 
 """
+
 import enum
 import struct
 import time
@@ -97,7 +98,7 @@ class BulkOutMessage(object):
 class BulkInMessage(
     namedtuple(
         "BulkInMessage",
-        "msgid btag btaginverse " "transfer_size transfer_attributes data",
+        "msgid btag btaginverse transfer_size transfer_attributes data",
     )
 ):
     """The Host uses the Bulk-IN endpoint to read USBTMC response messages from
@@ -113,7 +114,9 @@ class BulkInMessage(
         msgid, btag, btaginverse = struct.unpack_from("BBBx", data)
         if msgid != MsgID.dev_dep_msg_in:
             warnings.warn(
-                "Unexpected MsgID format. Consider updating the device's firmware. See https://github.com/pyvisa/pyvisa-py/issues/20"
+                "Unexpected MsgID format. Consider updating the device's firmware. "
+                "See https://github.com/pyvisa/pyvisa-py/issues/20"
+                f"Expected message id was {MsgID.dev_dep_msg_in}, got {msgid}."
             )
             return BulkInMessage.from_quirky(data)
 

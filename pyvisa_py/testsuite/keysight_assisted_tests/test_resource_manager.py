@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
-"""Test the Resource manager.
+"""Test the Resource manager."""
 
-"""
 import pytest
 
 from pyvisa.rname import ResourceName

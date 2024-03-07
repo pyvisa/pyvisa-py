@@ -6,6 +6,7 @@
 :license: MIT, see LICENSE for more details.
 
 """
+
 import abc
 import time
 from typing import (

@@ -17,6 +17,7 @@ Original source:
 :license: MIT, see LICENSE for more details.
 
 """
+
 import enum
 import select
 import socket

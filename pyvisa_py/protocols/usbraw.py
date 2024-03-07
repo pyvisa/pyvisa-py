@@ -10,6 +10,7 @@ This file is an offspring of the Lantz Project.
 :license: MIT, see LICENSE for more details.
 
 """
+
 from .usbtmc import USBRaw as USBRaw
 from .usbutil import find_devices, find_interfaces
 

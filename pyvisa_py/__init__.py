@@ -6,6 +6,7 @@
 :license: MIT, see LICENSE for more details.
 
 """
+
 import sys
 
 if sys.version_info >= (3, 8):

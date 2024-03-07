@@ -5,6 +5,7 @@
 :license: MIT, see LICENSE for more details.
 
 """
+
 import logging
 from typing import Iterator, Optional
 

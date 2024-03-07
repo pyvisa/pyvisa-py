@@ -11,6 +11,7 @@ This file is an offspring of the Lantz Project.
 :license: MIT, see LICENSE for more details.
 
 """
+
 from fnmatch import fnmatch
 
 import usb
