@@ -58,3 +58,4 @@ Or get the code in GitHub_.
 .. _GitHub: https://github.com/pyvisa/pyvisa-py
 .. _`issue tracker`: https://github.com/pyvisa/pyvisa-py/issues
 
+If looking for a no-code GUI for PyVISA-py test automation, please see the [Flojoy project](https://github.com/flojoy-ai/studio)
