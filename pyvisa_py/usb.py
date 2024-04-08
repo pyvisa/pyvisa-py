@@ -316,7 +316,7 @@ class USBInstrSession(USBSession):
                         missing_perms.append("write to")
                     missing_perms_str = " or ".join(missing_perms)
                     logger.warning(
-                        "User does not have permission to %s %s, so the above USBTMC"
+                        "User does not have permission to %s %s, so the above USB INSTR"
                         " device cannot be used by pyvisa; see"
                         " https://pyvisa.readthedocs.io/projects/pyvisa-py/en/latest/faq.html"
                         " for more info.",
