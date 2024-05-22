@@ -13,7 +13,7 @@ import select
 import socket
 import time
 import warnings
-from typing import Any, Dict, List, Optional, Tuple, Type
+from typing import Any, Dict, List, Optional, Tuple, Type, cast
 
 from pyvisa import attributes, constants, errors, rname
 from pyvisa.constants import BufferOperation, ResourceAttribute, StatusCode
@@ -311,9 +311,9 @@ class TCPIPInstrHiSLIP(Session):
 
         """
 
-        self.interface: hislip.Instrument
+        interface = cast(hislip.Instrument, self.interface)
         # According to IVI-6.1 Rev.2 status query corresponds to viReadSTB.
-        stb = self.interface.async_status_query()
+        stb = interface.async_status_query()
         errorcode = StatusCode.success
 
         return stb, errorcode
