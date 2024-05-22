@@ -297,6 +297,27 @@ class TCPIPInstrHiSLIP(Session):
 
         return StatusCode.success
 
+    def read_stb(self) -> Tuple[int, StatusCode]:
+        """Reads a status byte of the service request.
+
+        Corresponds to viReadSTB function of the VISA library.
+
+        Returns
+        -------
+        int
+            Service request status byte
+        StatusCode
+            Return value of the library call.
+
+        """
+
+        self.interface: hislip.Instrument
+        # According to IVI-6.1 Rev.2 status query corresponds to viReadSTB.
+        stb = self.interface.async_status_query()
+        errorcode = StatusCode.success
+
+        return stb, errorcode
+
     def _get_attribute(self, attribute: ResourceAttribute) -> Tuple[Any, StatusCode]:
         """Get the value for a given VISA attribute for this session.
 
