@@ -9,6 +9,7 @@ PyVISA-py Changelog
   Read now reads from usb until a "short packet" has been read
   (see specification), and only expects a header on the first packet received.
 - add support for VI_ATTR_SUPPRESS_END_EN for USB resources PR #449
+- support open_timeout for TCPIP hislip resources PR #430
 
 0.7.2 (07/03/2024)
 ------------------
