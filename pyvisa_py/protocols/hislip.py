@@ -367,6 +367,7 @@ class Instrument:
     def __init__(
         self,
         ip_addr: str,
+        open_timeout: float = 0.0,
         timeout: Optional[float] = None,
         port: int = PORT,
         sub_address: str = "hislip0",
@@ -381,6 +382,7 @@ class Instrument:
 
         # open the synchronous socket and send an initialize packet
         self._sync = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self._sync.settimeout(open_timeout)
         self._sync.connect((ip_addr, port))
         self._sync.settimeout(timeout)
         self._sync.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
