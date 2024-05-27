@@ -1,6 +1,11 @@
 PyVISA-py Changelog
 ===================
 
+0.7.2 (unreleased)
+------------------
+
+- support open_timeout for TCPIP hislip resources PR #430
+
 0.7.2 (07/03/2024)
 ------------------
 
