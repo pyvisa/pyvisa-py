@@ -367,7 +367,7 @@ class Instrument:
     def __init__(
         self,
         ip_addr: str,
-        open_timeout: float = 0.0,
+        open_timeout: float | None = 0.0,
         timeout: Optional[float] = None,
         port: int = PORT,
         sub_address: str = "hislip0",
