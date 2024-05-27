@@ -10,6 +10,7 @@ import ctypes
 
 from pyvisa.constants import InterfaceType
 from pyvisa.testsuite import BaseTestCase
+import pyvisa_py.highlevel
 from pyvisa_py.sessions import Session
 
 
