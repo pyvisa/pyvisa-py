@@ -138,7 +138,7 @@ class TCPIPInstrHiSLIP(Session):
         self.interface = hislip.Instrument(
             self.parsed.host_address,
             open_timeout=(
-                self.open_timeout * 1000
+                self.open_timeout * 1000.0
                 if self.open_timeout is not None
                 else self.open_timeout
             ),
