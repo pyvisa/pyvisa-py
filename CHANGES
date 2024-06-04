@@ -1,10 +1,10 @@
 PyVISA-py Changelog
 ===================
 
-0.7.3 (07/06/2024)
+0.7.3 (unreleased)
 ------------------
 
-- add read_stb method for TCPIP HiSLIP client
+- add read_stb method for TCPIP HiSLIP client PR #429
 
 0.7.2 (07/03/2024)
 ------------------
