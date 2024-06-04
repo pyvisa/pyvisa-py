@@ -13,7 +13,7 @@ import select
 import socket
 import time
 import warnings
-from typing import Any, Dict, List, Optional, Tuple, Type
+from typing import Any, Dict, List, Optional, Tuple, Type, cast
 
 from pyvisa import attributes, constants, errors, rname
 from pyvisa.constants import BufferOperation, ResourceAttribute, StatusCode
@@ -296,6 +296,27 @@ class TCPIPInstrHiSLIP(Session):
         self.interface.device_clear()
 
         return StatusCode.success
+
+    def read_stb(self) -> Tuple[int, StatusCode]:
+        """Reads a status byte of the service request.
+
+        Corresponds to viReadSTB function of the VISA library.
+
+        Returns
+        -------
+        int
+            Service request status byte
+        StatusCode
+            Return value of the library call.
+
+        """
+
+        interface = cast(hislip.Instrument, self.interface)
+        # According to IVI-6.1 Rev.2 status query corresponds to viReadSTB.
+        stb = interface.async_status_query()
+        errorcode = StatusCode.success
+
+        return stb, errorcode
 
     def _get_attribute(self, attribute: ResourceAttribute) -> Tuple[Any, StatusCode]:
         """Get the value for a given VISA attribute for this session.
