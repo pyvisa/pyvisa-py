@@ -26,6 +26,13 @@ visa Resource Manager:
 That's all! Except for **@py**, the code is exactly what you would write to
 using the NI-VISA backend for PyVISA.
 
+Note that some instruments are known to not like pyvista appending a
+line-end marker (CR/LF) to the string, notably with TCPIP resources.
+The symptom would be a Timeout on the ``inst.query`` call above. The
+line end marker can be turned off with::
+
+    >>> inst.write_termination = ''
+
 
 Installation
 ============
