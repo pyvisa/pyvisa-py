@@ -37,7 +37,7 @@ jobs:
       - name: Linting
         if: always()
         run: |
-          ruff pyvisa_py;
+          ruff check pyvisa_py;
       - name: Mypy
         if: always()
         run: |
