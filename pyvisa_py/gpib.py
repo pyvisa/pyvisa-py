@@ -2,7 +2,7 @@
 """GPIB Session implementation using linux-gpib or gpib-ctypes.
 
 
-:copyright: 2015-2020 by PyVISA-py Authors, see AUTHORS for more details.
+:copyright: 2015-2024 by PyVISA-py Authors, see AUTHORS for more details.
 :license: MIT, see LICENSE for more details.
 
 """

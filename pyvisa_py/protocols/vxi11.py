@@ -5,7 +5,7 @@ Based on Python Sun RPC Demo and Alex Forencich python-vx11
 
 This file is an offspring of the Lantz project.
 
-:copyright: 2014-2020 by PyVISA-py Authors, see AUTHORS for more details.
+:copyright: 2014-2024 by PyVISA-py Authors, see AUTHORS for more details.
 :license: MIT, see LICENSE for more details.
 
 """
