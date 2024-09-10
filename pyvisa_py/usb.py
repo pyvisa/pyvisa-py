@@ -305,7 +305,7 @@ class USBInstrSession(USBSession):
                 }
             )
         return out
-    
+
     def read(self, count: int) -> Tuple[bytes, StatusCode]:
         """Reads data from device or interface synchronously.
 
@@ -354,7 +354,6 @@ class USBInstrSession(USBSession):
             term_char_en,
             USBTimeoutException,
         )
-
 
 
 @Session.register(constants.InterfaceType.usb, "RAW")

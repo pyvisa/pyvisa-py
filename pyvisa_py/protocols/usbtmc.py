@@ -481,9 +481,9 @@ class USBTMC(USBRaw):
                 response = BulkInMessage.from_bytes(resp)
                 received.extend(response.data)
                 while len(resp) == self.usb_recv_ep.wMaxPacketSize:
-                    # USBTMC Section 3.3 specifies that the first usb packet 
-                    # must contain the header. the remaining packets do not need 
-                    # the header the message is finished when a "short packet" 
+                    # USBTMC Section 3.3 specifies that the first usb packet
+                    # must contain the header. the remaining packets do not need
+                    # the header the message is finished when a "short packet"
                     # is sent (one whose length is less than wMaxPacketSize)
                     resp = raw_read(recv_chunk + header_size + max_padding)
                     received.extend(resp)
