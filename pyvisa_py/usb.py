@@ -347,7 +347,8 @@ class USBInstrSession(USBSession):
         return self._read(
             _usb_reader,
             count,
-            lambda current: False,  # USBTMC can return partial message (i.e., before the term_char) or have trailing zeros
+            lambda current: False,  # USBTMC can return partial message (i.e.,
+            # before the term_char) or have trailing zeros
             supress_end_en,
             term_char,
             term_char_en,
