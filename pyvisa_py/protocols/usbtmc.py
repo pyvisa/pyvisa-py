@@ -479,12 +479,18 @@ class USBTMC(USBRaw):
             try:
                 resp = raw_read(recv_chunk + header_size + max_padding)
                 response = BulkInMessage.from_bytes(resp)
+                received.extend(response.data)
+                while len(resp) == self.usb_recv_ep.wMaxPacketSize:
+                    # USBTMC Section 3.3 specifies that the first usb packet must contain the header
+                    # the remaining packets do not need the header
+                    # the message is finished when a "short packet" is sent (one whose length is less than wMaxPacketSize)
+                    resp = raw_read(recv_chunk + header_size + max_padding)
+                    received.extend(resp)
             except (usb.core.USBError, ValueError):
                 # Abort failed Bulk-IN operation.
                 self._abort_bulk_in(self._btag)
                 raise
 
-            received.extend(response.data)
 
             # Detect EOM only when device sends all expected bytes.
             if len(response.data) >= response.transfer_size:
