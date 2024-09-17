@@ -165,7 +165,10 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
             parsed.interface_type_const, parsed.resource_class
         )
 
-        sess = cls(session, resource_name, parsed, open_timeout)
+        try:
+            sess = cls(session, resource_name, parsed, open_timeout)
+        except sessions.OpenError as e:
+            return 0, e.error_code
 
         return self._register(sess), StatusCode.success
 

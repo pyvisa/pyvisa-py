@@ -32,6 +32,13 @@ from .common import int_to_byte
 T = TypeVar("T", bound=Type["Session"])
 
 
+class OpenError(Exception):
+    """Custom exception signaling we failed to open a resource."""
+
+    def __init__(self, error_code: int = StatusCode.error_resource_not_found):
+        self.error_code = error_code
+
+
 class UnknownAttribute(Exception):
     """Custom exception signaling a VISA attribute is not supported."""
 
