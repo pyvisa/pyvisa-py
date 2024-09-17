@@ -157,11 +157,6 @@ class USBSession(Session):
 
         supress_end_en, _ = self.get_attribute(ResourceAttribute.suppress_end_enabled)
 
-        if supress_end_en:
-            raise ValueError(
-                "VI_ATTR_SUPPRESS_END_EN == True is currently unsupported by pyvisa-py"
-            )
-
         term_char, _ = self.get_attribute(ResourceAttribute.termchar)
         term_char_en, _ = self.get_attribute(ResourceAttribute.termchar_enabled)
 
@@ -305,6 +300,7 @@ class USBInstrSession(USBSession):
                 }
             )
         return out
+
 
     def read(self, count: int) -> Tuple[bytes, StatusCode]:
         """Reads data from device or interface synchronously.
