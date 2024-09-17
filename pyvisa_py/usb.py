@@ -301,7 +301,6 @@ class USBInstrSession(USBSession):
             )
         return out
 
-
     def read(self, count: int) -> Tuple[bytes, StatusCode]:
         """Reads data from device or interface synchronously.
 
