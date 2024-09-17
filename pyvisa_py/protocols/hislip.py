@@ -1,7 +1,7 @@
 """
 Python implementation of HiSLIP protocol.  Based on the HiSLIP spec:
 
-http://www.ivifoundation.org/downloads/Class%20Specifications/IVI-6.1_HiSLIP-1.1-2011-02-24.pdf
+http://www.ivifoundation.org/downloads/Class%20Specifications/IVI-6.1_HiSLIP-1.1-2024-02-24.pdf
 """
 
 import socket

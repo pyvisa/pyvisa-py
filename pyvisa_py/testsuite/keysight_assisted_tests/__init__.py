@@ -9,7 +9,7 @@ PYVISA_KEYSIGHT_VIRTUAL_INSTR environment value.
 
 See pyvisa/testsuite/keysight_assisted_tests/__init__.py for more details.
 
-:copyright: 2014-2020 by PyVISA-py Authors, see AUTHORS for more details.
+:copyright: 2014-2024 by PyVISA-py Authors, see AUTHORS for more details.
 :license: MIT, see LICENSE for more details.
 
 """
