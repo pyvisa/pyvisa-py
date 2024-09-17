@@ -18,9 +18,10 @@ from typing import Any, Dict, List, Optional, Tuple, Type, cast
 from pyvisa import attributes, constants, errors, rname
 from pyvisa.constants import BufferOperation, ResourceAttribute, StatusCode
 
-from . import common
+from . import common, LOGGER
 from .protocols import hislip, rpc, vxi11
-from .sessions import Session, UnknownAttribute, VISARMSession
+from .sessions import OpenError, Session, UnknownAttribute, VISARMSession
+
 
 # Let psutil be optional dependency
 try:
@@ -135,17 +136,25 @@ class TCPIPInstrHiSLIP(Session):
         else:
             sub_address = self.parsed.lan_device_name
             port = 4880
-        self.interface = hislip.Instrument(
-            self.parsed.host_address,
-            open_timeout=(
-                self.open_timeout * 1000.0
-                if self.open_timeout is not None
-                else self.open_timeout
-            ),
-            timeout=self.timeout,
-            port=port,
-            sub_address=sub_address,
-        )
+
+        try:
+            self.interface = hislip.Instrument(
+                self.parsed.host_address,
+                open_timeout=(
+                    self.open_timeout * 1000.0
+                    if self.open_timeout is not None
+                    else self.open_timeout
+                ),
+                timeout=self.timeout,
+                port=port,
+                sub_address=sub_address,
+            )
+        except OSError as e:
+            LOGGER.exception(
+                f"Failed to open HiSLIP connection to {self.parsed.host_address} "
+                f"on port {port} with lan device name {sub_address}"
+            )
+            raise OpenError() from e
 
         # initialize the constant attributes
         self.attrs[ResourceAttribute.dma_allow_enabled] = constants.VI_FALSE
@@ -482,7 +491,10 @@ class TCPIPInstrVxi11(Session):
         try:
             self.interface = Vxi11CoreClient(host_address, port, self.open_timeout)
         except rpc.RPCError:
-            raise errors.VisaIOError(constants.VI_ERROR_RSRC_NFOUND)
+            LOGGER.exception(
+                f"Failed to open VX11 connection to {host_address} on port {port}"
+            )
+            raise OpenError()
 
         # vxi11 expect all timeouts to be expressed in ms and should be integers
         self.lock_timeout = 10000
@@ -511,7 +523,7 @@ class TCPIPInstrVxi11(Session):
         try:
             self.interface.destroy_link(self.link)
         except (errors.VisaIOError, socket.error, rpc.RPCError) as e:
-            print("Error closing VISA link: {}".format(e))
+            LOGGER.error("Error closing VISA link: {}".format(e))
 
         self.interface.close()
         self.link = 0
@@ -870,9 +882,16 @@ class TCPIPInstrVicp(Session):
         else:
             port = 1861
 
-        self.interface = pyvicp.Client(
-            self.parsed.host_address, port, timeout=self.timeout
-        )
+        try:
+            self.interface = pyvicp.Client(
+                self.parsed.host_address, port, timeout=self.timeout
+            )
+        except OSError as e:
+            LOGGER.exception(
+                f"Failed to open VICP connection to {self.parsed.host_address} "
+                f"on port {port}"
+            )
+            raise OpenError() from e
 
         # initialize the constant attributes
         for name in ("SEND_END_EN", "TERMCHAR", "TERMCHAR_EN"):

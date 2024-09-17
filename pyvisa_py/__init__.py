@@ -7,7 +7,10 @@
 
 """
 
+import logging
 from importlib.metadata import PackageNotFoundError, version
+
+LOGGER = logging.getLogger("pyvisa.pyvisa-py")
 
 __version__ = "unknown"
 try:
