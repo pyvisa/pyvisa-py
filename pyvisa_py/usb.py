@@ -301,55 +301,6 @@ class USBInstrSession(USBSession):
             )
         return out
 
-    def read(self, count: int) -> Tuple[bytes, StatusCode]:
-        """Reads data from device or interface synchronously.
-
-        Corresponds to viRead function of the VISA library.
-
-        Parameters
-        -----------
-        count : int
-            Number of bytes to be read.
-
-        Returns
-        -------
-        bytes
-            Data read from the device
-        StatusCode
-            Return value of the library call.
-
-        """
-
-        def _usb_reader():
-            """Data reader identifying usb timeout exception."""
-            try:
-                return self.interface.read(count)
-            except usb.USBError as exc:
-                if exc.errno in (errno.ETIMEDOUT, -errno.ETIMEDOUT):
-                    raise USBTimeoutException()
-                raise
-
-        supress_end_en, _ = self.get_attribute(ResourceAttribute.suppress_end_enabled)
-
-        if supress_end_en:
-            raise ValueError(
-                "VI_ATTR_SUPPRESS_END_EN == True is currently unsupported by pyvisa-py"
-            )
-
-        term_char, _ = self.get_attribute(ResourceAttribute.termchar)
-        term_char_en, _ = self.get_attribute(ResourceAttribute.termchar_enabled)
-
-        return self._read(
-            _usb_reader,
-            count,
-            lambda current: False,  # USBTMC can return partial message (i.e.,
-            # before the term_char) or have trailing zeros
-            supress_end_en,
-            term_char,
-            term_char_en,
-            USBTimeoutException,
-        )
-
 
 @Session.register(constants.InterfaceType.usb, "RAW")
 class USBRawSession(USBSession):
