@@ -18,10 +18,9 @@ from typing import Any, Dict, List, Optional, Tuple, Type, cast
 from pyvisa import attributes, constants, errors, rname
 from pyvisa.constants import BufferOperation, ResourceAttribute, StatusCode
 
-from . import common, LOGGER
+from . import LOGGER, common
 from .protocols import hislip, rpc, vxi11
 from .sessions import OpenError, Session, UnknownAttribute, VISARMSession
-
 
 # Let psutil be optional dependency
 try:
