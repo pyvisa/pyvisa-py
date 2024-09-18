@@ -78,7 +78,7 @@ Optionally:
 Installation
 --------------
 
-Using pip:
+Using pip::
 
     $ pip install pyvisa-py
 
