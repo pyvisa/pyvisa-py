@@ -18,7 +18,7 @@ from typing import Any, Dict, List, Optional, Tuple, Type, cast
 from pyvisa import attributes, constants, errors, rname
 from pyvisa.constants import BufferOperation, ResourceAttribute, StatusCode
 
-from . import LOGGER, common
+from . import common
 from .protocols import hislip, rpc, vxi11
 from .sessions import OpenError, Session, UnknownAttribute, VISARMSession
 
@@ -149,7 +149,7 @@ class TCPIPInstrHiSLIP(Session):
                 sub_address=sub_address,
             )
         except OSError as e:
-            LOGGER.exception(
+            common.logger.exception(
                 f"Failed to open HiSLIP connection to {self.parsed.host_address} "
                 f"on port {port} with lan device name {sub_address}"
             )
@@ -490,7 +490,7 @@ class TCPIPInstrVxi11(Session):
         try:
             self.interface = Vxi11CoreClient(host_address, port, self.open_timeout)
         except rpc.RPCError:
-            LOGGER.exception(
+            common.logger.exception(
                 f"Failed to open VX11 connection to {host_address} on port {port}"
             )
             raise OpenError()
@@ -522,7 +522,7 @@ class TCPIPInstrVxi11(Session):
         try:
             self.interface.destroy_link(self.link)
         except (errors.VisaIOError, socket.error, rpc.RPCError) as e:
-            LOGGER.error("Error closing VISA link: {}".format(e))
+            common.logger.error("Error closing VISA link: {}".format(e))
 
         self.interface.close()
         self.link = 0
@@ -886,7 +886,7 @@ class TCPIPInstrVicp(Session):
                 self.parsed.host_address, port, timeout=self.timeout
             )
         except OSError as e:
-            LOGGER.exception(
+            common.logger.exception(
                 f"Failed to open VICP connection to {self.parsed.host_address} "
                 f"on port {port}"
             )
