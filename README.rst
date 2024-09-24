@@ -61,8 +61,8 @@ controlling:
 Requirements
 ------------
 
-- Python (tested with 3.6+)
-- PyVISA 1.11+
+- Python 3
+- PyVISA
 
 Optionally:
 
@@ -74,11 +74,13 @@ Optionally:
 - zeroconf (for HiSLIP and VICP devices discovery)
 - pyvicp (to enable the Teledyne LeCroy proprietary VICP protocol)
 
+Please refer to `pyproject.toml <./pyproject.toml>`_ for the specific version
+requirements.
 
 Installation
 --------------
 
-Using pip:
+Using pip::
 
     $ pip install pyvisa-py
 
