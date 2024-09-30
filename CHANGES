@@ -5,6 +5,7 @@ PyVISA-py Changelog
 ------------------
 
 - add read_stb method for TCPIP HiSLIP client PR #429
+- support open_timeout for TCPIP hislip resources PR #430
 
 0.7.2 (07/03/2024)
 ------------------
