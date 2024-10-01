@@ -5,6 +5,10 @@ PyVISA-py Changelog
 ------------------
 
 - add read_stb method for TCPIP HiSLIP client PR #429
+- fix usbtmc implementation to respect section 3.3 of the spec PR #449
+  Read now reads from usb until a "short packet" has been read
+  (see specification), and only expects a header on the first packet received.
+- add support for VI_ATTR_SUPPRESS_END_EN for USB resources PR #449
 
 0.7.2 (07/03/2024)
 ------------------

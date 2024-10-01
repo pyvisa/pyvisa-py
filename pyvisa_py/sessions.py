@@ -796,10 +796,9 @@ class Session(metaclass=abc.ABCMeta):
             if current:
                 out.extend(current)
                 end_indicator_received = end_indicator_checker(current)
-                if end_indicator_received:
-                    if not suppress_end_en:
-                        # RULE 6.1.1
-                        return bytes(out), StatusCode.success
+                if end_indicator_received and not suppress_end_en:
+                    # RULE 6.1.1
+                    return bytes(out), StatusCode.success
                 else:
                     if termination_char_en and (term_char in current):
                         # RULE 6.1.2
