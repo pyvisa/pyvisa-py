@@ -41,7 +41,7 @@ implements most of the methods for Message Based communication
 (Serial/USB/GPIB/Ethernet) using Python and some well developed, easy to deploy
 and cross platform libraries
 
-.. _VISA: http://www.ivifoundation.org/Downloads/Specifications.htm
+.. _VISA: https://www.ivifoundation.org/specifications/default.html#visa-specifications
 
 
 VISA and Python
