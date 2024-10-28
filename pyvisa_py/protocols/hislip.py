@@ -162,6 +162,8 @@ def receive_exact_into(sock: socket.socket, recv_buffer: bytes) -> None:
     while bytes_recvd < recv_len:
         request_size = recv_len - bytes_recvd
         data_len = sock.recv_into(view, request_size)
+        if data_len == 0:
+            raise RuntimeError("Connection was dropped by server.")
         bytes_recvd += data_len
         view = view[data_len:]
 
@@ -382,20 +384,26 @@ class Instrument:
 
         # open the synchronous socket and send an initialize packet
         self._sync = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self._sync.settimeout(open_timeout)
+        # The VISA spec does not allow to tune the socket timeout when opening
+        # a connection. ``open_timeout`` only applies to attempt to acquire a
+        # lock.
+        self._sync.settimeout(5.0)
         self._sync.connect((ip_addr, port))
-        self._sync.settimeout(timeout)
         self._sync.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
         init = self.initialize(sub_address=sub_address.encode("ascii"))
         if init.overlap != 0:
             print("**** prefer overlap = %d" % init.overlap)
+        # We set the user timeout once we managed to initialize the connection.
+        self._sync.settimeout(timeout)
 
         # open the asynchronous socket and send an initialize packet
         self._async = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self._async.connect((ip_addr, port))
-        self._async.settimeout(timeout)
+        self._async.settimeout(5.0)
         self._async.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
         self._async_init = self.async_initialize(session_id=init.session_id)
+        # We set the user timeout once we managed to initialize the connection.
+        self._async.settimeout(timeout)
 
         # initialize variables
         self.max_msg_size = DEFAULT_MAX_MSG_SIZE
