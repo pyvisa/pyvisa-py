@@ -10,6 +10,7 @@
 import errno
 import logging
 import os
+import sys
 import traceback
 from typing import Any, List, Tuple, Type, Union
 
@@ -292,14 +293,7 @@ class USBInstrSession(USBSession):
                 )
                 logging_level = logger.getEffectiveLevel()
                 if logging_level <= logging.DEBUG:
-                    if exc_strs := traceback.format_exception(err):
-                        msg = "Traceback:"
-                        logger.debug(msg)
-                        logger.debug("-" * len(msg))
-                        for exc_str in exc_strs:
-                            for line in exc_str.split("\n"):
-                                logger.debug(line)
-                        logger.debug("-" * len(msg))
+                    logger.debug("Error while reading serial number", exc_info=err)
                 elif logging_level <= logging.INFO:
                     if exc_strs := traceback.format_exception_only(err):
                         logger.info(
@@ -307,22 +301,25 @@ class USBInstrSession(USBSession):
                             exc_strs[0].strip(),
                         )
 
-                dev_path = f"/dev/bus/usb/{dev.bus:03d}/{dev.address:03d}"
-                if os.path.exists(dev_path) and not os.access(dev_path, os.O_RDWR):
-                    missing_perms = []
-                    if not os.access(dev_path, os.O_RDONLY):
-                        missing_perms.append("read from")
-                    if not os.access(dev_path, os.O_WRONLY):
-                        missing_perms.append("write to")
-                    missing_perms_str = " or ".join(missing_perms)
-                    logger.warning(
-                        "User does not have permission to %s %s, so the above USB INSTR"
-                        " device cannot be used by pyvisa; see"
-                        " https://pyvisa.readthedocs.io/projects/pyvisa-py/en/latest/faq.html"
-                        " for more info.",
-                        missing_perms_str,
-                        dev_path,
-                    )
+                # Check permissions on Linux
+                if sys.platform.startswith("linux"):
+                    dev_path = f"/dev/bus/usb/{dev.bus:03d}/{dev.address:03d}"
+                    if os.path.exists(dev_path) and not os.access(dev_path, os.O_RDWR):
+                        missing_perms = []
+                        if not os.access(dev_path, os.O_RDONLY):
+                            missing_perms.append("read from")
+                        if not os.access(dev_path, os.O_WRONLY):
+                            missing_perms.append("write to")
+                        missing_perms_str = " or ".join(missing_perms)
+                        logger.warning(
+                            "User does not have permission to %s %s, so the above "
+                            "USB INSTR device cannot be used by pyvisa; see"
+                            " https://pyvisa.readthedocs.io/projects/pyvisa-py/en/latest/faq.html"
+                            " for more info.",
+                            missing_perms_str,
+                            dev_path,
+                        )
+
                 continue
 
             out.append(
