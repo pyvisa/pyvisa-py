@@ -7,12 +7,17 @@
 
 """
 
+import logging
 from importlib.metadata import PackageNotFoundError, version
 
 # We need to import all attributes so that __init_subclass__() is executed once
 # (hence the noqa)
 from . import attributes  # noqa: F401
 from .highlevel import PyVisaLibrary
+
+# Global pyvisa-py logger used to provide more details on errors (VISA error code
+# can make some report rather terse).
+LOGGER = logging.getLogger("pyvisa.pyvisa-py")
 
 __version__ = "unknown"
 try:
