@@ -167,7 +167,7 @@ class USBRaw(object):
     """
 
     #: Configuration number to be used. If None, the default will be used.
-    CONFIGURATION = None
+    CONFIGURATION: int | None = None
 
     #: Interface index it be used
     INTERFACE = (0, 0)

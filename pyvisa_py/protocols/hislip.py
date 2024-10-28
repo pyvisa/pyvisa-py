@@ -232,7 +232,7 @@ class RxHeader:
             payload = (
                 (": " + str(receive_exact(sock, self.payload_length)))
                 if self.payload_length > 0
-                else b""
+                else ""
             )
             raise RuntimeError(
                 "expected message type '%s', received '%s%s'"
