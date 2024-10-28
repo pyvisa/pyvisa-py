@@ -148,7 +148,7 @@ class TCPIPInstrHiSLIP(Session):
                 port=port,
                 sub_address=sub_address,
             )
-        except OSError as e:
+        except Exception as e:
             common.logger.exception(
                 f"Failed to open HiSLIP connection to {self.parsed.host_address} "
                 f"on port {port} with lan device name {sub_address}"
