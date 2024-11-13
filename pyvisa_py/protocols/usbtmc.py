@@ -494,12 +494,12 @@ class USBTMC(USBRaw):
                     resp = raw_read(recv_chunk + header_size + max_padding)
                     received_transfer.extend(resp)
 
-                    # Detect EOM only when device sends all expected bytes.
+                # Detect EOM only when device sends all expected bytes.
                 if len(received_transfer) >= response.transfer_size:
                     eom = response.transfer_attributes & 1
                     # Truncate data to the specified length (discard padding)
                     # USBTMC header (12 bytes) has already truncated
-                    received_message = received_transfer[: response.transfer_size]
+                    received_message.extend(received_transfer[: response.transfer_size])
             except (usb.core.USBError, ValueError):
                 # Abort failed Bulk-IN operation.
                 self._abort_bulk_in(self._btag)
