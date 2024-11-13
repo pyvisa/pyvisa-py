@@ -468,6 +468,8 @@ class USBTMC(USBRaw):
         raw_write = super(USBTMC, self).write
 
         received = bytearray()
+        transfer_size = 0
+        transfer_attributes = 0
 
         while not eom:
             self._btag = (self._btag % 255) + 1
@@ -480,11 +482,15 @@ class USBTMC(USBRaw):
                 resp = raw_read(recv_chunk + header_size + max_padding)
                 response = BulkInMessage.from_bytes(resp)
                 received.extend(response.data)
-                while len(resp) == self.usb_recv_ep.wMaxPacketSize:
+                transfer_size = response.transfer_size
+                transfer_attributes = response.transfer_attributes
+                while (len(resp) == self.usb_recv_ep.wMaxPacketSize or len(received) <  response.transfer_size):
                     # USBTMC Section 3.3 specifies that the first usb packet
                     # must contain the header. the remaining packets do not need
                     # the header the message is finished when a "short packet"
                     # is sent (one whose length is less than wMaxPacketSize)
+                    # wMaxPacketSize may be incorrectly reported by certain drivers.
+                    # Therefore, continue reading until the transfer_size is reached.
                     resp = raw_read(recv_chunk + header_size + max_padding)
                     received.extend(resp)
             except (usb.core.USBError, ValueError):
@@ -493,7 +499,8 @@ class USBTMC(USBRaw):
                 raise
 
             # Detect EOM only when device sends all expected bytes.
-            if len(response.data) >= response.transfer_size:
-                eom = response.transfer_attributes & 1
-
-        return bytes(received)
+            if len(received) >= response.transfer_size:
+                eom = transfer_attributes & 1
+        # Truncate data to the specified length (discard padding)
+        # USBTMC header (12 bytes) has already truncated 
+        return bytes(received[:transfer_size])
