@@ -484,7 +484,10 @@ class USBTMC(USBRaw):
                 received.extend(response.data)
                 transfer_size = response.transfer_size
                 transfer_attributes = response.transfer_attributes
-                while (len(resp) == self.usb_recv_ep.wMaxPacketSize or len(received) <  response.transfer_size):
+                while (
+                    len(resp) == self.usb_recv_ep.wMaxPacketSize
+                    or len(received) < response.transfer_size
+                ):
                     # USBTMC Section 3.3 specifies that the first usb packet
                     # must contain the header. the remaining packets do not need
                     # the header the message is finished when a "short packet"
@@ -502,5 +505,5 @@ class USBTMC(USBRaw):
             if len(received) >= response.transfer_size:
                 eom = transfer_attributes & 1
         # Truncate data to the specified length (discard padding)
-        # USBTMC header (12 bytes) has already truncated 
+        # USBTMC header (12 bytes) has already truncated
         return bytes(received[:transfer_size])
