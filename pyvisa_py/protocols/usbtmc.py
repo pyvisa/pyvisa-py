@@ -467,9 +467,10 @@ class USBTMC(USBRaw):
         raw_read = super(USBTMC, self).read
         raw_write = super(USBTMC, self).write
 
-        received = bytearray()
+        received_message = bytearray()
 
         while not eom:
+            received_transfer = bytearray()
             self._btag = (self._btag % 255) + 1
 
             req = BulkInMessage.build_array(self._btag, recv_chunk, None)
@@ -479,21 +480,29 @@ class USBTMC(USBRaw):
             try:
                 resp = raw_read(recv_chunk + header_size + max_padding)
                 response = BulkInMessage.from_bytes(resp)
-                received.extend(response.data)
-                while len(resp) == self.usb_recv_ep.wMaxPacketSize:
+                received_transfer.extend(response.data)
+                while (
+                    len(resp) == self.usb_recv_ep.wMaxPacketSize
+                    or len(received_transfer) < response.transfer_size
+                ):
                     # USBTMC Section 3.3 specifies that the first usb packet
                     # must contain the header. the remaining packets do not need
                     # the header the message is finished when a "short packet"
                     # is sent (one whose length is less than wMaxPacketSize)
+                    # wMaxPacketSize may be incorrectly reported by certain drivers.
+                    # Therefore, continue reading until the transfer_size is reached.
                     resp = raw_read(recv_chunk + header_size + max_padding)
-                    received.extend(resp)
+                    received_transfer.extend(resp)
+
+                # Detect EOM only when device sends all expected bytes.
+                if len(received_transfer) >= response.transfer_size:
+                    eom = response.transfer_attributes & 1
+                    # Truncate data to the specified length (discard padding)
+                    # USBTMC header (12 bytes) has already truncated
+                    received_message.extend(received_transfer[: response.transfer_size])
             except (usb.core.USBError, ValueError):
                 # Abort failed Bulk-IN operation.
                 self._abort_bulk_in(self._btag)
                 raise
 
-            # Detect EOM only when device sends all expected bytes.
-            if len(response.data) >= response.transfer_size:
-                eom = response.transfer_attributes & 1
-
-        return bytes(received)
+        return bytes(received_message)
