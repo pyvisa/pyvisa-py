@@ -67,7 +67,7 @@ jobs:
           pip install pytest-cov
           pytest pyvisa_py/testsuite --cov pyvisa_py --cov-report xml
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           flags: unittests
