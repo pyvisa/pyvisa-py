@@ -476,13 +476,13 @@ class USBTMC(USBRaw):
                 # + 1 * wMaxPacketSize for message sizes that equals wMaxPacketSize == size + usbtmc_header_size.
                 # This to be able to retrieve a short package to end communication
                 # (see USB 2.0 Section 5.8.3 and USBTMC Section 3.3)
-                chunck_size = (
+                chunk_size = (
                     math.floor(
                         (size + usbtmc_header_size) / self.usb_recv_ep.wMaxPacketSize
                     )
                     + 1
                 ) * self.usb_recv_ep.wMaxPacketSize
-                resp = raw_read(chunck_size)
+                resp = raw_read(chunk_size)
 
                 response = BulkInMessage.from_bytes(resp)
                 received_transfer.extend(response.data)
@@ -507,14 +507,14 @@ class USBTMC(USBRaw):
                         # is sent (one whose length is less than wMaxPacketSize)
                         # wMaxPacketSize may be incorrectly reported by certain drivers.
                         # Therefore, continue reading until the transfer_size is reached.
-                        chunck_size = (
+                        chunk_size = (
                             math.floor(
                                 (size - len(received_transfer))
                                 / self.usb_recv_ep.wMaxPacketSize
                             )
                             + 1
                         ) * self.usb_recv_ep.wMaxPacketSize
-                        resp = raw_read(chunck_size)
+                        resp = raw_read(chunk_size)
                         received_transfer.extend(resp)
                     if len(received_transfer) >= response.transfer_size:
                         eom = response.transfer_attributes & 1
