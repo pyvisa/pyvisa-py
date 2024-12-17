@@ -27,4 +27,5 @@ class AttrVI_ATTR_TCPIP_KEEPALIVE(former_keepalive):
     resources = [
         (constants.InterfaceType.tcpip, "SOCKET"),
         (constants.InterfaceType.tcpip, "INSTR"),
+        (constants.InterfaceType.vicp, "INSTR"),
     ]
