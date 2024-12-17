@@ -22,14 +22,21 @@ from typing import (
     TypeVar,
 )
 
-from pyvisa import attributes, constants, logger, rname
+from pyvisa import attributes, constants, rname
 from pyvisa.constants import ResourceAttribute, StatusCode
 from pyvisa.typing import VISARMSession
 
-from .common import int_to_byte
+from .common import LOGGER, int_to_byte
 
 #: Type var used when typing register.
 T = TypeVar("T", bound=Type["Session"])
+
+
+class OpenError(Exception):
+    """Custom exception signaling we failed to open a resource."""
+
+    def __init__(self, error_code: StatusCode = StatusCode.error_resource_not_found):
+        self.error_code = error_code
 
 
 class UnknownAttribute(Exception):
@@ -230,7 +237,7 @@ class Session(metaclass=abc.ABCMeta):
 
         def _internal(python_class):
             if (interface_type, resource_class) in cls._session_classes:
-                logger.warning(
+                LOGGER.warning(
                     "%s is already registered in the "
                     "ResourceManager. Overwriting with %s",
                     (interface_type, resource_class),
@@ -273,7 +280,7 @@ class Session(metaclass=abc.ABCMeta):
             session_issue = msg
 
         if (interface_type, resource_class) in cls._session_classes:
-            logger.warning(
+            LOGGER.warning(
                 "%s is already registered in the ResourceManager. "
                 "Overwriting with unavailable %s",
                 (interface_type, resource_class),
@@ -667,7 +674,7 @@ class Session(metaclass=abc.ABCMeta):
         try:
             return self._get_attribute(attribute)
         except UnknownAttribute as e:
-            logger.exception(str(e))
+            LOGGER.exception(str(e))
             return 0, StatusCode.error_nonsupported_attribute
 
     def set_attribute(
@@ -730,10 +737,10 @@ class Session(metaclass=abc.ABCMeta):
             return StatusCode.error_nonsupported_attribute_state
         except NotImplementedError:
             e = UnknownAttribute(attribute)
-            logger.exception(str(e))
+            LOGGER.exception(str(e))
             return StatusCode.error_nonsupported_attribute
         except UnknownAttribute as e:
-            logger.exception(str(e))
+            LOGGER.exception(str(e))
             return StatusCode.error_nonsupported_attribute
 
     def _read(

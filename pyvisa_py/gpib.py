@@ -11,10 +11,11 @@ import ctypes  # Used for missing bindings not ideal
 from bisect import bisect
 from typing import Any, Iterator, List, Tuple, Union
 
-from pyvisa import attributes, constants, logger
+from pyvisa import attributes, constants
 from pyvisa.constants import ResourceAttribute, StatusCode
 from pyvisa.rname import GPIBInstr, GPIBIntfc
 
+from .common import LOGGER
 from .sessions import Session, UnknownAttribute
 
 try:
@@ -83,7 +84,7 @@ def _find_boards() -> Iterator[Tuple[int, int]]:
         try:
             yield board, gpib.ask(board, 1)
         except gpib.GpibError as e:
-            logger.debug("GPIB board %i error in _find_boards(): %s", board, repr(e))
+            LOGGER.debug("GPIB board %i error in _find_boards(): %s", board, repr(e))
 
 
 def _find_listeners() -> Iterator[Tuple[int, int, int]]:
@@ -99,7 +100,7 @@ def _find_listeners() -> Iterator[Tuple[int, int, int]]:
                         if gpib.listener(board, i, j):
                             yield board, i, j
             except gpib.GpibError as e:
-                logger.debug(
+                LOGGER.debug(
                     "GPIB board %i paddr %i saddr %i error in _find_listeners(): %s",
                     board,
                     i,
@@ -204,7 +205,7 @@ def convert_gpib_error(
     # feels brittle. As a consequence we only try to be smart when using
     # gpib-ctypes. However in both cases we log the exception at debug level.
     else:
-        logger.debug("Failed to %s.", operation, exc_info=error)
+        LOGGER.debug("Failed to %s.", operation, exc_info=error)
         if not GPIB_CTYPES:
             return StatusCode.error_system_error
         if error.code == 1:
@@ -410,7 +411,7 @@ class _GPIBCommon(Session):
             Return value of the library call.
 
         """
-        logger.debug("GPIB.write %r" % data)
+        LOGGER.debug("GPIB.write %r" % data)
 
         # INTFC don't have an interface so use the controller
         ifc = self.interface or self.controller
@@ -663,7 +664,7 @@ class GPIBSession(_GPIBCommon):
             Return value of the library call.
 
         """
-        logger.debug("GPIB.device clear")
+        LOGGER.debug("GPIB.device clear")
         try:
             self.interface.clear()
             return StatusCode.success
@@ -685,7 +686,7 @@ class GPIBSession(_GPIBCommon):
             Return value of the library call.
 
         """
-        logger.debug("GPIB.device assert hardware trigger")
+        LOGGER.debug("GPIB.device assert hardware trigger")
 
         try:
             if protocol == constants.VI_TRIG_PROT_DEFAULT:
@@ -838,7 +839,7 @@ class GPIBInterface(_GPIBCommon):
         Corresponds to viGpibSendIFC function of the VISA library.
 
         """
-        logger.debug("GPIB.interface clear")
+        LOGGER.debug("GPIB.interface clear")
         try:
             self.controller.interface_clear()
             return StatusCode.success
@@ -862,7 +863,7 @@ class GPIBInterface(_GPIBCommon):
             Return value of the library call.
 
         """
-        logger.debug("GPIB.control atn")
+        LOGGER.debug("GPIB.control atn")
         if mode == constants.VI_GPIB_ATN_ASSERT:
             status = gpib_lib.ibcac(self.controller.id, 0)
         elif mode == constants.VI_GPIB_ATN_DEASSERT:
@@ -899,11 +900,11 @@ class GPIBInterface(_GPIBCommon):
 
         """
         # ibpct need to get the device id matching the primary and secondary address
-        logger.debug("GPIB.pass control")
+        LOGGER.debug("GPIB.pass control")
         try:
             did = gpib.dev(self.parsed.board, primary_address, secondary_address)
         except gpib.GpibError:
-            logger.exception(
+            LOGGER.exception(
                 "Failed to get id for %s, %d", primary_address, secondary_address
             )
             return StatusCode.error_resource_not_found

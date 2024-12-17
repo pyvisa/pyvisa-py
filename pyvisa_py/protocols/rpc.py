@@ -25,7 +25,7 @@ import struct
 import sys
 import time
 
-from ..common import logger
+from ..common import LOGGER
 from . import xdrlib
 
 #: Version of the protocol
@@ -225,7 +225,7 @@ class Client(object):
 
     def make_call(self, proc, args, pack_func, unpack_func):
         # Don't normally override this (but see Broadcast)
-        logger.debug("Make call %r, %r, %r, %r", proc, args, pack_func, unpack_func)
+        LOGGER.debug("Make call %r, %r, %r, %r", proc, args, pack_func, unpack_func)
 
         if pack_func is None and args is not None:
             raise TypeError("non-null args with null pack_func")
@@ -296,7 +296,7 @@ def sendfrag(sock, last, frag):
 
 
 def _sendrecord(sock, record, fragsize=None, timeout=None):
-    logger.debug("Sending record through %s: %r", sock, record)
+    LOGGER.debug("Sending record through %s: %r", sock, record)
     if timeout is not None:
         r, w, x = select.select([], [sock], [], timeout)
         if sock not in w:
@@ -330,7 +330,7 @@ def _recvrecord(sock, timeout, read_fun=None, min_packages=0):
     packages_received = 0
 
     if min_packages != 0:
-        logger.debug("Start receiving at least %i packages" % min_packages)
+        LOGGER.debug("Start receiving at least %i packages" % min_packages)
 
     # minimum is in interval 1 - 100ms based on timeout or for infinite it is
     # 1 sec
@@ -355,11 +355,11 @@ def _recvrecord(sock, timeout, read_fun=None, min_packages=0):
             if sock in r:
                 read_data = read_fun(exp_length)
                 buffer.extend(read_data)
-                logger.debug("received %r" % read_data)
+                LOGGER.debug("received %r" % read_data)
             # Timeout was reached
             if not read_data:  # no response or empty response
                 if timeout is not None and time.time() >= finish_time:
-                    logger.debug(
+                    LOGGER.debug(
                         (
                             "Time out encountered in %s."
                             "Already receieved %d bytes. Last fragment is %d "
@@ -376,7 +376,7 @@ def _recvrecord(sock, timeout, read_fun=None, min_packages=0):
                     )
                     raise socket.timeout(msg)
                 elif min_packages != 0 and packages_received >= min_packages:
-                    logger.debug(
+                    LOGGER.debug(
                         "Stop receiving after %i of %i requested packages. Received record through %s: %r",
                         packages_received,
                         min_packages,
@@ -404,7 +404,7 @@ def _recvrecord(sock, timeout, read_fun=None, min_packages=0):
                 record.extend(buffer[:exp_length])
                 buffer = buffer[exp_length:]
                 if last:
-                    logger.debug("Received record through %s: %r", sock, record)
+                    LOGGER.debug("Received record through %s: %r", sock, record)
                     return bytes(record)
                 else:
                     wait_header = True
@@ -480,7 +480,7 @@ class RawTCPClient(Client):
         return super(RawTCPClient, self).make_call(proc, args, pack_func, unpack_func)
 
     def connect(self, timeout=5.0):
-        logger.debug(
+        LOGGER.debug(
             "RawTCPClient: connecting to socket at (%s, %s)", self.host, self.port
         )
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -488,7 +488,7 @@ class RawTCPClient(Client):
             raise RPCError("can't connect to server")
 
     def close(self):
-        logger.debug("RawTCPClient: closing socket")
+        LOGGER.debug("RawTCPClient: closing socket")
         self.sock.close()
 
     def do_call(self):
@@ -498,7 +498,7 @@ class RawTCPClient(Client):
 
         try:
             min_packages = int(self.packer.proc == 3)
-            logger.debug("RawTCPClient: procedure type %i" % self.packer.proc)
+            LOGGER.debug("RawTCPClient: procedure type %i" % self.packer.proc)
             # if the command is get_port, we only expect one package.
             # This is a workaround for misbehaving instruments.
         except AttributeError:
@@ -531,14 +531,14 @@ class RawUDPClient(Client):
         self.connect()
 
     def connect(self):
-        logger.debug(
+        LOGGER.debug(
             "RawTCPClient: connecting to socket at (%s, %s)", self.host, self.port
         )
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.sock.connect((self.host, self.port))
 
     def close(self):
-        logger.debug("RawTCPClient: closing socket")
+        LOGGER.debug("RawTCPClient: closing socket")
         self.sock.close()
 
     def do_call(self):
@@ -1005,7 +1005,7 @@ class TCPServer(Server):
             except EOFError:
                 break
             except socket.error:
-                logger.exception("socket error: %r", sys.exc_info()[0])
+                LOGGER.exception("socket error: %r", sys.exc_info()[0])
                 break
             reply = self.handle(call)
             if reply is not None:

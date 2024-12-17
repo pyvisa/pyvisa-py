@@ -11,7 +11,7 @@ from typing import Iterator, Optional
 
 from pyvisa import logger
 
-logger = logging.LoggerAdapter(logger, {"backend": "py"})  # type: ignore
+LOGGER = logging.LoggerAdapter(logger, {"backend": "py"})  # type: ignore
 
 
 class NamedObject(object):

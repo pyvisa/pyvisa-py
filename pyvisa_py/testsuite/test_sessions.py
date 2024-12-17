@@ -73,5 +73,6 @@ class TestSessions(BaseTestCase):
         except Exception:
             exp_missing.append(vicp)
 
+        print(available, missing)
         assert sorted(available) == sorted(expected)
         assert sorted(missing) == sorted(exp_missing)
