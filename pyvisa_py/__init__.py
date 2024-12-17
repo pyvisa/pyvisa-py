@@ -7,7 +7,6 @@
 
 """
 
-import logging
 from importlib.metadata import PackageNotFoundError, version
 
 # We need to import all attributes so that __init_subclass__() is executed once
