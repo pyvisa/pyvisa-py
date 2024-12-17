@@ -419,7 +419,7 @@ class TCPIPInstrVxi11(Session):
             # Get broadcast address for each interface
             for interface, snics in psutil.net_if_addrs().items():
                 for snic in snics:
-                    if snic.family is socket.AF_INET:
+                    if snic.family is socket.AF_INET and snic.netmask is not None:
                         addr = snic.address
                         mask = snic.netmask
                         network = ipaddress.IPv4Network(addr + "/" + mask, strict=False)
