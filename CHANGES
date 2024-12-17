@@ -4,12 +4,15 @@ PyVISA-py Changelog
 0.7.3 (unreleased)
 ------------------
 
+- ignore network interface card with no subnet mask when discovering TCPIP
+  resources PR #478
+- add VICP INSTR to the supported interface for TCPIP keep alive attr PR #477
 - add read_stb method for TCPIP HiSLIP client PR #429
 - fix usbtmc implementation to respect section 3.3 of the spec PR #449
   Read now reads from usb until a "short packet" or if all data (`transfer_size`) PR #465
   has been read (see specification), and only expects a header on the first packet received.
 - fix usbtmc implementation to properly discard the alignment bytes
-  ensuring only the actual data (`transfer_size`) is retained in the message PR #465 
+  ensuring only the actual data (`transfer_size`) is retained in the message PR #465
 - add support for VI_ATTR_SUPPRESS_END_EN for USB resources PR #449
 
 0.7.2 (07/03/2024)
