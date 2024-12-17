@@ -17,7 +17,7 @@ from pyvisa.typing import VISAEventContext, VISARMSession, VISASession
 from pyvisa.util import DebugInfo, LibraryPath
 
 from . import sessions
-from .common import logger
+from .common import LOGGER
 
 
 class PyVisaLibrary(highlevel.VisaLibraryBase):
@@ -45,30 +45,30 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
     try:
         from .serial import SerialSession
 
-        logger.debug("SerialSession was correctly imported.")
+        LOGGER.debug("SerialSession was correctly imported.")
     except Exception as e:
-        logger.debug("SerialSession was not imported %s." % e)
+        LOGGER.debug("SerialSession was not imported %s." % e)
 
     try:
         from .usb import USBRawSession, USBSession
 
-        logger.debug("USBSession and USBRawSession were correctly imported.")
+        LOGGER.debug("USBSession and USBRawSession were correctly imported.")
     except Exception as e:
-        logger.debug("USBSession and USBRawSession were not imported %s." % e)
+        LOGGER.debug("USBSession and USBRawSession were not imported %s." % e)
 
     try:
         from .tcpip import TCPIPInstrSession, TCPIPSocketSession
 
-        logger.debug("TCPIPSession was correctly imported.")
+        LOGGER.debug("TCPIPSession was correctly imported.")
     except Exception as e:
-        logger.debug("TCPIPSession was not imported %s." % e)
+        LOGGER.debug("TCPIPSession was not imported %s." % e)
 
     try:
         from .gpib import GPIBSession
 
-        logger.debug("GPIBSession was correctly imported.")
+        LOGGER.debug("GPIBSession was correctly imported.")
     except Exception as e:
-        logger.debug("GPIBSession was not imported %s." % e)
+        LOGGER.debug("GPIBSession was not imported %s." % e)
 
     @staticmethod
     def get_library_paths() -> Iterable[LibraryPath]:

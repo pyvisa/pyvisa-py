@@ -15,10 +15,6 @@ from importlib.metadata import PackageNotFoundError, version
 from . import attributes  # noqa: F401
 from .highlevel import PyVisaLibrary
 
-# Global pyvisa-py logger used to provide more details on errors (VISA error code
-# can make some report rather terse).
-LOGGER = logging.getLogger("pyvisa.pyvisa-py")
-
 __version__ = "unknown"
 try:
     __version__ = version(__name__)

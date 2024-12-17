@@ -18,7 +18,7 @@ from typing import Any, Dict, List, Optional, Tuple, Type, cast
 from pyvisa import attributes, constants, errors, rname
 from pyvisa.constants import BufferOperation, ResourceAttribute, StatusCode
 
-from . import LOGGER, common
+from .common import LOGGER, int_to_byte
 from .protocols import hislip, rpc, vxi11
 from .sessions import OpenError, Session, UnknownAttribute, VISARMSession
 
@@ -149,7 +149,7 @@ class TCPIPInstrHiSLIP(Session):
                 sub_address=sub_address,
             )
         except Exception as e:
-            common.logger.exception(
+            LOGGER.exception(
                 f"Failed to open HiSLIP connection to {self.parsed.host_address} "
                 f"on port {port} with lan device name {sub_address}"
             )
@@ -1191,7 +1191,7 @@ class TCPIPSocketSession(Session):
             chunk_length = self.max_recv_size
 
         term_char, _ = self.get_attribute(ResourceAttribute.termchar)
-        term_byte = common.int_to_byte(term_char) if term_char is not None else b""
+        term_byte = int_to_byte(term_char) if term_char is not None else b""
         term_char_en, _ = self.get_attribute(ResourceAttribute.termchar_enabled)
         suppress_end_en, _ = self.get_attribute(ResourceAttribute.suppress_end_enabled)
 

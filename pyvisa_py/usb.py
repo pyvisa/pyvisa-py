@@ -14,7 +14,7 @@ from pyvisa import attributes, constants
 from pyvisa.constants import ResourceAttribute, StatusCode
 from pyvisa.rname import USBInstr, USBRaw
 
-from .common import logger
+from .common import LOGGER
 from .sessions import Session, UnknownAttribute
 
 try:
@@ -277,7 +277,7 @@ class USBInstrSession(USBSession):
                     "Found a device whose serial number cannot be read."
                     " The partial VISA resource name is: " + fmt
                 )
-                logger.warning(
+                LOGGER.warning(
                     msg,
                     {
                         "board": 0,
@@ -334,7 +334,7 @@ class USBRawSession(USBSession):
                     "Found a device whose serial number cannot be read."
                     " The partial VISA resource name is: " + fmt
                 )
-                logger.warning(
+                LOGGER.warning(
                     msg,
                     {
                         "board": 0,
