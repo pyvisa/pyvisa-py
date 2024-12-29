@@ -12,7 +12,9 @@ PyVISA-py Changelog
   Read now reads from usb until a "short packet" or if all data (`transfer_size`) PR #465
   has been read (see specification), and only expects a header on the first packet received.
 - fix usbtmc implementation to properly discard the alignment bytes
-  ensuring only the actual data (`transfer_size`) is retained in the message PR #465
+  ensuring only the actual data (`transfer_size`) is retained in the message PR #465 
+- Implemented partial USBTMC message functionality that allows reading the amount of bytes 
+  specified by host PR #470
 - add support for VI_ATTR_SUPPRESS_END_EN for USB resources PR #449
 
 0.7.2 (07/03/2024)

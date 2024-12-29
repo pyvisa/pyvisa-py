@@ -12,6 +12,7 @@ This file is an offspring of the Lantz Project.
 """
 
 import enum
+import math
 import struct
 import time
 import warnings
@@ -455,13 +456,7 @@ class USBTMC(USBRaw):
         return size
 
     def read(self, size):
-        header_size = 12
-        max_padding = 511
-        recv_chunk = self.usb_recv_ep.wMaxPacketSize - header_size
-
-        if size > 0 and size < recv_chunk:
-            recv_chunk = size
-
+        usbtmc_header_size = 12
         eom = False
 
         raw_read = super(USBTMC, self).read
@@ -473,33 +468,61 @@ class USBTMC(USBRaw):
             received_transfer = bytearray()
             self._btag = (self._btag % 255) + 1
 
-            req = BulkInMessage.build_array(self._btag, recv_chunk, None)
-
+            req = BulkInMessage.build_array(self._btag, size, None)
             raw_write(req)
 
             try:
-                resp = raw_read(recv_chunk + header_size + max_padding)
+                # make sure the data request is in multitudes of wMaxPacketSize.
+                # + 1 * wMaxPacketSize for message sizes that equals wMaxPacketSize == size + usbtmc_header_size.
+                # This to be able to retrieve a short package to end communication
+                # (see USB 2.0 Section 5.8.3 and USBTMC Section 3.3)
+                chunk_size = (
+                    math.floor(
+                        (size + usbtmc_header_size) / self.usb_recv_ep.wMaxPacketSize
+                    )
+                    + 1
+                ) * self.usb_recv_ep.wMaxPacketSize
+                resp = raw_read(chunk_size)
+
                 response = BulkInMessage.from_bytes(resp)
                 received_transfer.extend(response.data)
-                while (
-                    len(resp) == self.usb_recv_ep.wMaxPacketSize
-                    or len(received_transfer) < response.transfer_size
-                ):
-                    # USBTMC Section 3.3 specifies that the first usb packet
-                    # must contain the header. the remaining packets do not need
-                    # the header the message is finished when a "short packet"
-                    # is sent (one whose length is less than wMaxPacketSize)
-                    # wMaxPacketSize may be incorrectly reported by certain drivers.
-                    # Therefore, continue reading until the transfer_size is reached.
-                    resp = raw_read(recv_chunk + header_size + max_padding)
-                    received_transfer.extend(resp)
 
                 # Detect EOM only when device sends all expected bytes.
                 if len(received_transfer) >= response.transfer_size:
                     eom = response.transfer_attributes & 1
-                    # Truncate data to the specified length (discard padding)
-                    # USBTMC header (12 bytes) has already truncated
-                    received_message.extend(received_transfer[: response.transfer_size])
+                if not eom and len(received_transfer) >= size:
+                    # Read asking for 'size' bytes from the device.
+                    # This may be less then the device wants to send back in a message
+                    # Therefore the request does not mean that we must receive a EOM.
+                    # Multiple `transfers` will be required to retrieve the remaining bytes.
+                    eom = True
+                else:
+                    while (
+                        (len(resp) % self.usb_recv_ep.wMaxPacketSize) == 0
+                        or len(received_transfer) < response.transfer_size
+                    ) and not eom:
+                        # USBTMC Section 3.3 specifies that the first usb packet
+                        # must contain the header. the remaining packets do not need
+                        # the header the message is finished when a "short packet"
+                        # is sent (one whose length is less than wMaxPacketSize)
+                        # wMaxPacketSize may be incorrectly reported by certain drivers.
+                        # Therefore, continue reading until the transfer_size is reached.
+                        chunk_size = (
+                            math.floor(
+                                (size - len(received_transfer))
+                                / self.usb_recv_ep.wMaxPacketSize
+                            )
+                            + 1
+                        ) * self.usb_recv_ep.wMaxPacketSize
+                        resp = raw_read(chunk_size)
+                        received_transfer.extend(resp)
+                    if len(received_transfer) >= response.transfer_size:
+                        eom = response.transfer_attributes & 1
+                    if not eom and len(received_transfer) >= size:
+                        eom = True
+                # Truncate data to the specified length (discard padding)
+                # USBTMC header (12 bytes) has already truncated
+                received_message.extend(received_transfer[: response.transfer_size])
             except (usb.core.USBError, ValueError):
                 # Abort failed Bulk-IN operation.
                 self._abort_bulk_in(self._btag)
