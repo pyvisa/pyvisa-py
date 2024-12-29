@@ -10,7 +10,7 @@
 import sys
 from typing import Any, List, Tuple
 
-from pyvisa import attributes, constants, logger, rname
+from pyvisa import attributes, constants, rname
 from pyvisa.constants import (
     BufferOperation,
     ResourceAttribute,
@@ -19,6 +19,7 @@ from pyvisa.constants import (
 )
 
 from . import common
+from .common import LOGGER
 from .sessions import Session, UnknownAttribute
 
 try:
@@ -166,7 +167,7 @@ class SerialSession(Session):
             Return value of the library call.
 
         """
-        logger.debug("Serial.write %r" % data)
+        LOGGER.debug("Serial.write %r" % data)
         send_end, _ = self.get_attribute(ResourceAttribute.send_end_enabled)
         end_out, _ = self.get_attribute(ResourceAttribute.asrl_end_out)
         data_bits, _ = self.get_attribute(constants.ResourceAttribute.asrl_data_bits)
@@ -188,7 +189,7 @@ class SerialSession(Session):
             count = self.interface.write(data)
 
             if end_out == SerialTermination.termination_break:
-                logger.debug("Serial.sendBreak")
+                LOGGER.debug("Serial.sendBreak")
                 self.interface.sendBreak()
 
             return count, StatusCode.success
