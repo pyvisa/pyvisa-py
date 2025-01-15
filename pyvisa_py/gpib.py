@@ -9,14 +9,71 @@
 
 import ctypes  # Used for missing bindings not ideal
 from bisect import bisect
-from typing import Any, Iterator, List, Tuple, Union
+from typing import Any, Iterator, List, Optional, Tuple, Type, Union
 
 from pyvisa import attributes, constants
 from pyvisa.constants import ResourceAttribute, StatusCode
-from pyvisa.rname import GPIBInstr, GPIBIntfc
+from pyvisa.rname import GPIBInstr, GPIBIntfc, parse_resource_name
 
+from . import prologix
 from .common import LOGGER
-from .sessions import Session, UnknownAttribute
+from .sessions import Session, UnavailableSession, UnknownAttribute, VISARMSession
+
+
+@Session.register(constants.InterfaceType.gpib, "INSTR")
+class GPIBSessionDispatch(Session):
+    """dispatch to the proper class based on entries in prologix.BOARDS.
+
+    Uses the __new__ method to intercept the creation of the instance of a
+    GPIB session.  If parsed.board is found in prologix.BOARDS, create an
+    instance of prologix.PrologixInstrSession, otherwise create an instance
+    of GPIBSession.
+    """
+
+    def __new__(  # typing: ignore
+        cls,
+        resource_manager_session: VISARMSession,
+        resource_name: str,
+        parsed=None,
+        open_timeout: Optional[int] = None,
+    ) -> Session:
+        newcls: Type
+
+        if parsed is None:
+            parsed = parse_resource_name(resource_name)
+
+        if parsed.board in prologix.BOARDS:
+            newcls = prologix.PrologixInstrSession
+        else:
+            newcls = GPIBSession
+
+        return newcls(resource_manager_session, resource_name, parsed, open_timeout)
+
+
+def make_unavailable(msg: str) -> Type:
+    """
+    This creates a fake session class that raises a ValueError if instantiated.
+
+    We can't use Session.register_unavailable() because we need to be able to
+    first check if a GPIB "board" has been registered in prologix.BOARDS.
+
+    Parameters
+    ----------
+    msg : str
+        Message detailing why no session class exists.
+
+    Returns
+    -------
+    Type[Session]
+        Fake session.
+    """
+
+    class _internal(UnavailableSession):
+        #: Message detailing why no session is available.
+        session_issue = msg
+
+    return _internal
+
 
 try:
     GPIB_CTYPES = True
@@ -42,7 +99,7 @@ try:
             "  gpib_ctypes.gpib.gpib._load_lib(filename)\n"
             "before importing pyvisa."
         )
-        Session.register_unavailable(constants.InterfaceType.gpib, "INSTR", msg)
+        GPIBSession = make_unavailable(msg)
         Session.register_unavailable(constants.InterfaceType.gpib, "INTFC", msg)
         raise
 
@@ -57,7 +114,7 @@ except ImportError:
             "to use this resource type. Note that installing gpib-ctypes will "
             "give you access to a broader range of functionalities.\n%s" % e
         )
-        Session.register_unavailable(constants.InterfaceType.gpib, "INSTR", msg)
+        GPIBSession = make_unavailable(msg)
         Session.register_unavailable(constants.InterfaceType.gpib, "INTFC", msg)
         raise
 
@@ -636,9 +693,13 @@ class _GPIBCommon(Session):
 
 
 # TODO: Check secondary addresses.
-@Session.register(constants.InterfaceType.gpib, "INSTR")
 class GPIBSession(_GPIBCommon):
     """A GPIB Session that uses linux-gpib to do the low level communication."""
+
+    # we don't decorate this class with Session.register() because we don't
+    # want it to be registered in the _session_classes array, but we still
+    # need to define session_type to make the set_attribute machinery work.
+    session_type = (constants.InterfaceType.gpib, "INSTR")
 
     # Override parsed to take into account the fact that this class is only used
     # for a specific kind of resource
