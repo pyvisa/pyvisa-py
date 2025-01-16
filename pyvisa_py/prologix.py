@@ -60,9 +60,8 @@ class _PrologixIntfcSession(Session):  # pylint: disable=W0223
         # Assert EOI with last byte to indicate end of data
         self.write_oob(b"++eoi 1\n")
 
-        # additional setup found in code from Willow Garage, Inc
-        self.write_oob(b"++eot_enable 1\n")
-        self.write_oob(b"++eot_char 0\n")
+        # do not append eot_char to recvd data when EOI detected
+        self.write_oob(b"++eot_enable 0\n")
 
         BOARDS[self.parsed.board] = self
         self._gpib_addr = ""
