@@ -30,7 +30,7 @@ class GPIBSessionDispatch(Session):
     of GPIBSession.
     """
 
-    def __new__(  # typing: ignore
+    def __new__(  # type: ignore[misc]
         cls,
         resource_manager_session: VISARMSession,
         resource_name: str,
@@ -77,9 +77,9 @@ def make_unavailable(msg: str) -> Type:
 
 try:
     GPIB_CTYPES = True
-    from gpib_ctypes import gpib  # typing: ignore
-    from gpib_ctypes.Gpib import Gpib  # typing: ignore
-    from gpib_ctypes.gpib.gpib import _lib as gpib_lib  # typing: ignore
+    from gpib_ctypes import gpib  # type: ignore
+    from gpib_ctypes.Gpib import Gpib  # type: ignore
+    from gpib_ctypes.gpib.gpib import _lib as gpib_lib  # type: ignore
 
     try:
         # Add some extra binding not available by default
@@ -106,8 +106,8 @@ try:
 except ImportError:
     GPIB_CTYPES = False
     try:
-        import gpib  # typing: ignore
-        from Gpib import Gpib  # typing: ignore
+        import gpib  # type: ignore
+        from Gpib import Gpib  # type: ignore
     except ImportError as e:
         msg = (
             "Please install linux-gpib (Linux) or gpib-ctypes (Windows, Linux) "
@@ -693,7 +693,7 @@ class _GPIBCommon(Session):
 
 
 # TODO: Check secondary addresses.
-class GPIBSession(_GPIBCommon):
+class GPIBSession(_GPIBCommon):  # type: ignore[no-redef]
     """A GPIB Session that uses linux-gpib to do the low level communication."""
 
     # we don't decorate this class with Session.register() because we don't
