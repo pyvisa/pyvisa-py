@@ -399,11 +399,15 @@ class SerialSession(Session):
                 return StatusCode.error_nonsupported_attribute_state
 
             try:
-                self.interface.xonxoff = (
+                self.interface.xonxoff = bool(
                     attribute_state & constants.VI_ASRL_FLOW_XON_XOFF
                 )
-                self.interface.rtscts = attribute_state & constants.VI_ASRL_FLOW_RTS_CTS
-                self.interface.dsrdtr = attribute_state & constants.VI_ASRL_FLOW_DTR_DSR
+                self.interface.rtscts = bool(
+                    attribute_state & constants.VI_ASRL_FLOW_RTS_CTS
+                )
+                self.interface.dsrdtr = bool(
+                    attribute_state & constants.VI_ASRL_FLOW_DTR_DSR
+                )
                 return StatusCode.success
             except Exception:
                 return StatusCode.error_nonsupported_attribute_state
