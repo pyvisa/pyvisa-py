@@ -18,7 +18,6 @@ PyVISA-py Changelog
 - add support for VI_ATTR_SUPPRESS_END_EN for USB resources PR #449
 - support open_timeout for TCPIP hislip resources PR #430
 - fix serial flow control configuration PR #483
-- support for Prologix GPIB adapters (both USB and ethernet)
 
 0.7.2 (07/03/2024)
 ------------------
