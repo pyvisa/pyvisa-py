@@ -9,7 +9,7 @@
 
 import ctypes  # Used for missing bindings not ideal
 from bisect import bisect
-from typing import Any, Iterator, List, Optional, Tuple, Type, Union
+from typing import Any, Iterator, List, Tuple, Type, Union
 
 from pyvisa import attributes, constants
 from pyvisa.constants import ResourceAttribute, StatusCode
@@ -36,7 +36,7 @@ class GPIBSessionDispatch(Session):
         resource_manager_session: VISARMSession,
         resource_name: str,
         parsed=None,
-        open_timeout: Optional[int] = None,
+        open_timeout: int | None = None,
     ) -> Session:
         newcls: Type
 
