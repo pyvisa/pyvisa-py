@@ -66,6 +66,7 @@ def make_unavailable(msg: str) -> Type:
     -------
     Type[Session]
         Fake session.
+
     """
 
     class _internal(UnavailableSession):
