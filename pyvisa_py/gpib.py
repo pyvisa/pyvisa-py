@@ -28,6 +28,7 @@ class GPIBSessionDispatch(Session):
     GPIB session.  If parsed.board is found in prologix.BOARDS, create an
     instance of prologix.PrologixInstrSession, otherwise create an instance
     of GPIBSession.
+
     """
 
     def __new__(  # type: ignore[misc]
