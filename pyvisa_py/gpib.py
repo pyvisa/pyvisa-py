@@ -22,7 +22,7 @@ from .sessions import Session, UnavailableSession, UnknownAttribute, VISARMSessi
 
 @Session.register(constants.InterfaceType.gpib, "INSTR")
 class GPIBSessionDispatch(Session):
-    """dispatch to the proper class based on entries in prologix.BOARDS.
+    """Dispatch to the proper class based on entries in prologix.BOARDS.
 
     Uses the __new__ method to intercept the creation of the instance of a
     GPIB session.  If parsed.board is found in prologix.BOARDS, create an
