@@ -5,7 +5,7 @@ Implements the interface and instrument classes for Prologix-style devices.
 import select
 import socket
 import sys
-from typing import Any, List, Optional, Tuple, Union
+from typing import Any
 
 from pyvisa import attributes, constants, errors, logger, rname
 from pyvisa.constants import BufferOperation, ResourceAttribute, StatusCode
@@ -29,7 +29,7 @@ class _PrologixIntfcSession(Session):  # pylint: disable=W0223
 
     # Override parsed to take into account the fact that this
     # class is only used for specific kinds of resources
-    parsed: Union[rname.TCPIPSocket, rname.PrlgxASRLIntfc]
+    parsed: rname.TCPIPSocket | rname.PrlgxASRLIntfc
     plus_plus_read: bool = True
     rd_ahead: bytes = b""
 
@@ -37,8 +37,8 @@ class _PrologixIntfcSession(Session):  # pylint: disable=W0223
         self,
         resource_manager_session: VISARMSession,
         resource_name: str,
-        parsed: Optional[rname.ResourceName] = None,
-        open_timeout: Optional[int] = None,
+        parsed: rname.ResourceName | None = None,
+        open_timeout: int | None = None,
     ) -> None:
         super().__init__(resource_manager_session, resource_name, parsed, open_timeout)
 
@@ -113,15 +113,14 @@ class _PrologixIntfcSession(Session):  # pylint: disable=W0223
 
 @Session.register(constants.InterfaceType.prlgx_tcpip, "INTFC")
 class PrologixTCPIPIntfcSession(_PrologixIntfcSession, TCPIPSocketSession):
-    """
-    This class is instantiated for PRLGX-TCPIP<n>::INTFC resources.
+    """Instantiated for PRLGX-TCPIP<n>::INTFC resources.
     """
 
     # Override parsed to take into account the fact that this class is only
     # used for specific kinds of resources
     parsed: rname.TCPIPSocket
 
-    def write(self, data: bytes) -> Tuple[int, StatusCode]:
+    def write(self, data: bytes) -> tuple[int, StatusCode]:
         """Writes data to device or interface synchronously.
 
         Corresponds to viWrite function of the VISA library.
@@ -157,8 +156,7 @@ class PrologixTCPIPIntfcSession(_PrologixIntfcSession, TCPIPSocketSession):
 
 @Session.register(constants.InterfaceType.prlgx_asrl, "INTFC")
 class PrologixASRLIntfcSession(_PrologixIntfcSession, SerialSession):
-    """
-    This class is instantiated for PRLGX-ASRL<n>::INTFC resources.
+    """Instantiated for PRLGX-ASRL<n>::INTFC resources.
     """
 
     # Override parsed to take into account the fact that this class is only
@@ -166,7 +164,7 @@ class PrologixASRLIntfcSession(_PrologixIntfcSession, SerialSession):
     parsed: rname.PrlgxASRLIntfc  # type: ignore[assignment]
 
     @staticmethod
-    def list_resources() -> List[str]:
+    def list_resources() -> list[str]:
         return [
             f"PRLGX-ASRL::{port[0][3:] if IS_WIN else port[0]}::INTFC"
             for port in comports()
@@ -236,7 +234,7 @@ class PrologixInstrSession(Session):
     parsed: rname.GPIBInstr
 
     @staticmethod
-    def list_resources() -> List[str]:
+    def list_resources() -> list[str]:
         # TODO: is there a way to get this?
         return []
 
