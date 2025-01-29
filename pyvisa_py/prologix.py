@@ -113,8 +113,7 @@ class _PrologixIntfcSession(Session):  # pylint: disable=W0223
 
 @Session.register(constants.InterfaceType.prlgx_tcpip, "INTFC")
 class PrologixTCPIPIntfcSession(_PrologixIntfcSession, TCPIPSocketSession):
-    """Instantiated for PRLGX-TCPIP<n>::INTFC resources.
-    """
+    """Instantiated for PRLGX-TCPIP<n>::INTFC resources."""
 
     # Override parsed to take into account the fact that this class is only
     # used for specific kinds of resources
@@ -156,8 +155,7 @@ class PrologixTCPIPIntfcSession(_PrologixIntfcSession, TCPIPSocketSession):
 
 @Session.register(constants.InterfaceType.prlgx_asrl, "INTFC")
 class PrologixASRLIntfcSession(_PrologixIntfcSession, SerialSession):
-    """Instantiated for PRLGX-ASRL<n>::INTFC resources.
-    """
+    """Instantiated for PRLGX-ASRL<n>::INTFC resources."""
 
     # Override parsed to take into account the fact that this class is only
     # used for specific kinds of resources
