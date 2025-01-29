@@ -52,8 +52,7 @@ class GPIBSessionDispatch(Session):
 
 
 def make_unavailable(msg: str) -> Type:
-    """
-    This creates a fake session class that raises a ValueError if instantiated.
+    """Creates a fake session class that raises a ValueError if instantiated.
 
     We can't use Session.register_unavailable() because we need to be able to
     first check if a GPIB "board" has been registered in prologix.BOARDS.
