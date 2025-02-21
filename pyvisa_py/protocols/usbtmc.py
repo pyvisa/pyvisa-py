@@ -449,9 +449,9 @@ class USBTMC(USBRaw):
             self._btag = (self._btag % 255) + 1
 
             eom = end >= size
-            data = BulkOutMessage.build_array(self._btag, eom, data[begin:end])
+            datapart = BulkOutMessage.build_array(self._btag, eom, data[begin:end])
 
-            bytes_sent += raw_write(data)
+            bytes_sent += raw_write(datapart)
 
         return size
 
