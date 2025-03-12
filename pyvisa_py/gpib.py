@@ -22,10 +22,10 @@ from .sessions import Session, UnavailableSession, UnknownAttribute, VISARMSessi
 
 @Session.register(constants.InterfaceType.gpib, "INSTR")
 class GPIBSessionDispatch(Session):
-    """Dispatch to the proper class based on entries in prologix.BOARDS.
+    """Dispatch to the proper class based on entries in prologix._PrologixIntfcSession.boards.
 
     Uses the __new__ method to intercept the creation of the instance of a
-    GPIB session.  If parsed.board is found in prologix.BOARDS, create an
+    GPIB session.  If parsed.board is found in prologix._PrologixIntfcSession.boards, create an
     instance of prologix.PrologixInstrSession, otherwise create an instance
     of GPIBSession.
 
@@ -43,7 +43,7 @@ class GPIBSessionDispatch(Session):
         if parsed is None:
             parsed = parse_resource_name(resource_name)
 
-        if parsed.board in prologix.BOARDS:
+        if parsed.board in prologix._PrologixIntfcSession.boards:
             newcls = prologix.PrologixInstrSession
         else:
             newcls = GPIBSession
@@ -55,7 +55,7 @@ def make_unavailable(msg: str) -> Type:
     """Creates a fake session class that raises a ValueError if instantiated.
 
     We can't use Session.register_unavailable() because we need to be able to
-    first check if a GPIB "board" has been registered in prologix.BOARDS.
+    first check if a GPIB "board" has been registered in prologix._PrologixIntfcSession.boards.
 
     Parameters
     ----------

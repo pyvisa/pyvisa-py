@@ -15,9 +15,6 @@ from .serial import SerialSession, comports, serial as pyserial
 from .sessions import Session, UnknownAttribute, VISARMSession
 from .tcpip import TCPIPSocketSession
 
-# dictionary lookup for Prologix controllers that have been opened
-BOARDS = {}
-
 IS_WIN = sys.platform == "win32"
 
 
@@ -27,6 +24,9 @@ class _PrologixIntfcSession(Session):  # pylint: disable=W0223
     PRLGX-TCPIP<n>::INTFC resources and
     PRLGX-ASRL<n>::INTFC resources.
     """
+
+    # class var for looking up Prologix INTFC instances from board number
+    boards: dict = {}
 
     # Override parsed to take into account the fact that this
     # class is only used for specific kinds of resources
@@ -42,6 +42,9 @@ class _PrologixIntfcSession(Session):  # pylint: disable=W0223
         open_timeout: int | None = None,
     ) -> None:
         super().__init__(resource_manager_session, resource_name, parsed, open_timeout)
+
+        # store this instance in the dictionary of Prologix interfaces
+        self.boards[self.parsed.board] = self
 
         self.set_attribute(ResourceAttribute.termchar, ord("\n"))
         self.set_attribute(ResourceAttribute.termchar_enabled, True)
@@ -64,13 +67,17 @@ class _PrologixIntfcSession(Session):  # pylint: disable=W0223
         # do not append eot_char to recvd data when EOI detected
         self.write_oob(b"++eot_enable 0\n")
 
-        BOARDS[self.parsed.board] = self
         self._gpib_addr = ""
 
         self.intfc_lock = threading.Lock()
 
     def close(self) -> StatusCode:
-        BOARDS.pop(self.parsed.board)
+        try:
+            _PrologixIntfcSession.boards.pop(self.parsed.board)
+        except KeyError:
+            # probably raised an exception before __init__ finished
+            pass
+
         return super().close()  # type: ignore[safe-super]
 
     @property
@@ -242,7 +249,8 @@ class PrologixInstrSession(Session):
         return []
 
     def after_parsing(self) -> None:
-        self.interface = BOARDS[self.parsed.board]
+        self.interface = _PrologixIntfcSession.boards[self.parsed.board]
+
         self.gpib_addr = self.parsed.primary_address
         if self.parsed.secondary_address:
             # Secondary address of the device to connect to
