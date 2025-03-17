@@ -206,7 +206,7 @@ class TCPIPInstrHiSLIP(Session):
         self, attribute: ResourceAttribute
     ) -> Tuple[int, StatusCode]:
         """Get the maximum HiSLIP message size in kilobytes."""
-        max_msg_size_kb = int(round(self.interface.max_msg_size / 1024))
+        max_msg_size_kb = round(self.interface.max_msg_size / 1024)
         return max_msg_size_kb, StatusCode.success
 
     def set_max_message_kb(
@@ -219,7 +219,7 @@ class TCPIPInstrHiSLIP(Session):
         if size_kb > 0xFFFF_FFFF:
             raise ValueError("size exceeds the range in the VISA spec")
 
-        self.interface.max_msg_size = int(round(size_kb * 1024))
+        self.interface.max_msg_size = round(size_kb * 1024)
         return StatusCode.success
 
     def get_keepalive(self, attribute: ResourceAttribute) -> Tuple[bool, StatusCode]:
