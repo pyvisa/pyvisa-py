@@ -9,15 +9,25 @@
 
 import random
 from collections import OrderedDict
-from typing import Any, Dict, Iterable, List, Optional, Tuple, Union, cast
+from typing import (
+    Any,
+    Dict,
+    Iterable,
+    List,
+    MutableMapping,
+    Optional,
+    Tuple,
+    Union,
+    cast,
+)
 
 from pyvisa import constants, highlevel, rname
 from pyvisa.constants import StatusCode
 from pyvisa.typing import VISAEventContext, VISARMSession, VISASession
 from pyvisa.util import DebugInfo, LibraryPath
 
-from . import sessions
 from .common import LOGGER
+from .sessions import OpenError, Session
 
 
 class PyVisaLibrary(highlevel.VisaLibraryBase):
@@ -39,7 +49,9 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
     """
 
     #: Live session object identified by a randon session ID
-    sessions: Dict[int, sessions.Session]
+    sessions: MutableMapping[
+        Union[VISASession, VISAEventContext, VISARMSession], Session
+    ]
 
     # Try to import packages implementing lower level functionality.
     try:
@@ -83,11 +95,11 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
         d: OrderedDict[str, Union[str, List[str], Dict[str, str]]] = OrderedDict()
         d["Version"] = "%s" % __version__
 
-        for key, val in sessions.Session.iter_valid_session_classes():
+        for key, val in Session.iter_valid_session_classes():
             key_name = "%s %s" % (key[0].name.upper(), key[1])
             d[key_name] = "Available " + val.get_low_level_info()
 
-        for key, issue in sessions.Session.iter_session_classes_issues():
+        for key, issue in Session.iter_session_classes_issues():
             key_name = "%s %s" % (key[0].name.upper(), key[1])
             d[key_name] = issue.split("\n")
 
@@ -98,16 +110,16 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
         # Map session handle to session object.
         self.sessions = {}
 
-    def _register(self, obj: object) -> VISASession:
+    def _register(self, obj: Session) -> VISASession:
         """Creates a random but unique session handle for a session object.
 
         Register it in the sessions dictionary and return the value.
 
         """
-        session = None
-
-        while session is None or session in self.sessions:
-            session = random.randint(1000000, 9999999)
+        while True:
+            session = VISASession(random.randint(1000000, 9999999))
+            if session not in self.sessions:
+                break
 
         self.sessions[session] = obj
         return session
@@ -161,13 +173,13 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
                 self.handle_return_value(None, StatusCode.error_invalid_resource_name),
             )
 
-        cls = sessions.Session.get_session_class(
+        cls = Session.get_session_class(
             parsed.interface_type_const, parsed.resource_class
         )
 
         try:
             sess = cls(session, resource_name, parsed, open_timeout)
-        except sessions.OpenError as e:
+        except OpenError as e:
             return VISASession(0), self.handle_return_value(None, e.error_code)
 
         return self._register(sess), StatusCode.success
@@ -460,7 +472,7 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
 
         """
         return (
-            cast(VISARMSession, self._register(self)),
+            cast(VISARMSession, self._register(cast(Session, self))),
             self.handle_return_value(None, StatusCode.success),
         )
 
@@ -486,7 +498,7 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
         # merge them into a single list.
         # HINT: the cast should not be necessary here
         resources: List[str] = []
-        for key, st in sessions.Session.iter_valid_session_classes():
+        for key, st in Session.iter_valid_session_classes():
             resources += st.list_resources()
 
         return rname.filter(resources, query)
@@ -607,7 +619,7 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
 
         Parameters
         ----------
-        session : Union[VISASession, VISAEventContext]
+        session : Union[VISASession, VISAEventContext, VISARMSession]
             Unique logical identifier to a session, event, or find list.
         attribute : Union[constants.ResourceAttribute, constants.EventAttribute]
             Resource or event attribute for which the state query is made.
