@@ -9,7 +9,17 @@
 
 import random
 from collections import OrderedDict
-from typing import Any, Dict, Iterable, List, Optional, Tuple, Union, cast
+from typing import (
+    Any,
+    Dict,
+    Iterable,
+    List,
+    MutableMapping,
+    Optional,
+    Tuple,
+    Union,
+    cast,
+)
 
 from pyvisa import constants, highlevel, rname
 from pyvisa.constants import StatusCode
@@ -39,7 +49,9 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
     """
 
     #: Live session object identified by a randon session ID
-    sessions: Dict[VISASession, Session]
+    sessions: MutableMapping[
+        Union[VISASession, VISAEventContext, VISARMSession], Session
+    ]
 
     # Try to import packages implementing lower level functionality.
     try:
@@ -607,7 +619,7 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
 
         Parameters
         ----------
-        session : Union[VISASession, VISAEventContext]
+        session : Union[VISASession, VISAEventContext, VISARMSession]
             Unique logical identifier to a session, event, or find list.
         attribute : Union[constants.ResourceAttribute, constants.EventAttribute]
             Resource or event attribute for which the state query is made.
