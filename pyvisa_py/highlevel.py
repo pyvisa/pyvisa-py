@@ -85,7 +85,6 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
 
         LOGGER.debug(f"{ss} were correctly imported.")
     except Exception as e:
-        breakpoint()
         LOGGER.debug(
             "PrologixASRLIntfcSession and PrologixTCPIPIntfcSession were not imported: %s."
             % e

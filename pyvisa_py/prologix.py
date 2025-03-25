@@ -182,6 +182,7 @@ class PrologixTCPIPIntfcSession(_PrologixIntfcSession, TCPIPSocketSession):
 
 
 if SerialSession is not None:
+    assert isinstance(SerialSession, type)
 
     @Session.register(constants.InterfaceType.prlgx_asrl, "INTFC")
     class PrologixASRLIntfcSession(_PrologixIntfcSession, SerialSession):
