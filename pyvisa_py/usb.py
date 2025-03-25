@@ -291,12 +291,12 @@ class USBInstrSession(USBSession):
                         "usb_interface_number": intfc,
                     },
                 )
-                logging_level = logger.getEffectiveLevel()
+                logging_level = LOGGER.getEffectiveLevel()
                 if logging_level <= logging.DEBUG:
-                    logger.debug("Error while reading serial number", exc_info=err)
+                    LOGGER.debug("Error while reading serial number", exc_info=err)
                 elif logging_level <= logging.INFO:
                     if exc_strs := traceback.format_exception_only(err):
-                        logger.info(
+                        LOGGER.info(
                             "Error raised from underlying module (pyusb): %s",
                             exc_strs[0].strip(),
                         )
@@ -311,10 +311,10 @@ class USBInstrSession(USBSession):
                         if not os.access(dev_path, os.O_WRONLY):
                             missing_perms.append("write to")
                         missing_perms_str = " or ".join(missing_perms)
-                        logger.warning(
+                        LOGGER.warning(
                             "User does not have permission to %s %s, so the above "
                             "USB INSTR device cannot be used by pyvisa; see"
-                            " https://pyvisa.readthedocs.io/projects/pyvisa-py/en/latest/faq.html"
+                            " https://pyvisa.readthedocs.io/projects/pyvisa-py/en/latest/installation.html"
                             " for more info.",
                             missing_perms_str,
                             dev_path,

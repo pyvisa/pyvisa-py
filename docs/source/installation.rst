@@ -69,7 +69,13 @@ details.
 
 On Unix system, one may have to modify udev rules to allow non-root access to
 the device you are trying to connect to. The following tutorial describes how
-to do it http://ask.xmodulo.com/change-usb-device-permission-linux.html.
+to do it https://www.xmodulo.com/change-usb-device-permission-linux.html.
+
+Note that USBTMC devices show up as both /dev/usbtmcN and /dev/bus/usb/NNN/NNN.
+Both instances need to have suitable permissions for pyvisa with pyvisa-py to
+be able to communicate. If only the /dev/usbtmcN has permissions then you get::
+
+  WARNING Found a device whose serial number cannot be read
 
 On Windows, you may have to uninstall the USBTMC-specific driver installed by
 Windows and re-install a generic driver. Please check `libusb's guide`_ for more
