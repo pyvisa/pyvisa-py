@@ -27,7 +27,7 @@ except Exception as e:
     pyserial = None
     ERR_MSG = f"{e}"
 else:
-    from .serial import SerialSession, comports
+    from .serial import SerialSession, comports  # type: ignore
 
     ERR_MSG = ""
 
@@ -182,10 +182,10 @@ class PrologixTCPIPIntfcSession(_PrologixIntfcSession, TCPIPSocketSession):
 
 
 if SerialSession is not None:
-    assert isinstance(SerialSession, type)
+    # Mypy is unhappy with the handling of the possibly failing import
 
     @Session.register(constants.InterfaceType.prlgx_asrl, "INTFC")
-    class PrologixASRLIntfcSession(_PrologixIntfcSession, SerialSession):
+    class PrologixASRLIntfcSession(_PrologixIntfcSession, SerialSession):  # type: ignore
         """Instantiated for PRLGX-ASRL<n>::INTFC resources."""
 
         # Override parsed to take into account the fact that this class is only
