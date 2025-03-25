@@ -76,11 +76,20 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
         LOGGER.debug("TCPIPSession was not imported %s." % e)
 
     try:
-        from .prologix import _PrologixIntfcSession
+        from . import prologix
 
-        LOGGER.debug("_PrologixIntfcSession was correctly imported.")
+        if hasattr(prologix, "PrologixASRLIntfcSession"):
+            ss = "PrologixASRLIntfcSession and PrologixTCPIPIntfcSession"
+        else:
+            ss = "PrologixTCPIPIntfcSession"
+
+        LOGGER.debug(f"{ss} were correctly imported.")
     except Exception as e:
-        LOGGER.debug("_PrologixIntfcSession was not imported %s." % e)
+        breakpoint()
+        LOGGER.debug(
+            "PrologixASRLIntfcSession and PrologixTCPIPIntfcSession were not imported: %s."
+            % e
+        )
 
     try:
         from .gpib import GPIBSession

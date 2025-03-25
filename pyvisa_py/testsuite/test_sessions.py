@@ -23,7 +23,6 @@ class TestSessions(BaseTestCase):
         expected = [
             (InterfaceType.tcpip, "INSTR"),
             (InterfaceType.tcpip, "SOCKET"),
-            (InterfaceType.prlgx_asrl, "INTFC"),
             (InterfaceType.prlgx_tcpip, "INTFC"),
             (InterfaceType.gpib, "INSTR"),
         ]
@@ -64,12 +63,15 @@ class TestSessions(BaseTestCase):
             exp_missing.extend(gpibs)
 
         asrl = (InterfaceType.asrl, "INSTR")
+        prlgx_aslr = (InterfaceType.prlgx_asrl, "INTFC")
         try:
             import serial  # noqa
 
             expected.append(asrl)
+            expected.append(prlgx_aslr)
         except Exception:
             exp_missing.append(asrl)
+            exp_missing.append(prlgx_aslr)
 
         vicp = (InterfaceType.vicp, "INSTR")
         try:

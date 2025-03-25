@@ -1,5 +1,9 @@
 """
 Implements the interface and instrument classes for Prologix-style devices.
+
+:copyright: 2025 by PyVISA-py Authors, see AUTHORS for more details.
+:license: MIT, see LICENSE for more details.
+
 """
 
 import select
@@ -11,9 +15,21 @@ from typing import Any
 from pyvisa import attributes, constants, errors, logger, rname
 from pyvisa.constants import BufferOperation, ResourceAttribute, StatusCode
 
-from .serial import SerialSession, comports, serial as pyserial
 from .sessions import Session, UnknownAttribute, VISARMSession
 from .tcpip import TCPIPSocketSession
+
+# Allow to work even in the absence of pyserial
+try:
+    import serial as pyserial
+except Exception as e:
+    SerialSession = None
+    comports = None
+    pyserial = None
+    ERR_MSG = f"{e}"
+else:
+    from .serial import SerialSession, comports
+
+    ERR_MSG = ""
 
 IS_WIN = sys.platform == "win32"
 
@@ -165,67 +181,75 @@ class PrologixTCPIPIntfcSession(_PrologixIntfcSession, TCPIPSocketSession):
         return super().write(data)
 
 
-@Session.register(constants.InterfaceType.prlgx_asrl, "INTFC")
-class PrologixASRLIntfcSession(_PrologixIntfcSession, SerialSession):
-    """Instantiated for PRLGX-ASRL<n>::INTFC resources."""
+if SerialSession is not None:
 
-    # Override parsed to take into account the fact that this class is only
-    # used for specific kinds of resources
-    parsed: rname.PrlgxASRLIntfc  # type: ignore[assignment]
+    @Session.register(constants.InterfaceType.prlgx_asrl, "INTFC")
+    class PrologixASRLIntfcSession(_PrologixIntfcSession, SerialSession):
+        """Instantiated for PRLGX-ASRL<n>::INTFC resources."""
 
-    @staticmethod
-    def list_resources() -> list[str]:
-        return [
-            f"PRLGX-ASRL::{port[0][3:] if IS_WIN else port[0]}::INTFC"
-            for port in comports()
-        ]
+        # Override parsed to take into account the fact that this class is only
+        # used for specific kinds of resources
+        parsed: rname.PrlgxASRLIntfc  # type: ignore[assignment]
 
-    def after_parsing(self) -> None:
-        self.interface = pyserial.serial_for_url(
-            ("COM" if IS_WIN else "") + self.parsed.serial_device,
-            timeout=self.timeout,
-            write_timeout=self.timeout,
-            baudrate=115200,
-        )
+        @staticmethod
+        def list_resources() -> list[str]:
+            return [
+                f"PRLGX-ASRL::{port[0][3:] if IS_WIN else port[0]}::INTFC"
+                for port in comports()
+            ]
 
-        for name in (
-            "ASRL_END_IN",
-            "ASRL_END_OUT",
-            "SEND_END_EN",
-            "TERMCHAR",
-            "TERMCHAR_EN",
-            "SUPPRESS_END_EN",
-        ):
-            attribute = getattr(constants, "VI_ATTR_" + name)
-            self.attrs[attribute] = attributes.AttributesByID[attribute].default
+        def after_parsing(self) -> None:
+            self.interface = pyserial.serial_for_url(
+                ("COM" if IS_WIN else "") + self.parsed.serial_device,
+                timeout=self.timeout,
+                write_timeout=self.timeout,
+                baudrate=115200,
+            )
 
-    def write(self, data: bytes) -> tuple[int, StatusCode]:
-        """Writes data to device or interface synchronously.
+            for name in (
+                "ASRL_END_IN",
+                "ASRL_END_OUT",
+                "SEND_END_EN",
+                "TERMCHAR",
+                "TERMCHAR_EN",
+                "SUPPRESS_END_EN",
+            ):
+                attribute = getattr(constants, "VI_ATTR_" + name)
+                self.attrs[attribute] = attributes.AttributesByID[attribute].default
 
-        Corresponds to viWrite function of the VISA library.
+        def write(self, data: bytes) -> tuple[int, StatusCode]:
+            """Writes data to device or interface synchronously.
 
-        Parameters
-        ----------
-        data : bytes
-            Data to be written.
+            Corresponds to viWrite function of the VISA library.
 
-        Returns
-        -------
-        int
-            Number of bytes actually transferred
-        StatusCode
-            Return value of the library call.
+            Parameters
+            ----------
+            data : bytes
+                Data to be written.
 
-        """
-        if self.interface is None:
-            raise errors.InvalidSession()
+            Returns
+            -------
+            int
+                Number of bytes actually transferred
+            StatusCode
+                Return value of the library call.
 
-        if self.interface.inWaiting() > 0:
-            # any data that hasn't been read yet is now considered stale,
-            # and should be discarded.
-            self.interface.flushInput()
-        self.plus_plus_read = True
-        return super().write(data)
+            """
+            if self.interface is None:
+                raise errors.InvalidSession()
+
+            if self.interface.inWaiting() > 0:
+                # any data that hasn't been read yet is now considered stale,
+                # and should be discarded.
+                self.interface.flushInput()
+            self.plus_plus_read = True
+            return super().write(data)
+else:
+    Session.register_unavailable(
+        constants.InterfaceType.prlgx_asrl,
+        "INTFC",
+        "Please install PySerial (>=3.0) to use this resource type.\n%s" % ERR_MSG,
+    )
 
 
 class PrologixInstrSession(Session):
