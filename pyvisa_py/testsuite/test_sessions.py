@@ -20,7 +20,12 @@ class TestSessions(BaseTestCase):
         available = [d for d, _ in Session.iter_valid_session_classes()]
         missing = [d for d, _ in Session.iter_session_classes_issues()]
 
-        expected = [(InterfaceType.tcpip, "INSTR"), (InterfaceType.tcpip, "SOCKET")]
+        expected = [
+            (InterfaceType.tcpip, "INSTR"),
+            (InterfaceType.tcpip, "SOCKET"),
+            (InterfaceType.prlgx_tcpip, "INTFC"),
+            (InterfaceType.gpib, "INSTR"),
+        ]
         exp_missing = []
         usbs = [(InterfaceType.usb, "INSTR"), (InterfaceType.usb, "RAW")]
         try:
@@ -32,7 +37,7 @@ class TestSessions(BaseTestCase):
         except Exception:
             exp_missing.extend(usbs)
 
-        gpibs = [(InterfaceType.gpib, "INSTR"), (InterfaceType.gpib, "INTFC")]
+        gpibs = [(InterfaceType.gpib, "INTFC")]
         try:
             try:
                 from gpib_ctypes import gpib
@@ -58,12 +63,15 @@ class TestSessions(BaseTestCase):
             exp_missing.extend(gpibs)
 
         asrl = (InterfaceType.asrl, "INSTR")
+        prlgx_aslr = (InterfaceType.prlgx_asrl, "INTFC")
         try:
             import serial  # noqa
 
             expected.append(asrl)
+            expected.append(prlgx_aslr)
         except Exception:
             exp_missing.append(asrl)
+            exp_missing.append(prlgx_aslr)
 
         vicp = (InterfaceType.vicp, "INSTR")
         try:

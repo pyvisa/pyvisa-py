@@ -26,7 +26,7 @@ from .sessions import OpenError, Session, UnknownAttribute, VISARMSession
 try:
     import psutil  # type: ignore
 except ImportError:
-    psutil = None
+    psutil = None  # type: ignore
 
 # Let zeroconf be optional dependency
 try:
