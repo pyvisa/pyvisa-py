@@ -23,26 +23,26 @@
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
   ]
-  dependencies = ["pyvisa>=1.13.0", "typing_extensions"]
+  dependencies = ["pyvisa>=1.15.0", "typing_extensions"]
   dynamic = ["version"]
 
   [project.optional-dependencies]
-    gpib-ctypes = ["gpib-ctypes>=0.3.0"]
-    serial = ["pyserial>=3.0"]
-    usb = ["pyusb"]
-    psutil = ["psutil"]
+    gpib-ctypes      = ["gpib-ctypes>=0.3.0"]
+    serial           = ["pyserial>=3.0"]
+    usb              = ["pyusb"]
+    psutil           = ["psutil"]
     hislip-discovery = ["zeroconf"]
-    vicp = ["pyvicp", "zeroconf"]
+    vicp             = ["pyvicp", "zeroconf"]
 
 
   [project.urls]
-    homepage = "https://github.com/pyvisa/pyvisa-py"
+    homepage      = "https://github.com/pyvisa/pyvisa-py"
     documentation = "https://pyvisa-py.readthedocs.io/en/latest/"
-    repository = "https://github.com/pyvisa/pyvisa-py"
-    changelog = "https://github.com/pyvisa/pyvisa-py/blob/main/CHANGES"
+    repository    = "https://github.com/pyvisa/pyvisa-py"
+    changelog     = "https://github.com/pyvisa/pyvisa-py/blob/main/CHANGES"
 
 [build-system]
-  requires = ["setuptools>=61.2", "wheel", "setuptools_scm[toml]>=3.4.3"]
+  requires      = ["setuptools>=61.2", "wheel", "setuptools_scm[toml]>=3.4.3"]
   build-backend = "setuptools.build_meta"
 
 [tool.setuptools_scm]
@@ -70,17 +70,17 @@ __version__ = "{version}"
 """
 
 [tool.ruff]
-  src = ["src"]
+  src            = ["src"]
   extend-exclude = ["pyvisa/thirdparty/*"]
-  line-length = 88
+  line-length    = 88
 
   [tool.ruff.lint]
-    select = ["C", "E", "F", "W", "I", "C90", "RUF"]
+    select        = ["C", "E", "F", "W", "I", "C90", "RUF"]
     extend-ignore = ["E501", "RUF012"]
 
     [tool.ruff.lint.isort]
       combine-as-imports = true
-      known-first-party = ["pyvisa"]
+      known-first-party  = ["pyvisa"]
 
     [tool.ruff.lint.mccabe]
       max-complexity = 20
@@ -89,11 +89,11 @@ __version__ = "{version}"
   minversion = "6.0"
 
 [tool.mypy]
-  follow_imports = "normal"
+  follow_imports  = "normal"
   strict_optional = true
 
   [[tool.mypy.overrides]]
-    module = ["usb.*", "serial.*", "gpib.*", "Gpib.*", "gpib_ctypes.*", "pyvicp.*"]
+    module                 = ["usb.*", "serial.*", "gpib.*", "Gpib.*", "gpib_ctypes.*", "pyvicp.*"]
     ignore_missing_imports = true
 
 [tool.coverage]
