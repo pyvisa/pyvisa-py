@@ -8,6 +8,10 @@
 """
 
 import errno
+import logging
+import os
+import sys
+import traceback
 from typing import Any, List, Tuple, Type, Union
 
 from pyvisa import attributes, constants
@@ -272,9 +276,9 @@ class USBInstrSession(USBSession):
 
             try:
                 serial = dev.serial_number
-            except (NotImplementedError, ValueError):
+            except (NotImplementedError, ValueError) as err:
                 msg = (
-                    "Found a device whose serial number cannot be read."
+                    "Found a USB INSTR device whose serial number cannot be read."
                     " The partial VISA resource name is: " + fmt
                 )
                 LOGGER.warning(
@@ -287,6 +291,35 @@ class USBInstrSession(USBSession):
                         "usb_interface_number": intfc,
                     },
                 )
+                logging_level = LOGGER.getEffectiveLevel()
+                if logging_level <= logging.DEBUG:
+                    LOGGER.debug("Error while reading serial number", exc_info=err)
+                elif logging_level <= logging.INFO:
+                    if exc_strs := traceback.format_exception_only(err):
+                        LOGGER.info(
+                            "Error raised from underlying module (pyusb): %s",
+                            exc_strs[0].strip(),
+                        )
+
+                # Check permissions on Linux
+                if sys.platform.startswith("linux"):
+                    dev_path = f"/dev/bus/usb/{dev.bus:03d}/{dev.address:03d}"
+                    if os.path.exists(dev_path) and not os.access(dev_path, os.O_RDWR):
+                        missing_perms = []
+                        if not os.access(dev_path, os.O_RDONLY):
+                            missing_perms.append("read from")
+                        if not os.access(dev_path, os.O_WRONLY):
+                            missing_perms.append("write to")
+                        missing_perms_str = " or ".join(missing_perms)
+                        LOGGER.warning(
+                            "User does not have permission to %s %s, so the above "
+                            "USB INSTR device cannot be used by pyvisa; see"
+                            " https://pyvisa.readthedocs.io/projects/pyvisa-py/en/latest/installation.html"
+                            " for more info.",
+                            missing_perms_str,
+                            dev_path,
+                        )
+
                 continue
 
             out.append(
@@ -331,7 +364,7 @@ class USBRawSession(USBSession):
                 serial = dev.serial_number
             except (NotImplementedError, ValueError, usb.USBError):
                 msg = (
-                    "Found a device whose serial number cannot be read."
+                    "Found a USB RAW device whose serial number cannot be read."
                     " The partial VISA resource name is: " + fmt
                 )
                 LOGGER.warning(
