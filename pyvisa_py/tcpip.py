@@ -409,8 +409,8 @@ class TCPIPInstrVxi11(Session):
     #: Maximum size of a chunk of data in bytes.
     max_recv_size: int
 
-    #: Time to wait before erroring with a timeout when trying to acquire a lock
-    lock_timeout: int
+    #: Time to wait in ms before erroring with a timeout when trying to acquire a lock
+    lock_timeout: int = 10000
 
     #: Unique ID of the client used to authenticate messages.
     client_id: int
@@ -495,8 +495,6 @@ class TCPIPInstrVxi11(Session):
             )
             raise OpenError()
 
-        # vxi11 expect all timeouts to be expressed in ms and should be integers
-        self.lock_timeout = 10000
         self.client_id = random.getrandbits(31)
         self.keepalive = False
 
