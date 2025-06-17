@@ -93,6 +93,21 @@ By using PyVISA as a frontend to many backends, we abstract these things
 from higher level applications.
 
 
+Why is my Ethernet instrument not working?
+------------------------------------------
+
+Some instruments, such as the Rigol DM3068 Digital Multimeter,
+expect a non-default parameter in order to communicate successfully over Ethernet.
+In the case of the DM3068, the VXI-11 lock timeout must be set to zero:
+
+    >>> import pyvisa
+    >>> rm = pyvisa.ResourceManager('@py')
+    >>> dm3068 = rm.open_resource('TCPIP::rigol-dm3068-hostname::INSTR')
+    >>> # default lock_timeout is still 10000ms at this point
+    >>> rm.visalib.sessions[dm3068.session].lock_timeout = 0
+    >>> # can now communicate successfully with the DM3068
+
+
 .. _PySerial: https://pythonhosted.org/pyserial/
 .. _PyVISA: http://pyvisa.readthedocs.org/
 .. _PyUSB: https://github.com/pyusb/pyusb
