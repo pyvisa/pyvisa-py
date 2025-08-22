@@ -20,14 +20,20 @@ from .common import LOGGER
 from .sessions import Session, UnavailableSession, UnknownAttribute, VISARMSession
 
 
+# NOTE dummy implementation that is overwritten when a GPIB library is found
+# Allow to provide session listing even when no GPIB library is available.
+def _find_listeners() -> Iterator[Tuple[int, int, int]]:
+    yield from ()
+
+
 @Session.register(constants.InterfaceType.gpib, "INSTR")
 class GPIBSessionDispatch(Session):
-    """Dispatch to the proper class based on entries in prologix._PrologixIntfcSession.boards.
+    """Dispatch to the proper class based on prologix._PrologixIntfcSession.boards.
 
     Uses the __new__ method to intercept the creation of the instance of a
-    GPIB session.  If parsed.board is found in prologix._PrologixIntfcSession.boards, create an
-    instance of prologix.PrologixInstrSession, otherwise create an instance
-    of GPIBSession.
+    GPIB session.  If parsed.board is found in
+    prologix._PrologixIntfcSession.boards, create an instance of
+    prologix.PrologixInstrSession, otherwise create an instance of GPIBSession.
 
     """
 
@@ -49,6 +55,18 @@ class GPIBSessionDispatch(Session):
             newcls = GPIBSession
 
         return newcls(resource_manager_session, resource_name, parsed, open_timeout)
+
+    @staticmethod
+    def list_resources() -> List[str]:
+        return [
+            "GPIB%d::%d::INSTR" % (board, pad)
+            if sad == 0
+            else "GPIB%d::%d::%d::INSTR" % (board, pad, sad - 0x60)
+            for board, pad, sad in _find_listeners()
+        ]
+
+    # FIXME when PROLOGIX gain the ability to list resources, we should
+    # include PROLOGIX results.
 
 
 def make_unavailable(msg: str) -> Type:
@@ -145,7 +163,7 @@ def _find_boards() -> Iterator[Tuple[int, int]]:
             LOGGER.debug("GPIB board %i error in _find_boards(): %s", board, repr(e))
 
 
-def _find_listeners() -> Iterator[Tuple[int, int, int]]:
+def _find_listeners() -> Iterator[Tuple[int, int, int]]:  # type: ignore[no-redef]
     """Find GPIB listeners."""
     for board, boardpad in _find_boards():
         for i in range(31):
