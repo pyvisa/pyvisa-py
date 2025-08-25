@@ -33,17 +33,21 @@ except ImportError as e:
 
 try:
     _ = usb.core.find()
-except Exception as e:
-    msg = (
-        "PyUSB does not seem to be properly installed.\n"
-        "Please refer to PyUSB documentation and \n"
-        "install a suitable backend like \n"
-        "libusb 0.1, libusb 1.0, libusbx, \n"
-        "libusb-win32 or OpenUSB.\n%s" % e
-    )
-    Session.register_unavailable(constants.InterfaceType.usb, "INSTR", msg)
-    Session.register_unavailable(constants.InterfaceType.usb, "RAW", msg)
-    raise
+except Exception as e1:
+    try:
+        import libusb_package
+        _ = libusb_package.find()
+    except Exception as e2:
+        msg = (
+            "PyUSB does not seem to be properly installed.\n"
+            "Please refer to PyUSB documentation and \n"
+            "install a suitable backend like \n"
+            "libusb 0.1, libusb 1.0, libusbx, \n"
+            "libusb-win32 or OpenUSB.\n%s\n%s" % (e2, e1)
+        )
+        Session.register_unavailable(constants.InterfaceType.usb, "INSTR", msg)
+        Session.register_unavailable(constants.InterfaceType.usb, "RAW", msg)
+        raise
 
 
 class USBTimeoutException(Exception):
@@ -78,7 +82,10 @@ class USBSession(Session):
             # noinspection PyProtectedMember
             backend = usb.core.find()._ctx.backend.__class__.__module__.split(".")[-1]
         except Exception:
-            backend = "N/A"
+            try:
+                backend = libusb_package.find()._ctx.backend.__class__.__module__.split(".")[-1]
+            except Exception:
+                backend = "N/A"
 
         return "via PyUSB (%s). Backend: %s" % (ver, backend)
 

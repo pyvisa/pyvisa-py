@@ -214,7 +214,16 @@ def find_devices(
     else:
         cm = custom_match
 
-    return usb.core.find(find_all=True, custom_match=cm, **kwargs)
+    try:
+        devices = usb.core.find(find_all=True, custom_match=cm, **kwargs)
+    except usb.core.NoBackendError as e1:
+        try:
+            import libusb_package
+            devices = libusb_package.find(find_all=True, custom_match=cm, **kwargs)
+        except ImportError as e2:
+            raise e1 from e2
+
+    return devices
 
 
 def find_interfaces(device, **kwargs):
