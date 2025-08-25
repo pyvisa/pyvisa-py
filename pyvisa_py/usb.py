@@ -36,6 +36,7 @@ try:
 except Exception as e1:
     try:
         import libusb_package
+
         _ = libusb_package.find()
     except Exception as e2:
         msg = (
@@ -83,7 +84,9 @@ class USBSession(Session):
             backend = usb.core.find()._ctx.backend.__class__.__module__.split(".")[-1]
         except Exception:
             try:
-                backend = libusb_package.find()._ctx.backend.__class__.__module__.split(".")[-1]
+                backend = libusb_package.find()._ctx.backend.__class__.__module__.split(
+                    "."
+                )[-1]
             except Exception:
                 backend = "N/A"
 
