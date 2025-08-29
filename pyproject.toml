@@ -93,7 +93,7 @@ __version__ = "{version}"
   strict_optional = true
 
   [[tool.mypy.overrides]]
-    module                 = ["usb.*", "serial.*", "gpib.*", "Gpib.*", "gpib_ctypes.*", "pyvicp.*"]
+    module                 = ["usb.*", "libusb_package.*", "serial.*", "gpib.*", "Gpib.*", "gpib_ctypes.*", "pyvicp.*"]
     ignore_missing_imports = true
 
 [tool.coverage]
