@@ -46,7 +46,7 @@ except Exception as e1:
             "libusb 0.1, libusb 1.0, libusbx, \n"
             "libusb-win32 or OpenUSB. If you do not have \n"
             "administrator/root privileges, you may try \n"
-            "installing the \"libusb-package\" Python \n"
+            'installing the "libusb-package" Python \n'
             "package to provide the necessary backend.\n%s\n%s" % (e2, e1)
         )
         Session.register_unavailable(constants.InterfaceType.usb, "INSTR", msg)

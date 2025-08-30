@@ -220,9 +220,7 @@ def find_devices(
         try:
             import libusb_package
 
-            devices = libusb_package.find(
-                find_all=True, custom_match=cm, **kwargs
-            )
+            devices = libusb_package.find(find_all=True, custom_match=cm, **kwargs)
         except ImportError as e2:
             raise e1 from e2
 
