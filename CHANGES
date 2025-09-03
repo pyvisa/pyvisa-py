@@ -5,6 +5,7 @@ PyVISA-py Changelog
 ------------------
 
 - add support for USB and Ethernet Prologix adapters PR #484
+- ensure listing of GPIB resources works after PR#484 PR #523
 - improve message when USB device serial number is not readable PR #423
 - ignore network interface card with no subnet mask when discovering TCPIP
   resources PR #478
