@@ -1,11 +1,17 @@
 PyVISA-py Changelog
 ===================
 
+0.8.1 (03-09-2025)
+------------------
+
+- allow users to easily change the VXI-11 lock timeout PR #496
+- ensure listing of GPIB resources works after PR #484 PR #523
+- add support for pyocd/libusb_package PyUSB backend PR #524
+
 0.8.0 (01-04-2025)
 ------------------
 
 - add support for USB and Ethernet Prologix adapters PR #484
-- ensure listing of GPIB resources works after PR#484 PR #523
 - improve message when USB device serial number is not readable PR #423
 - ignore network interface card with no subnet mask when discovering TCPIP
   resources PR #478

@@ -62,12 +62,16 @@ You should not have to perform any special configuration after the install.
 USB resources: USB INSTR/RAW
 ----------------------------
 
-For **USB** resources, you need to install PyUSB_. PyUSB_ relies on USB driver
-library such as libusb 0.1, libusb 1.0, libusbx, libusb-win32 and OpenUSB
-that you should also install. Please refer to PyUSB_ documentation for more
-details.
+For **USB** resources, you need to install PyUSB_ and a suitable backend. PyUSB_
+relies on a USB driver library such as libusb 0.1, libusb 1.0, libusbx,
+libusb-win32 or OpenUSB as a suitable backend. Please refer to the PyUSB_
+documentation for more details.
 
-On Unix system, one may have to modify udev rules to allow non-root access to
+On Windows, especially if you are using a user account without administrator
+privileges, you may install `pyocd/libusb-package`_ for a convenient way to
+provide the necessary libusb 1.0 DLL as a suitable PyUSB_ backend.
+
+On Unix systems, you may have to modify udev rules to allow non-root access to
 the device you are trying to connect to. The following tutorial describes how
 to do it https://www.xmodulo.com/change-usb-device-permission-linux.html.
 
@@ -120,3 +124,4 @@ form GitHub_::
 .. _`pyvicp`: https://pypi.org/project/pyvicp/
 .. _`libusb's guide`: https://github.com/libusb/libusb/wiki/Windows#user-content-How_to_use_libusb_on_Windows
 .. _`Zadig`: https://zadig.akeo.ie/
+.. _`pyocd/libusb-package`: https://pypi.org/project/libusb-package/

@@ -30,6 +30,7 @@
     gpib-ctypes      = ["gpib-ctypes>=0.3.0"]
     serial           = ["pyserial>=3.0"]
     usb              = ["pyusb"]
+    usb-full         = ["pyusb", "libusb-package"]
     psutil           = ["psutil"]
     hislip-discovery = ["zeroconf"]
     vicp             = ["pyvicp", "zeroconf"]
@@ -93,7 +94,7 @@ __version__ = "{version}"
   strict_optional = true
 
   [[tool.mypy.overrides]]
-    module                 = ["usb.*", "serial.*", "gpib.*", "Gpib.*", "gpib_ctypes.*", "pyvicp.*"]
+    module                 = ["usb.*", "libusb_package.*", "serial.*", "gpib.*", "Gpib.*", "gpib_ctypes.*", "pyvicp.*"]
     ignore_missing_imports = true
 
 [tool.coverage]
