@@ -1,7 +1,7 @@
 PyVISA-py Changelog
 ===================
 
-0.8.1 (03-09-2025)
+0.8.1 (04-09-2025)
 ------------------
 
 - allow users to easily change the VXI-11 lock timeout PR #496
