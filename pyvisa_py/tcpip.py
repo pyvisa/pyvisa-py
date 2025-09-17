@@ -498,7 +498,7 @@ class TCPIPInstrVxi11(Session):
         self.client_id = random.getrandbits(31)
         self.keepalive = False
 
-        error, link, abort_port, max_recv_size = self.interface.create_link(
+        error, link, _abort_port, max_recv_size = self.interface.create_link(
             self.client_id, 0, self.lock_timeout, self.parsed.lan_device_name
         )
 
@@ -1146,7 +1146,7 @@ class TCPIPSocketSession(Session):
         finish_time = time.time() + timeout
         while True:
             # use select to wait for socket ready, max `select_timout` seconds
-            r, w, x = select.select(
+            r, w, _x = select.select(
                 [self.interface], [self.interface], [], select_timout
             )
             if self.interface in r or self.interface in w:
@@ -1230,7 +1230,7 @@ class TCPIPSocketSession(Session):
                 return out, StatusCode.success_max_count_read
 
             # use select to wait for read ready, max `select_timout` seconds
-            r, w, x = select.select([self.interface], [], [], select_timout)
+            r, _w, _x = select.select([self.interface], [], [], select_timout)
 
             read_data = b""
             if self.interface in r:
@@ -1306,7 +1306,7 @@ class TCPIPSocketSession(Session):
         """
         self._pending_buffer.clear()
         while True:
-            r, w, x = select.select([self.interface], [], [], 0.1)
+            r, _w, _x = select.select([self.interface], [], [], 0.1)
             if not r:
                 break
             r[0].recv(4096)

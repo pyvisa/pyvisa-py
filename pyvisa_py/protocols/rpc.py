@@ -298,7 +298,7 @@ def sendfrag(sock, last, frag):
 def _sendrecord(sock, record, fragsize=None, timeout=None):
     LOGGER.debug("Sending record through %s: %r", sock, record)
     if timeout is not None:
-        r, w, x = select.select([], [sock], [], timeout)
+        _r, w, _x = select.select([], [sock], [], timeout)
         if sock not in w:
             msg = "socket.timeout: The instrument seems to have stopped responding."
             raise socket.timeout(msg)
@@ -350,7 +350,7 @@ def _recvrecord(sock, timeout, read_fun=None, min_packages=0):
         # if more data for the current fragment is needed, use select
         # to wait for read ready, max `select_timeout` seconds
         if len(buffer) < exp_length:
-            r, w, x = select.select([sock], [], [], select_timeout)
+            r, _w, x = select.select([sock], [], [], select_timeout)
             read_data = b""
             if sock in r:
                 read_data = read_fun(exp_length)
@@ -432,7 +432,7 @@ def _connect(sock, host, port, timeout=0):
     finish_time = time.time() + timeout
     while True:
         # use select to wait for socket ready, max `select_timout` seconds
-        r, w, x = select.select([sock], [sock], [], select_timout)
+        r, w, _x = select.select([sock], [sock], [], select_timout)
         if sock in r or sock in w:
             return True
 
@@ -508,7 +508,7 @@ class RawTCPClient(Client):
             reply = _recvrecord(self.sock, self.timeout, min_packages=min_packages)
             u = self.unpacker
             u.reset(reply)
-            xid, verf = u.unpack_replyheader()
+            xid, _verf = u.unpack_replyheader()
             if xid == self.lastxid:
                 # xid matches, we're done
                 return
@@ -563,7 +563,7 @@ class RawUDPClient(Client):
             reply = self.sock.recv(BUFSIZE)
             u = self.unpacker
             u.reset(reply)
-            xid, verf = u.unpack_replyheader()
+            xid, _verf = u.unpack_replyheader()
             if xid != self.lastxid:
                 continue
             break
@@ -616,7 +616,7 @@ class RawBroadcastUDPClient(RawUDPClient):
             reply, fromaddr = self.sock.recvfrom(BUFSIZE)
             u = self.unpacker
             u.reset(reply)
-            xid, verf = u.unpack_replyheader()
+            xid, _verf = u.unpack_replyheader()
             if xid != self.lastxid:
                 continue
             reply = unpack_func()
@@ -662,7 +662,7 @@ class RawBroadcastUDPClient(RawUDPClient):
                 raise RPCError("unable to recieve broadcast") from exc
             u = self.unpacker
             u.reset(reply)
-            xid, verf = u.unpack_replyheader()
+            xid, _verf = u.unpack_replyheader()
             if xid != self.lastxid:
                 continue
             reply = unpack_func()
@@ -861,7 +861,7 @@ class BroadcastUDPClient(Client):
         self.pmap.set_timeout(timeout)
 
     def my_reply_handler(self, reply, fromaddr):
-        port, res = reply
+        _port, res = reply
         self.unpacker.reset(res)
         result = self.unpack_func()
         self.unpacker.done()
@@ -998,7 +998,7 @@ class TCPServer(Server):
             self.session(self.sock.accept())
 
     def session(self, connection):
-        sock, (host, port) = connection
+        sock, (_host, _port) = connection
         while 1:
             try:
                 call = _recvrecord(sock, None)
@@ -1024,7 +1024,7 @@ class TCPServer(Server):
         # Wait for deceased children
         try:
             while 1:
-                pid, sts = os.waitpid(0, 1)
+                pid, _sts = os.waitpid(0, 1)
         except os.error:
             pass
         pid = None

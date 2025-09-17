@@ -205,7 +205,7 @@ class USBSession(Session):
             Return value of the library call.
 
         """
-        send_end, _ = self.get_attribute(ResourceAttribute.send_end_enabled)
+        _send_end, _ = self.get_attribute(ResourceAttribute.send_end_enabled)
 
         count = self.interface.write(data)
 
