@@ -1276,6 +1276,12 @@ class TCPIPSocketSession(Session):
         """
         chunk_size = 4096
 
+        term_char_en, _ = self.get_attribute(ResourceAttribute.termchar_enabled)
+        if term_char_en:
+            term_char, _ = self.get_attribute(ResourceAttribute.termchar)
+            term_byte = int_to_byte(term_char) if term_char is not None else b""
+            data += term_byte
+
         num = sz = len(data)
 
         offset = 0
