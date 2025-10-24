@@ -2,7 +2,7 @@
 """Serial Session implementation using PyUSB.
 
 
-:copyright: 2014-2024 by PyVISA-py Authors, see AUTHORS for more details.
+:copyright: 2014-2025 by PyVISA-py Authors, see AUTHORS for more details.
 :license: MIT, see LICENSE for more details.
 
 """
@@ -56,8 +56,6 @@ except Exception as e1:
 
 class USBTimeoutException(Exception):
     """Exception used internally to indicate USB timeout."""
-
-    pass
 
 
 class USBSession(Session):

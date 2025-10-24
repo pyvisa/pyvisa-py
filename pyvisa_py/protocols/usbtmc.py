@@ -2,11 +2,11 @@
 """Implements Session to control USBTMC instruments
 
 Loosely based on PyUSBTMC:python module to handle USB-TMC(Test and
-Measurement class)　devices. by Noboru Yamamot, Accl. Lab, KEK, JAPAN
+Measurement class) devices. by Noboru Yamamot, Accl. Lab, KEK, JAPAN
 
 This file is an offspring of the Lantz Project.
 
-:copyright: 2014-2024 by PyVISA-py Authors, see AUTHORS for more details.
+:copyright: 2014-2025 by PyVISA-py Authors, see AUTHORS for more details.
 :license: MIT, see LICENSE for more details.
 
 """
@@ -79,7 +79,7 @@ def find_tmc_devices(
     return find_devices(vendor, product, serial_number, is_usbtmc, **kwargs)
 
 
-class BulkOutMessage(object):
+class BulkOutMessage:
     """The Host uses the Bulk-OUT endpoint to send USBTMC command messages to
     the device.
 
@@ -162,7 +162,7 @@ class BulkInMessage(
         ) + struct.pack("<LBBxx", transfer_size, transfer_attributes, term_char)
 
 
-class USBRaw(object):
+class USBRaw:
     """Base class for drivers that communicate with instruments
     via usb port using pyUSB
     """
@@ -188,7 +188,7 @@ class USBRaw(object):
         timeout=None,
         **kwargs,
     ):
-        super(USBRaw, self).__init__()
+        super().__init__()
 
         # Timeout expressed in ms as an integer and limited to 2**32-1
         # If left to None pyusb will use its default value
@@ -305,7 +305,7 @@ class USBTMC(USBRaw):
     find_devices = staticmethod(find_tmc_devices)
 
     def __init__(self, vendor=None, product=None, serial_number=None, **kwargs):
-        super(USBTMC, self).__init__(vendor, product, serial_number, **kwargs)
+        super().__init__(vendor, product, serial_number, **kwargs)
         self.usb_intr_in = find_endpoint(
             self.usb_intf, usb.ENDPOINT_IN, usb.ENDPOINT_TYPE_INTERRUPT
         )
@@ -438,7 +438,7 @@ class USBTMC(USBRaw):
         begin, end, size = 0, 0, len(data)
         bytes_sent = 0
 
-        raw_write = super(USBTMC, self).write
+        raw_write = super().write
 
         # Send all data via one or more Bulk-OUT transfers.
         # Set the EOM flag on the last transfer only.
@@ -459,8 +459,8 @@ class USBTMC(USBRaw):
         usbtmc_header_size = 12
         eom = False
 
-        raw_read = super(USBTMC, self).read
-        raw_write = super(USBTMC, self).write
+        raw_read = super().read
+        raw_write = super().write
 
         received_message = bytearray()
 
