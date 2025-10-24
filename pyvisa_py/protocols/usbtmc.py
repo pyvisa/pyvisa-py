@@ -21,7 +21,7 @@ from typing import Tuple
 
 import usb
 
-from pyvisa.constants import StatusCode, TriggerProtocol
+from pyvisa.constants import RENLineOperation, StatusCode, TriggerProtocol
 
 from ..common import LOGGER
 from .usbutil import find_devices, find_endpoint, find_interfaces, usb_find_desc
@@ -669,5 +669,112 @@ class USBTMC(USBRaw):
         btag = self._btag.next()
         msg = TriggerMessage.build_array(btag)
         raw_write(msg)
+
+        return StatusCode.success
+
+    def gpib_control_ren(self, mode: RENLineOperation) -> StatusCode:
+        """Controls the state of the GPIB Remote Enable (REN) interface line.
+
+        Optionally the remote/local state of the device can also be set.
+
+        Corresponds to viGpibControlREN function of the VISA library.
+
+        Parameters
+        ----------
+        mode : constants.RENLineOperation
+            State of the REN line and optionally the device remote/local state.
+
+        Returns
+        -------
+        StatusCode
+            Return value of the library call.
+
+        """
+        if not self._capabilities["usb488"].ren_control:
+            return StatusCode.error_nonsupported_operation
+
+        if mode in [
+            RENLineOperation.asrt,
+            RENLineOperation.asrt_address,
+            RENLineOperation.asrt_address_llo,
+        ]:
+            # According to USBTMC-USB488 1.0 section 4.3.2:
+            #   wValue = 1 - Assert REN
+            #   wIndex = Bulk-IN endpoint
+            #   wLength = 0x0001 (length of device response, USBTMC-USB488 1.0 section 4.3.2, table 16)
+            data = self.usb_dev.ctrl_transfer(
+                usb.util.build_request_type(
+                    usb.util.CTRL_IN,
+                    usb.util.CTRL_TYPE_CLASS,
+                    usb.util.CTRL_RECIPIENT_INTERFACE,
+                ),
+                Request.ren_control,
+                0x0001,
+                self.usb_intf.index,
+                0x0001,
+                timeout=self.timeout,
+            )
+            if data[0] != UsbTmcStatus.success:
+                raise ValueError("status nok")
+
+        if mode in [RENLineOperation.asrt_llo, RENLineOperation.asrt_address_llo]:
+            # According to USBTMC-USB488 1.0 section 4.3.4:
+            #   wValue = 0x0000
+            #   wIndex = Bulk-IN endpoint
+            #   wLength = 0x0001 (length of device response, USBTMC-USB488 1.0 section 4.3.4, table 20)
+            data = self.usb_dev.ctrl_transfer(
+                usb.util.build_request_type(
+                    usb.util.CTRL_IN,
+                    usb.util.CTRL_TYPE_CLASS,
+                    usb.util.CTRL_RECIPIENT_INTERFACE,
+                ),
+                Request.local_lockout,
+                0x0000,
+                self.usb_intf.index,
+                0x0001,
+                timeout=self.timeout,
+            )
+            if data[0] != UsbTmcStatus.success:
+                raise ValueError("status nok")
+
+        if mode in [RENLineOperation.deassert_gtl, RENLineOperation.address_gtl]:
+            # According to USBTMC-USB488 1.0 section 4.3.3:
+            #   wValue = 0x0000
+            #   wIndex = Bulk-IN endpoint
+            #   wLength = 0x0001 (length of device response, USBTMC-USB488 1.0 section 4.3.3, table 18)
+            data = self.usb_dev.ctrl_transfer(
+                usb.util.build_request_type(
+                    usb.util.CTRL_IN,
+                    usb.util.CTRL_TYPE_CLASS,
+                    usb.util.CTRL_RECIPIENT_INTERFACE,
+                ),
+                Request.go_to_local,
+                0x0000,
+                self.usb_intf.index,
+                0x0001,
+                timeout=self.timeout,
+            )
+            if data[0] != UsbTmcStatus.success:
+                raise ValueError("status nok")
+
+        if mode in [RENLineOperation.deassert, RENLineOperation.deassert_gtl]:
+            # According to USBTMC-USB488 1.0 section 4.3.2:
+            #   wValue = 0 - De-assert REN
+            #   wIndex = Bulk-IN endpoint
+            #   wLength = 0x0001 (length of device response, USBTMC-USB488 1.0 section 4.3.2, table 16)
+            data = self.usb_dev.ctrl_transfer(
+                usb.util.build_request_type(
+                    usb.util.CTRL_IN,
+                    usb.util.CTRL_TYPE_CLASS,
+                    usb.util.CTRL_RECIPIENT_INTERFACE,
+                ),
+                Request.ren_control,
+                0x0000,
+                self.usb_intf.index,
+                0x0001,
+                timeout=self.timeout,
+            )
+            if data[0] != UsbTmcStatus.success:
+                raise ValueError("status nok")
 
         return StatusCode.success

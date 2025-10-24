@@ -244,6 +244,28 @@ class USBSession(Session):
             return self.interface.assert_trigger(protocol)
         return StatusCode.error_nonsupported_operation
 
+    def gpib_control_ren(self, mode: constants.RENLineOperation) -> StatusCode:
+        """Controls the state of the GPIB Remote Enable (REN) interface line.
+
+        Optionally the remote/local state of the device can also be set.
+
+        Corresponds to viGpibControlREN function of the VISA library.
+
+        Parameters
+        ----------
+        mode : constants.RENLineOperation
+            State of the REN line and optionally the device remote/local state.
+
+        Returns
+        -------
+        StatusCode
+            Return value of the library call.
+
+        """
+        if hasattr(self.interface, "gpib_control_ren"):
+            return self.interface.gpib_control_ren(mode)
+        return StatusCode.error_nonsupported_operation
+
     def close(self):
         self.interface.close()
         return StatusCode.success
