@@ -79,6 +79,26 @@ def find_tmc_devices(
     return find_devices(vendor, product, serial_number, is_usbtmc, **kwargs)
 
 
+class BTag:
+    """A transfer identifier
+
+    The Host should increment the bTag
+    by 1 each time it sends a new Bulk-OUT Header.
+
+    """
+
+    def __init__(self, first: int, last: int):
+        self._first = first
+        self._last = last
+        self._current: int | None = None
+
+    def next(self) -> int:
+        self._current = self._first if self._current is None else self._current + 1
+        if self._current > self._last:
+            self._current = self._first
+        return self._current
+
+
 class BulkOutMessage:
     """The Host uses the Bulk-OUT endpoint to send USBTMC command messages to
     the device.
@@ -314,7 +334,7 @@ class USBTMC(USBRaw):
 
         self._capabilities = self._get_capabilities()
 
-        self._btag = 0
+        self._btag = BTag(1, 255)
 
         if not (self.usb_recv_ep and self.usb_send_ep):
             msg = "TMC device must have both Bulk-In and Bulk-out endpoints."
@@ -446,10 +466,10 @@ class USBTMC(USBRaw):
         while (end == 0) or (end < size):
             begin, end = end, begin + self.usb_send_ep.wMaxPacketSize
 
-            self._btag = (self._btag % 255) + 1
+            btag = self._btag.next()
 
             eom = end >= size
-            chunk = BulkOutMessage.build_array(self._btag, eom, data[begin:end])
+            chunk = BulkOutMessage.build_array(btag, eom, data[begin:end])
 
             bytes_sent += raw_write(chunk)
 
@@ -466,9 +486,9 @@ class USBTMC(USBRaw):
 
         while not eom:
             received_transfer = bytearray()
-            self._btag = (self._btag % 255) + 1
+            btag = self._btag.next()
 
-            req = BulkInMessage.build_array(self._btag, size, None)
+            req = BulkInMessage.build_array(btag, size, None)
             raw_write(req)
 
             try:
@@ -525,7 +545,7 @@ class USBTMC(USBRaw):
                 received_message.extend(received_transfer[: response.transfer_size])
             except (usb.core.USBError, ValueError):
                 # Abort failed Bulk-IN operation.
-                self._abort_bulk_in(self._btag)
+                self._abort_bulk_in(btag)
                 raise
 
         return bytes(received_message)
