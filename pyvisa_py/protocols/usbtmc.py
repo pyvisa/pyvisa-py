@@ -20,6 +20,7 @@ from collections import namedtuple
 
 import usb
 
+from ..common import LOGGER
 from .usbutil import find_devices, find_endpoint, find_interfaces, usb_find_desc
 
 
@@ -63,7 +64,12 @@ class UsbTmcStatus(enum.IntEnum):
     split_in_progress = 0x83
 
 
-UsbTmcCapabilities = namedtuple("UsbTmcCapabilities", "usb488 ren_control trigger")
+UsbTmcInterfaceCapabilities = namedtuple(
+    "UsbTmcInterfaceCapabilities", "indicator_pulse talk_only listen_only"
+)
+Usb488InterfaceCapabilities = namedtuple(
+    "Usb488InterfaceCapabilities", "usb488 ren_control trigger"
+)
 
 
 def find_tmc_devices(
@@ -343,7 +349,7 @@ class USBTMC(USBRaw):
         self._enable_remote_control()
 
     def _enable_remote_control(self):
-        if not self._capabilities.ren_control:
+        if not self._capabilities["usb488"].ren_control:
             return
 
         self.usb_dev.ctrl_transfer(
@@ -360,7 +366,7 @@ class USBTMC(USBRaw):
         )
 
     def _get_capabilities(self):
-        c = self.usb_dev.ctrl_transfer(
+        capabilities = self.usb_dev.ctrl_transfer(
             usb.util.build_request_type(
                 usb.util.CTRL_IN,
                 usb.util.CTRL_TYPE_CLASS,
@@ -373,7 +379,23 @@ class USBTMC(USBRaw):
             timeout=self.timeout,
         )
 
-        usb488_capabilities = c[0xE]
+        # bit #2: 1 - The USBTMC interface accepts the
+        #             INDICATOR_PULSE request.
+        #         0 - The USBTMC interface does not accept the
+        #             INDICATOR_PULSE request. The device, when
+        #             an INDICATOR_PULSE request is received,
+        #             must treat this command as a non-defined
+        #             command and return a STALL handshake
+        #             packet.
+        # bit #1: 1 - The USBTMC interface is talk-only.
+        #         0 - The USBTMC interface is not talk-only.
+        # bit #0: 1 - The USBTMC interface is listen-only.
+        #         0 - The USBTMC interface is not listen-only.
+        usbtmc_capabilities = UsbTmcInterfaceCapabilities(
+            indicator_pulse=bool(capabilities[4] & (1 << 2)),
+            talk_only=bool(capabilities[4] & (1 << 1)),
+            listen_only=bool(capabilities[4] & (1 << 0)),
+        )
 
         # bit #2: The interface is a 488.2 USB488 interface.
         # bit #1: The interface accepts REN_CONTROL, GO_TO_LOCAL,
@@ -381,11 +403,16 @@ class USBTMC(USBRaw):
         # bit #0: The interface accepts the MsgID = TRIGGER
         #         USBTMC command message and forwards
         #         TRIGGER requests to the Function Layer.
-        return UsbTmcCapabilities(
-            usb488=bool(usb488_capabilities & (1 << 2)),
-            ren_control=bool(usb488_capabilities & (1 << 1)),
-            trigger=bool(usb488_capabilities & (1 << 0)),
+        usb488_capabilities = Usb488InterfaceCapabilities(
+            usb488=bool(capabilities[14] & (1 << 2)),
+            ren_control=bool(capabilities[14] & (1 << 1)),
+            trigger=bool(capabilities[14] & (1 << 0)),
         )
+
+        LOGGER.debug(usbtmc_capabilities)
+        LOGGER.debug(usb488_capabilities)
+
+        return {"usb488": usb488_capabilities, "usbtmc": usbtmc_capabilities}
 
     def _find_interface(self, dev, setting):
         interfaces = find_interfaces(dev, bInterfaceClass=0xFE, bInterfaceSubClass=3)
