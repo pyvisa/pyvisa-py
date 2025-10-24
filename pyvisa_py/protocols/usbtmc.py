@@ -17,8 +17,13 @@ import struct
 import time
 import warnings
 from collections import namedtuple
+from typing import (
+    Tuple,
+)
 
 import usb
+
+from pyvisa.constants import StatusCode
 
 from ..common import LOGGER
 from .usbutil import find_devices, find_endpoint, find_interfaces, usb_find_desc
@@ -336,6 +341,7 @@ class USBTMC(USBRaw):
         self._capabilities = self._get_capabilities()
 
         self._btag = BTag(1, 255)
+        self._read_stb_btag = BTag(2, 127)
 
         if not (self.usb_recv_ep and self.usb_send_ep):
             msg = "TMC device must have both Bulk-In and Bulk-out endpoints."
@@ -571,3 +577,47 @@ class USBTMC(USBRaw):
                 raise
 
         return bytes(received_message)
+
+    def read_stb(self) -> Tuple[int, StatusCode]:
+        """Reads a status byte of the service request.
+
+        Returns
+        -------
+        int
+            Service request status byte
+        StatusCode
+            Return value of the library call.
+        """
+        if not self._capabilities["usb488"].usb488:
+            return 0, StatusCode.error_nonsupported_operation
+
+        btag = self._read_stb_btag.next()
+        data = self.usb_dev.ctrl_transfer(
+            usb.util.build_request_type(
+                usb.util.CTRL_IN,
+                usb.util.CTRL_TYPE_CLASS,
+                usb.util.CTRL_RECIPIENT_INTERFACE,
+            ),
+            Request.read_status_byte,
+            btag,
+            self.usb_intf.index,
+            0x0003,
+            timeout=self.timeout,
+        )
+
+        if data[0] != UsbTmcStatus.success:
+            raise ValueError("status nok")
+
+        if data[1] != btag:
+            raise ValueError("Read status byte btag mismatch", "read_stb")
+
+        if self.usb_intr_in is None:
+            return data[2], StatusCode.success
+
+        # Read response from interrupt channel
+        data = self.usb_intr_in.read(2, self.timeout)
+
+        if data[0] != btag | 0x80:
+            raise ValueError("Read status byte btag mismatch", "read_stb")
+
+        return data[1], StatusCode.success
