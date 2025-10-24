@@ -209,6 +209,21 @@ class USBSession(Session):
 
         return count, StatusCode.success
 
+    def read_stb(self) -> Tuple[int, StatusCode]:
+        """Reads a status byte of the service request.
+
+        Returns
+        -------
+        int
+            Service request status byte
+        StatusCode
+            Return value of the library call.
+
+        """
+        if hasattr(self.interface, "read_stb"):
+            return self.interface.read_stb()
+        return 0, StatusCode.error_nonsupported_operation
+
     def close(self):
         self.interface.close()
         return StatusCode.success
