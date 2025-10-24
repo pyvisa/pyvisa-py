@@ -4,7 +4,7 @@ PyVISA-py Changelog
 0.9.0 (unreleased)
 ------------------
 
-- Added read_stb function to usbtmc PR #532
+- Added read_stb and assert_trigger functions to usbtmc PR #532
 
 0.8.1 (04-09-2025)
 ------------------

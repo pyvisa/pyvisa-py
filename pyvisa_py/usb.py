@@ -224,6 +224,26 @@ class USBSession(Session):
             return self.interface.read_stb()
         return 0, StatusCode.error_nonsupported_operation
 
+    def assert_trigger(self, protocol: constants.TriggerProtocol) -> StatusCode:
+        """Assert software or hardware trigger.
+
+        Corresponds to viAssertTrigger function of the VISA library.
+
+        Parameters
+        ----------
+        protocol : constants.TriggerProtocol
+            Trigger protocol to use during assertion.
+
+        Returns
+        -------
+        StatusCode
+            Return value of the library call.
+
+        """
+        if hasattr(self.interface, "assert_trigger"):
+            return self.interface.assert_trigger(protocol)
+        return StatusCode.error_nonsupported_operation
+
     def close(self):
         self.interface.close()
         return StatusCode.success
