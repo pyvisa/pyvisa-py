@@ -23,7 +23,7 @@ from typing import (
 
 import usb
 
-from pyvisa.constants import StatusCode
+from pyvisa.constants import StatusCode, TriggerProtocol
 
 from ..common import LOGGER
 from .usbutil import find_devices, find_endpoint, find_interfaces, usb_find_desc
@@ -186,6 +186,16 @@ class BulkInMessage(
         return struct.pack(
             "BBBx", MsgID.request_dev_dep_msg_in, btag, ~btag & 0xFF
         ) + struct.pack("<LBBxx", transfer_size, transfer_attributes, term_char)
+
+
+class TriggerMessage:
+    """The Host uses the Bulk-OUT endpoint to send USBTMC trigger message to
+    the device.
+    """
+
+    @staticmethod
+    def build_array(btag):
+        return struct.pack("BBBx", MsgID.trigger, btag, ~btag & 0xFF) + b"\0" * (1 + 8)
 
 
 class USBRaw:
@@ -621,3 +631,32 @@ class USBTMC(USBRaw):
             raise ValueError("Read status byte btag mismatch", "read_stb")
 
         return data[1], StatusCode.success
+
+    def assert_trigger(self, protocol: TriggerProtocol) -> StatusCode:
+        """Assert software or hardware trigger.
+
+        Corresponds to viAssertTrigger function of the VISA library.
+
+        Parameters
+        ----------
+        protocol : constants.TriggerProtocol
+            Trigger protocol to use during assertion.
+
+        Returns
+        -------
+        StatusCode
+            Return value of the library call.
+        """
+        if (
+            not self._capabilities["usb488"].trigger
+            or protocol != TriggerProtocol.default
+        ):
+            return StatusCode.error_nonsupported_operation
+
+        raw_write = super().write
+
+        btag = self._btag.next()
+        msg = TriggerMessage.build_array(btag)
+        raw_write(msg)
+
+        return StatusCode.success
