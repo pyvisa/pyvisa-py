@@ -2,11 +2,11 @@
 """Implements Session to control USBTMC instruments
 
 Loosely based on PyUSBTMC:python module to handle USB-TMC(Test and
-Measurement class)　devices. by Noboru Yamamot, Accl. Lab, KEK, JAPAN
+Measurement class) devices. by Noboru Yamamot, Accl. Lab, KEK, JAPAN
 
 This file is an offspring of the Lantz Project.
 
-:copyright: 2014-2024 by PyVISA-py Authors, see AUTHORS for more details.
+:copyright: 2014-2025 by PyVISA-py Authors, see AUTHORS for more details.
 :license: MIT, see LICENSE for more details.
 
 """
@@ -17,9 +17,13 @@ import struct
 import time
 import warnings
 from collections import namedtuple
+from typing import Tuple
 
 import usb
 
+from pyvisa.constants import RENLineOperation, StatusCode, TriggerProtocol
+
+from ..common import LOGGER
 from .usbutil import find_devices, find_endpoint, find_interfaces, usb_find_desc
 
 
@@ -63,7 +67,12 @@ class UsbTmcStatus(enum.IntEnum):
     split_in_progress = 0x83
 
 
-UsbTmcCapabilities = namedtuple("UsbTmcCapabilities", "usb488 ren_control trigger")
+UsbTmcInterfaceCapabilities = namedtuple(
+    "UsbTmcInterfaceCapabilities", "indicator_pulse talk_only listen_only"
+)
+Usb488InterfaceCapabilities = namedtuple(
+    "Usb488InterfaceCapabilities", "usb488 ren_control trigger"
+)
 
 
 def find_tmc_devices(
@@ -79,7 +88,27 @@ def find_tmc_devices(
     return find_devices(vendor, product, serial_number, is_usbtmc, **kwargs)
 
 
-class BulkOutMessage(object):
+class BTag:
+    """A transfer identifier
+
+    The Host should increment the bTag
+    by 1 each time it sends a new Bulk-OUT Header.
+
+    """
+
+    def __init__(self, first: int, last: int):
+        self._first = first
+        self._last = last
+        self._current: int | None = None
+
+    def next(self) -> int:
+        self._current = self._first if self._current is None else self._current + 1
+        if self._current > self._last:
+            self._current = self._first
+        return self._current
+
+
+class BulkOutMessage:
     """The Host uses the Bulk-OUT endpoint to send USBTMC command messages to
     the device.
 
@@ -162,7 +191,16 @@ class BulkInMessage(
         ) + struct.pack("<LBBxx", transfer_size, transfer_attributes, term_char)
 
 
-class USBRaw(object):
+class TriggerMessage:
+    """The Host uses the Bulk-OUT endpoint to send USBTMC trigger message to the device."""
+
+    @staticmethod
+    def build_array(btag):
+        # According to USBTMC-USB488 1.0 section 3.2.1.1, table 2:
+        return struct.pack("BBBx", MsgID.trigger, btag, ~btag & 0xFF) + bytes(8)
+
+
+class USBRaw:
     """Base class for drivers that communicate with instruments
     via usb port using pyUSB
     """
@@ -188,7 +226,7 @@ class USBRaw(object):
         timeout=None,
         **kwargs,
     ):
-        super(USBRaw, self).__init__()
+        super().__init__()
 
         # Timeout expressed in ms as an integer and limited to 2**32-1
         # If left to None pyusb will use its default value
@@ -305,7 +343,7 @@ class USBTMC(USBRaw):
     find_devices = staticmethod(find_tmc_devices)
 
     def __init__(self, vendor=None, product=None, serial_number=None, **kwargs):
-        super(USBTMC, self).__init__(vendor, product, serial_number, **kwargs)
+        super().__init__(vendor, product, serial_number, **kwargs)
         self.usb_intr_in = find_endpoint(
             self.usb_intf, usb.ENDPOINT_IN, usb.ENDPOINT_TYPE_INTERRUPT
         )
@@ -314,7 +352,8 @@ class USBTMC(USBRaw):
 
         self._capabilities = self._get_capabilities()
 
-        self._btag = 0
+        self._btag = BTag(1, 255)
+        self._read_stb_btag = BTag(2, 127)
 
         if not (self.usb_recv_ep and self.usb_send_ep):
             msg = "TMC device must have both Bulk-In and Bulk-out endpoints."
@@ -323,7 +362,7 @@ class USBTMC(USBRaw):
         self._enable_remote_control()
 
     def _enable_remote_control(self):
-        if not self._capabilities.ren_control:
+        if not self._capabilities["usb488"].ren_control:
             return
 
         self.usb_dev.ctrl_transfer(
@@ -340,7 +379,7 @@ class USBTMC(USBRaw):
         )
 
     def _get_capabilities(self):
-        c = self.usb_dev.ctrl_transfer(
+        capabilities = self.usb_dev.ctrl_transfer(
             usb.util.build_request_type(
                 usb.util.CTRL_IN,
                 usb.util.CTRL_TYPE_CLASS,
@@ -353,7 +392,23 @@ class USBTMC(USBRaw):
             timeout=self.timeout,
         )
 
-        usb488_capabilities = c[0xE]
+        # bit #2: 1 - The USBTMC interface accepts the
+        #             INDICATOR_PULSE request.
+        #         0 - The USBTMC interface does not accept the
+        #             INDICATOR_PULSE request. The device, when
+        #             an INDICATOR_PULSE request is received,
+        #             must treat this command as a non-defined
+        #             command and return a STALL handshake
+        #             packet.
+        # bit #1: 1 - The USBTMC interface is talk-only.
+        #         0 - The USBTMC interface is not talk-only.
+        # bit #0: 1 - The USBTMC interface is listen-only.
+        #         0 - The USBTMC interface is not listen-only.
+        usbtmc_capabilities = UsbTmcInterfaceCapabilities(
+            indicator_pulse=bool(capabilities[4] & (1 << 2)),
+            talk_only=bool(capabilities[4] & (1 << 1)),
+            listen_only=bool(capabilities[4] & (1 << 0)),
+        )
 
         # bit #2: The interface is a 488.2 USB488 interface.
         # bit #1: The interface accepts REN_CONTROL, GO_TO_LOCAL,
@@ -361,11 +416,16 @@ class USBTMC(USBRaw):
         # bit #0: The interface accepts the MsgID = TRIGGER
         #         USBTMC command message and forwards
         #         TRIGGER requests to the Function Layer.
-        return UsbTmcCapabilities(
-            usb488=bool(usb488_capabilities & (1 << 2)),
-            ren_control=bool(usb488_capabilities & (1 << 1)),
-            trigger=bool(usb488_capabilities & (1 << 0)),
+        usb488_capabilities = Usb488InterfaceCapabilities(
+            usb488=bool(capabilities[14] & (1 << 2)),
+            ren_control=bool(capabilities[14] & (1 << 1)),
+            trigger=bool(capabilities[14] & (1 << 0)),
         )
+
+        LOGGER.debug(usbtmc_capabilities)
+        LOGGER.debug(usb488_capabilities)
+
+        return {"usb488": usb488_capabilities, "usbtmc": usbtmc_capabilities}
 
     def _find_interface(self, dev, setting):
         interfaces = find_interfaces(dev, bInterfaceClass=0xFE, bInterfaceSubClass=3)
@@ -438,7 +498,7 @@ class USBTMC(USBRaw):
         begin, end, size = 0, 0, len(data)
         bytes_sent = 0
 
-        raw_write = super(USBTMC, self).write
+        raw_write = super().write
 
         # Send all data via one or more Bulk-OUT transfers.
         # Set the EOM flag on the last transfer only.
@@ -446,10 +506,10 @@ class USBTMC(USBRaw):
         while (end == 0) or (end < size):
             begin, end = end, begin + self.usb_send_ep.wMaxPacketSize
 
-            self._btag = (self._btag % 255) + 1
+            btag = self._btag.next()
 
             eom = end >= size
-            chunk = BulkOutMessage.build_array(self._btag, eom, data[begin:end])
+            chunk = BulkOutMessage.build_array(btag, eom, data[begin:end])
 
             bytes_sent += raw_write(chunk)
 
@@ -459,16 +519,16 @@ class USBTMC(USBRaw):
         usbtmc_header_size = 12
         eom = False
 
-        raw_read = super(USBTMC, self).read
-        raw_write = super(USBTMC, self).write
+        raw_read = super().read
+        raw_write = super().write
 
         received_message = bytearray()
 
         while not eom:
             received_transfer = bytearray()
-            self._btag = (self._btag % 255) + 1
+            btag = self._btag.next()
 
-            req = BulkInMessage.build_array(self._btag, size, None)
+            req = BulkInMessage.build_array(btag, size, None)
             raw_write(req)
 
             try:
@@ -525,7 +585,196 @@ class USBTMC(USBRaw):
                 received_message.extend(received_transfer[: response.transfer_size])
             except (usb.core.USBError, ValueError):
                 # Abort failed Bulk-IN operation.
-                self._abort_bulk_in(self._btag)
+                self._abort_bulk_in(btag)
                 raise
 
         return bytes(received_message)
+
+    def read_stb(self) -> Tuple[int, StatusCode]:
+        """Reads a status byte of the service request.
+
+        Returns
+        -------
+        int
+            Service request status byte
+        StatusCode
+            Return value of the library call.
+
+        """
+        if not self._capabilities["usb488"].usb488:
+            return 0, StatusCode.error_nonsupported_operation
+
+        btag = self._read_stb_btag.next()
+        # According to USBTMC-USB488 1.0 section 4.3.1:
+        #   wValue = bTag value of transfer
+        #   wIndex = Bulk-IN endpoint
+        #   wLength = 0x0003 (length of device response, USBTMC-USB488 1.0 section 4.3.1.1 and 4.3.1.2)
+        data = self.usb_dev.ctrl_transfer(
+            usb.util.build_request_type(
+                usb.util.CTRL_IN,
+                usb.util.CTRL_TYPE_CLASS,
+                usb.util.CTRL_RECIPIENT_INTERFACE,
+            ),
+            Request.read_status_byte,
+            btag,
+            self.usb_intf.index,
+            0x0003,
+            timeout=self.timeout,
+        )
+
+        if data[0] != UsbTmcStatus.success:
+            raise ValueError("status nok")
+
+        if data[1] != btag:
+            raise ValueError("Read status byte btag mismatch", "read_stb")
+
+        if self.usb_intr_in is None:
+            return data[2], StatusCode.success
+
+        # Read response from interrupt channel
+        data = self.usb_intr_in.read(2, self.timeout)
+
+        # USBTMC-USB488 1.0 section 3.4.2, bNotify1 field
+        if data[0] & 0x80 != 0x80 or data[0] & 0x7F != btag:
+            raise ValueError(
+                "Read status byte interrupt-IN bNotify1 mismatch", "read_stb"
+            )
+
+        return data[1], StatusCode.success
+
+    def assert_trigger(self, protocol: TriggerProtocol) -> StatusCode:
+        """Assert software or hardware trigger.
+
+        Corresponds to viAssertTrigger function of the VISA library.
+
+        Parameters
+        ----------
+        protocol : constants.TriggerProtocol
+            Trigger protocol to use during assertion.
+
+        Returns
+        -------
+        StatusCode
+            Return value of the library call.
+
+        """
+        if (
+            not self._capabilities["usb488"].trigger
+            or protocol != TriggerProtocol.default
+        ):
+            return StatusCode.error_nonsupported_operation
+
+        raw_write = super().write
+
+        btag = self._btag.next()
+        msg = TriggerMessage.build_array(btag)
+        raw_write(msg)
+
+        return StatusCode.success
+
+    def gpib_control_ren(self, mode: RENLineOperation) -> StatusCode:
+        """Controls the state of the GPIB Remote Enable (REN) interface line.
+
+        Optionally the remote/local state of the device can also be set.
+
+        Corresponds to viGpibControlREN function of the VISA library.
+
+        Parameters
+        ----------
+        mode : constants.RENLineOperation
+            State of the REN line and optionally the device remote/local state.
+
+        Returns
+        -------
+        StatusCode
+            Return value of the library call.
+
+        """
+        if not self._capabilities["usb488"].ren_control:
+            return StatusCode.error_nonsupported_operation
+
+        if mode in [
+            RENLineOperation.asrt,
+            RENLineOperation.asrt_address,
+            RENLineOperation.asrt_address_llo,
+        ]:
+            # According to USBTMC-USB488 1.0 section 4.3.2:
+            #   wValue = 1 - Assert REN
+            #   wIndex = Bulk-IN endpoint
+            #   wLength = 0x0001 (length of device response, USBTMC-USB488 1.0 section 4.3.2, table 16)
+            data = self.usb_dev.ctrl_transfer(
+                usb.util.build_request_type(
+                    usb.util.CTRL_IN,
+                    usb.util.CTRL_TYPE_CLASS,
+                    usb.util.CTRL_RECIPIENT_INTERFACE,
+                ),
+                Request.ren_control,
+                0x0001,
+                self.usb_intf.index,
+                0x0001,
+                timeout=self.timeout,
+            )
+            if data[0] != UsbTmcStatus.success:
+                raise ValueError("status nok")
+
+        if mode in [RENLineOperation.asrt_llo, RENLineOperation.asrt_address_llo]:
+            # According to USBTMC-USB488 1.0 section 4.3.4:
+            #   wValue = 0x0000
+            #   wIndex = Bulk-IN endpoint
+            #   wLength = 0x0001 (length of device response, USBTMC-USB488 1.0 section 4.3.4, table 20)
+            data = self.usb_dev.ctrl_transfer(
+                usb.util.build_request_type(
+                    usb.util.CTRL_IN,
+                    usb.util.CTRL_TYPE_CLASS,
+                    usb.util.CTRL_RECIPIENT_INTERFACE,
+                ),
+                Request.local_lockout,
+                0x0000,
+                self.usb_intf.index,
+                0x0001,
+                timeout=self.timeout,
+            )
+            if data[0] != UsbTmcStatus.success:
+                raise ValueError("status nok")
+
+        if mode in [RENLineOperation.deassert_gtl, RENLineOperation.address_gtl]:
+            # According to USBTMC-USB488 1.0 section 4.3.3:
+            #   wValue = 0x0000
+            #   wIndex = Bulk-IN endpoint
+            #   wLength = 0x0001 (length of device response, USBTMC-USB488 1.0 section 4.3.3, table 18)
+            data = self.usb_dev.ctrl_transfer(
+                usb.util.build_request_type(
+                    usb.util.CTRL_IN,
+                    usb.util.CTRL_TYPE_CLASS,
+                    usb.util.CTRL_RECIPIENT_INTERFACE,
+                ),
+                Request.go_to_local,
+                0x0000,
+                self.usb_intf.index,
+                0x0001,
+                timeout=self.timeout,
+            )
+            if data[0] != UsbTmcStatus.success:
+                raise ValueError("status nok")
+
+        if mode in [RENLineOperation.deassert, RENLineOperation.deassert_gtl]:
+            # According to USBTMC-USB488 1.0 section 4.3.2:
+            #   wValue = 0 - De-assert REN
+            #   wIndex = Bulk-IN endpoint
+            #   wLength = 0x0001 (length of device response, USBTMC-USB488 1.0 section 4.3.2, table 16)
+            data = self.usb_dev.ctrl_transfer(
+                usb.util.build_request_type(
+                    usb.util.CTRL_IN,
+                    usb.util.CTRL_TYPE_CLASS,
+                    usb.util.CTRL_RECIPIENT_INTERFACE,
+                ),
+                Request.ren_control,
+                0x0000,
+                self.usb_intf.index,
+                0x0001,
+                timeout=self.timeout,
+            )
+            if data[0] != UsbTmcStatus.success:
+                raise ValueError("status nok")
+
+        return StatusCode.success

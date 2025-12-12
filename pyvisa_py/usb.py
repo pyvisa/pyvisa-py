@@ -2,7 +2,7 @@
 """Serial Session implementation using PyUSB.
 
 
-:copyright: 2014-2024 by PyVISA-py Authors, see AUTHORS for more details.
+:copyright: 2014-2025 by PyVISA-py Authors, see AUTHORS for more details.
 :license: MIT, see LICENSE for more details.
 
 """
@@ -56,8 +56,6 @@ except Exception as e1:
 
 class USBTimeoutException(Exception):
     """Exception used internally to indicate USB timeout."""
-
-    pass
 
 
 class USBSession(Session):
@@ -210,6 +208,63 @@ class USBSession(Session):
         count = self.interface.write(data)
 
         return count, StatusCode.success
+
+    def read_stb(self) -> Tuple[int, StatusCode]:
+        """Reads a status byte of the service request.
+
+        Returns
+        -------
+        int
+            Service request status byte
+        StatusCode
+            Return value of the library call.
+
+        """
+        if hasattr(self.interface, "read_stb"):
+            return self.interface.read_stb()
+        return 0, StatusCode.error_nonsupported_operation
+
+    def assert_trigger(self, protocol: constants.TriggerProtocol) -> StatusCode:
+        """Assert software or hardware trigger.
+
+        Corresponds to viAssertTrigger function of the VISA library.
+
+        Parameters
+        ----------
+        protocol : constants.TriggerProtocol
+            Trigger protocol to use during assertion.
+
+        Returns
+        -------
+        StatusCode
+            Return value of the library call.
+
+        """
+        if hasattr(self.interface, "assert_trigger"):
+            return self.interface.assert_trigger(protocol)
+        return StatusCode.error_nonsupported_operation
+
+    def gpib_control_ren(self, mode: constants.RENLineOperation) -> StatusCode:
+        """Controls the state of the GPIB Remote Enable (REN) interface line.
+
+        Optionally the remote/local state of the device can also be set.
+
+        Corresponds to viGpibControlREN function of the VISA library.
+
+        Parameters
+        ----------
+        mode : constants.RENLineOperation
+            State of the REN line and optionally the device remote/local state.
+
+        Returns
+        -------
+        StatusCode
+            Return value of the library call.
+
+        """
+        if hasattr(self.interface, "gpib_control_ren"):
+            return self.interface.gpib_control_ren(mode)
+        return StatusCode.error_nonsupported_operation
 
     def close(self):
         self.interface.close()

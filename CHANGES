@@ -1,6 +1,11 @@
 PyVISA-py Changelog
 ===================
 
+0.9.0 (unreleased)
+------------------
+
+- Added read_stb, assert_trigger and gpib_control_run functions to usbtmc PR #532
+
 0.8.1 (04-09-2025)
 ------------------
 
