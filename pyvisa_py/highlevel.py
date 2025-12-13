@@ -31,6 +31,7 @@ from .sessions import OpenError, Session
 
 import threading
 
+
 class PyVisaLibrary(highlevel.VisaLibraryBase):
     """A pure Python backend for PyVISA.
 
@@ -764,16 +765,16 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
 
     def enable_event(self, session, event_type, mechanism, context=None):
         """Enables notification for an event."""
-        
+
         # 1. Retrieve the actual session object (e.g., USBSession, TCPIPSession)
         # In pyvisa-py, sessions are usually stored in self.sessions
         obj = self.sessions[session]
-        
+
         # 2. Start a listener thread for this specific event/session
         if event_type == constants.VI_EVENT_SERVICE_REQ:
             # This is a hypothetical method you must add to the specific session classes
             # (e.g., in pyvisa_py/usb.py or pyvisa_py/tcpip.py)
-            if hasattr(obj, 'start_srq_listener'):
+            if hasattr(obj, "start_srq_listener"):
                 obj.start_srq_listener(callback=self._dispatch_event)
             else:
                 return constants.VI_ERROR_NSUP_OPER
@@ -841,25 +842,25 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
 
         """
         return StatusCode.error_nonimplemented_operation
-    
+
     def install_handler(self, session, event_type, handler, user_handle=None):
         """Stores the handler for a specific session and event type."""
         try:
             # Ensure the session entry exists
             if session not in self.handlers:
                 self.handlers[session] = {}
-                
+
             # Ensure the event_type entry exists
             if event_type not in self.handlers[session]:
                 self.handlers[session][event_type] = []
-                
+
             # Store the handler and the user_handle
             self.handlers[session][event_type].append((handler, user_handle))
-            
-            return constants.VI_SUCCESS #TODO: use existing status codes?
+
+            return constants.VI_SUCCESS  # TODO: use existing status codes?
         except Exception as e:
-            return constants.VI_ERROR_SYSTEM_ERROR #TODO: use existing status codes?
-    
+            return constants.VI_ERROR_SYSTEM_ERROR  # TODO: use existing status codes?
+
     def uninstall_handler(self, session, event_type, handler, user_handle=None):
         """
         Removes the callback handler for the specified session and event type.
@@ -867,7 +868,7 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
         try:
             # 1. Check if the session and event type exist in the registry
             if session not in self.handlers or event_type not in self.handlers[session]:
-                # Standard VISA behavior is to return success if the handler 
+                # Standard VISA behavior is to return success if the handler
                 # effectively isn't there, or a warning.
                 return constants.VI_SUCCESS
 
@@ -875,15 +876,16 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
             # We keep only the entries that DO NOT match the (handler, user_handle) pair.
             # This handles the case where multiple different handlers are registered for the same event.
             original_list = self.handlers[session][event_type]
-            
+
             # Check if the user passed a wildcard (Generic VISA behavior)
             # If handler is generic, we might want to clear all, but usually
             # users uninstall specific functions.
             new_list = [
-                (h, uh) for (h, uh) in original_list 
+                (h, uh)
+                for (h, uh) in original_list
                 if not (h == handler and uh == user_handle)
             ]
-            
+
             # If the list length didn't change, the handler wasn't found.
             if len(new_list) == len(original_list):
                 return constants.VI_WARN_UNKNOWN_STATUS
@@ -895,9 +897,9 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
             # If no handlers remain for this event type, we can delete the key.
             if not new_list:
                 del self.handlers[session][event_type]
-                
-                # IMPROVEMENT: If you want to automatically stop the TCP listener thread 
-                # to save resources when the last handler is removed, you would 
+
+                # IMPROVEMENT: If you want to automatically stop the TCP listener thread
+                # to save resources when the last handler is removed, you would
                 # call disable_event here.
                 # self.disable_event(session, event_type, mechanism)
 
