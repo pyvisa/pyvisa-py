@@ -29,6 +29,7 @@ from pyvisa.util import DebugInfo, LibraryPath
 from .common import LOGGER
 from .sessions import OpenError, Session
 
+import threading
 
 class PyVisaLibrary(highlevel.VisaLibraryBase):
     """A pure Python backend for PyVISA.
@@ -124,6 +125,9 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
         """Custom initialization code."""
         # Map session handle to session object.
         self.sessions = {}
+        # Dictionary to map sessions to their event handlers
+        # Structure: { session_id: { event_type: [ (handler, user_handle), ... ] } }
+        self.handlers = {}
 
     def _register(self, obj: Session) -> VISASession:
         """Creates a random but unique session handle for a session object.
@@ -758,6 +762,32 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
             return self.handle_return_value(session, StatusCode.error_invalid_object)
         return self.handle_return_value(session, sess.unlock())
 
+    def enable_event(self, session, event_type, mechanism, context=None):
+        """Enables notification for an event."""
+        
+        # 1. Retrieve the actual session object (e.g., USBSession, TCPIPSession)
+        # In pyvisa-py, sessions are usually stored in self.sessions
+        obj = self.sessions[session]
+        
+        # 2. Start a listener thread for this specific event/session
+        if event_type == constants.VI_EVENT_SERVICE_REQ:
+            # This is a hypothetical method you must add to the specific session classes
+            # (e.g., in pyvisa_py/usb.py or pyvisa_py/tcpip.py)
+            if hasattr(obj, 'start_srq_listener'):
+                obj.start_srq_listener(callback=self._dispatch_event)
+            else:
+                return constants.VI_ERROR_NSUP_OPER
+        return constants.VI_SUCCESS
+
+    def _dispatch_event(self, session_id, event_type):
+        """Internal method called by the listener thread when hardware triggers."""
+        if session_id in self.handlers and event_type in self.handlers[session_id]:
+            for handler, user_handle in self.handlers[session_id][event_type]:
+                # Call the user's registered function
+                # Note: VISA handlers require specific arguments: (session, event_type, event_context, user_handle)
+                # You may need to create a dummy event_context object here
+                handler(session_id, event_type, None, user_handle)
+
     def disable_event(
         self,
         session: VISASession,
@@ -811,3 +841,67 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
 
         """
         return StatusCode.error_nonimplemented_operation
+    
+    def install_handler(self, session, event_type, handler, user_handle=None):
+        """Stores the handler for a specific session and event type."""
+        try:
+            # Ensure the session entry exists
+            if session not in self.handlers:
+                self.handlers[session] = {}
+                
+            # Ensure the event_type entry exists
+            if event_type not in self.handlers[session]:
+                self.handlers[session][event_type] = []
+                
+            # Store the handler and the user_handle
+            self.handlers[session][event_type].append((handler, user_handle))
+            
+            return constants.VI_SUCCESS #TODO: use existing status codes?
+        except Exception as e:
+            return constants.VI_ERROR_SYSTEM_ERROR #TODO: use existing status codes?
+    
+    def uninstall_handler(self, session, event_type, handler, user_handle=None):
+        """
+        Removes the callback handler for the specified session and event type.
+        """
+        try:
+            # 1. Check if the session and event type exist in the registry
+            if session not in self.handlers or event_type not in self.handlers[session]:
+                # Standard VISA behavior is to return success if the handler 
+                # effectively isn't there, or a warning.
+                return constants.VI_SUCCESS
+
+            # 2. Filter out the specific handler to be removed
+            # We keep only the entries that DO NOT match the (handler, user_handle) pair.
+            # This handles the case where multiple different handlers are registered for the same event.
+            original_list = self.handlers[session][event_type]
+            
+            # Check if the user passed a wildcard (Generic VISA behavior)
+            # If handler is generic, we might want to clear all, but usually
+            # users uninstall specific functions.
+            new_list = [
+                (h, uh) for (h, uh) in original_list 
+                if not (h == handler and uh == user_handle)
+            ]
+            
+            # If the list length didn't change, the handler wasn't found.
+            if len(new_list) == len(original_list):
+                return constants.VI_WARN_UNKNOWN_STATUS
+
+            # 3. Update the registry
+            self.handlers[session][event_type] = new_list
+
+            # 4. Cleanup (Optional optimization)
+            # If no handlers remain for this event type, we can delete the key.
+            if not new_list:
+                del self.handlers[session][event_type]
+                
+                # IMPROVEMENT: If you want to automatically stop the TCP listener thread 
+                # to save resources when the last handler is removed, you would 
+                # call disable_event here.
+                # self.disable_event(session, event_type, mechanism)
+
+            return constants.VI_SUCCESS
+
+        except Exception:
+            return constants.VI_ERROR_SYSTEM_ERROR
