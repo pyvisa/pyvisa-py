@@ -247,9 +247,10 @@ def find_interfaces(device, **kwargs):
 def find_endpoint(interface, direction, type):
     ep = usb_find_desc(
         interface,
-        custom_match=lambda e: usb.util.endpoint_direction(e.bEndpointAddress)
-        == direction
-        and usb.util.endpoint_type(e.bmAttributes) == type,
+        custom_match=lambda e: (
+            usb.util.endpoint_direction(e.bEndpointAddress) == direction
+            and usb.util.endpoint_type(e.bmAttributes) == type
+        ),
     )
     return ep
 
