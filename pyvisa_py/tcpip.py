@@ -22,6 +22,21 @@ from .common import LOGGER, int_to_byte
 from .protocols import hislip, rpc, vxi11
 from .sessions import OpenError, Session, UnknownAttribute, VISARMSession
 
+import struct
+import threading
+
+# Constants for Parsing
+DEVICE_INTR_SRQ_PROC = 1
+RPC_MSG_CALL = 0
+
+# VXI-11 Constants
+DEVICE_CORE_PROG = 0x0607B0
+DEVICE_CORE_VERS = 1
+CREATE_INTR_CHAN_PROC = 12
+DEVICE_INTR_PROG = 0x0607AF  # The ID the device uses to call us back TODO: does this need to be dynamically assigned?
+DEVICE_INTR_VERS = 1
+IPPROTO_TCP = 6
+
 # Let psutil be optional dependency
 try:
     import psutil  # type: ignore
@@ -61,6 +76,71 @@ VXI11_ERRORS_TO_VISA = {
 }
 
 
+def pack_uint(n):
+    """Pack a 32-bit unsigned integer (Big Endian)."""
+    return struct.pack(">I", n)
+
+
+def pack_string(s):
+    """Pack a variable length string (XDR format: Length + Data + Padding)."""
+    if isinstance(s, str):
+        s = s.encode("ascii")
+    length = len(s)
+    padding = (4 - (length % 4)) % 4
+    return struct.pack(">I", length) + s + (b"\x00" * padding)
+
+
+def build_create_intr_chan_packet(host_ip, host_port, xid=None):
+    """
+    Constructs the VXI-11 'create_intr_chan' RPC packet.
+
+    Args:
+        host_ip (str): The IP address of YOUR computer (where the device should connect).
+        host_port (int): The port YOUR computer is listening on.
+    """
+    if xid is None:
+        xid = random.randint(1, 0xFFFFFFFF)
+
+    # --- 1. RPC Header ---
+    # Field: [XID] [MsgType:Call=0] [RPCVers:2] [Prog:Core] [Vers:1] [Proc:CreateIntr]
+    header = (
+        pack_uint(xid)  # Transaction ID
+        + pack_uint(0)  # Message Type (0 = Call)
+        + pack_uint(2)  # RPC Version (2)
+        + pack_uint(DEVICE_CORE_PROG)  # Program (Device Core)
+        + pack_uint(DEVICE_CORE_VERS)  # Program Version
+        + pack_uint(CREATE_INTR_CHAN_PROC)  # Procedure (12 = create_intr_chan)
+    )
+
+    # --- 2. Authentication (None) ---
+    # Field: [Cred Flavor:0] [Cred Len:0] [Verf Flavor:0] [Verf Len:0]
+    auth = (
+        pack_uint(0)
+        + pack_uint(0)  # Credentials (Auth_None)
+        + pack_uint(0)
+        + pack_uint(0)  # Verifier (Auth_None)
+    )
+
+    # --- 3. Arguments ---
+    # The arguments defined in VXI-11 spec for create_intr_chan:
+    # (host_addr, host_port, prog_num, prog_vers, prog_prot)
+    args = (
+        pack_string(host_ip)  # arg1: Host Address (String)
+        + pack_uint(host_port)  # arg2: Host Port (Uint)
+        + pack_uint(DEVICE_INTR_PROG)  # arg3: Program Number (0x0607AF)
+        + pack_uint(DEVICE_INTR_VERS)  # arg4: Program Version (1)
+        + pack_uint(IPPROTO_TCP)  # arg5: Protocol (6 = TCP)
+    )
+
+    # --- 4. Final Framing (Record Marking) ---
+    # ONC RPC over TCP requires a 4-byte fragment header.
+    # The top bit (0x80000000) indicates this is the "Last Fragment".
+    payload = header + auth + args
+    fragment_header = 0x80000000 | len(payload)
+
+    return struct.pack(">I", fragment_header) + payload
+
+
 @Session.register(constants.InterfaceType.tcpip, "INSTR")
 class TCPIPInstrSession(Session):
     """A class to dispatch to VXI11 or HiSLIP, based on the protocol."""
@@ -98,6 +178,175 @@ class TCPIPInstrSession(Session):
             f"\n         - VXI-11: {vxi11}"
             f"\n         - hislip: {hislip}"
         )
+
+    def start_tcp_listener(self, callback):
+        """
+        1. Opens a server socket on a random port.
+        2. Tells the device where to connect (RPC 'create_intr_chan').
+        3. Starts a thread to listen for the incoming connection.
+        """
+
+        # --- 1. Create a server socket on the host ---
+        # AF_INET = IPv4, SOCK_STREAM = TCP
+        self.server_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.server_sock.bind(("", 0))  # Bind to any available port
+        self.server_sock.listen(1)
+
+        # Get the port we were assigned
+        host_ip, host_port = self.server_sock.getsockname()
+
+        # --- 2. Send 'create_intr_chan' RPC to the device ---
+        # Note: This is the tricky part. You need to construct the VXI-11 RPC packet.
+        # If pyvisa-py has an internal RPC client, use it.
+        # Otherwise, you are sending raw bytes.
+        # This is a conceptual example of the RPC call:
+        error_code = self._send_create_intr_chan_rpc(host_ip, host_port)
+
+        if error_code != 0:
+            raise Exception("Device refused to create interrupt channel")
+
+        # --- 3. Start the Listener Thread ---
+        self.listening = True
+        t = threading.Thread(target=self._tcp_listen_loop, args=(callback,))
+        t.daemon = True
+        t.start()
+
+    def _send_create_intr_chan_rpc(self, host_ip, host_port):
+        """Sends the raw RPC packet to the device."""
+
+        # 1. Build the packet
+        packet = build_create_intr_chan_packet(host_ip, host_port)
+
+        # 2. Send it over the EXISTING connection to the device
+        # self.interface is usually the socket object in pyvisa-py TCPIPSession
+        # Note: You might need to check how pyvisa-py stores the socket.
+        # It is often in self.visalib.sessions[self.session].interface
+
+        # Assuming 'self.interface' is the active socket to the instrument:
+        self.interface.sendall(packet)
+
+        # 3. Read the RPC Reply (Important!)
+        # We need to ensure the device accepted it.
+        # Read the 4-byte fragment header first
+        header_data = self.interface.recv(4)
+        frag_len = struct.unpack(">I", header_data)[0] & 0x7FFFFFFF
+
+        # Read the rest of the reply
+        reply_data = self.interface.recv(frag_len)
+
+        # 4. Parse Reply (Simplified)
+        # Skip XID(4), MsgType(4), ReplyState(4), Verifier(8), AcceptStatus(4)
+        # We just want to check if AcceptStatus is 0 (SUCCESS)
+        # This is at offset 24 (4+4+4+8)
+        accept_status = struct.unpack(">I", reply_data[24:28])[0]
+
+        if accept_status != 0:
+            return -1  # RPC Error
+
+        # The actual return value of create_intr_chan is an "Error" object (integer)
+        # It is usually the last 4 bytes of the packet
+        error_code = struct.unpack(">I", reply_data[-4:])[0]
+
+        return error_code
+
+    def _tcp_listen_loop(self, callback):
+        """Waits for the instrument to connect back to us."""
+        while self.listening:
+            try:
+                conn, addr = self.server_sock.accept()
+                with conn:
+                    # Validate, Reply, and Get Status Byte
+                    stb = self._validate_and_handle_srq(conn)
+
+                    if stb is not None:
+                        # Trigger the HighLevel callback
+                        # We pass the Session ID, Event Type, and the STB
+                        # Note: PyVISA handlers usually expect (session, event_type, context, user_handle)
+                        # We can pass the STB inside a context object or wrap it if needed.
+                        callback(
+                            self.session.session_id,
+                            constants.VI_EVENT_SERVICE_REQ,
+                            status_byte=stb,
+                        )
+
+            except socket.error:
+                if not self.listening:
+                    break
+
+    def _validate_and_handle_srq(self, conn):
+        """
+        Reads the incoming RPC packet, validates it is an SRQ,
+        extracts the Status Byte, and sends a Success Reply.
+
+        Returns:
+            status_byte (int) if valid SRQ, None otherwise.
+        """
+        # 1. Read the Fragment Header (4 bytes)
+        header_data = conn.recv(4)
+        if not header_data:
+            return None
+
+        # The last 31 bits are the length
+        frag_len = struct.unpack(">I", header_data)[0] & 0x7FFFFFFF
+
+        # 2. Read the RPC Packet
+        data = conn.recv(frag_len)
+
+        if len(data) < 24:
+            return None  # Too short to be a valid RPC Call
+
+        # 3. Unpack Key Fields
+        # Struct: [XID:4] [MsgType:4] [RPCVer:4] [Prog:4] [ProgVer:4] [Proc:4]
+        xid, msg_type, rpc_vers, prog, prog_vers, proc = struct.unpack(
+            ">IIIIII", data[:24]
+        )
+
+        # 4. Validate Context
+        if (
+            msg_type == RPC_MSG_CALL
+            and prog == DEVICE_INTR_PROG
+            and proc == DEVICE_INTR_SRQ_PROC
+        ):
+            # This IS a valid SRQ!
+
+            # 5. Extract the Status Byte (STB)
+            # The arguments start after the Creds and Verifier.
+            # We need to skip Creds(8 bytes) + Verifier(8 bytes) = 16 bytes.
+            # Standard RPC header is 24 bytes. Total offset = 40 bytes.
+            # The argument is the Status Byte (passed as an int).
+            try:
+                stb = struct.unpack(">I", data[40:44])[0]
+            except:
+                stb = 0  # Default if parsing fails
+
+            # 6. SEND THE REPLY (Mandatory!)
+            # We must tell the instrument we received the message.
+            self._send_srq_reply(conn, xid)
+
+            return stb
+
+        return None
+
+    def _send_srq_reply(self, conn, xid):
+        """Sends a successful RPC reply back to the instrument."""
+
+        # Structure: [XID] [MsgType:Reply=1] [ReplyState:Accepted=0]
+        #            [Verf:None] [AcceptStatus:Success=0]
+
+        reply_payload = (
+            struct.pack(">I", xid)  # Match the XID from the Request
+            + struct.pack(">I", 1)  # MsgType: Reply
+            + struct.pack(">I", 0)  # ReplyState: Accepted
+            + struct.pack(">I", 0)  # Verifier Flavor (None)
+            + struct.pack(">I", 0)  # Verifier Length (0)
+            + struct.pack(">I", 0)  # AcceptStatus: Success
+        )
+
+        # Add Fragment Header (Last Fragment bit set)
+        frag_header = 0x80000000 | len(reply_payload)
+        full_packet = struct.pack(">I", frag_header) + reply_payload
+
+        conn.sendall(full_packet)
 
 
 class TCPIPInstrHiSLIP(Session):
