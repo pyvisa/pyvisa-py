@@ -21,12 +21,12 @@ from pyvisa_py.protocols.hislip import (
 
 
 class TestCancellableSocket:
-    """Unit tests for the CancellableSocket wrapper."""
+    """Unit tests for the CancellableSocket subclass."""
 
     def setup_method(self):
         """Create a socket pair for testing."""
-        self.server, self.client_raw = socket.socketpair()
-        self.client = CancellableSocket(self.client_raw)
+        self.server, client_raw = socket.socketpair()
+        self.client = CancellableSocket(client_raw)
 
     def teardown_method(self):
         self.client.close()
@@ -74,7 +74,7 @@ class TestCancellableSocket:
     def test_cancel_drain_allows_subsequent_recv(self):
         """After draining the cancel pipe, normal recv_into works again."""
         self.client.cancel()
-        self.client._drain_cancel()
+        self.client.drain_cancel()
 
         self.server.sendall(b"data")
         buf = bytearray(4)
@@ -83,8 +83,8 @@ class TestCancellableSocket:
         assert buf == b"data"
 
     def test_recv_into_timeout(self):
-        """recv_into honours the underlying socket timeout."""
-        self.client_raw.settimeout(0.1)
+        """recv_into honours the socket timeout."""
+        self.client.settimeout(0.1)
         buf = bytearray(100)
         with pytest.raises(socket.timeout):
             self.client.recv_into(buf, 100)
@@ -128,8 +128,8 @@ class TestHiSLIPInterruptedInHeader:
 
     def setup_method(self):
         """Create a socket pair simulating a HiSLIP sync channel."""
-        self.server, self.client_raw = socket.socketpair()
-        self.client = CancellableSocket(self.client_raw)
+        self.server, client_raw = socket.socketpair()
+        self.client = CancellableSocket(client_raw)
 
     def teardown_method(self):
         self.client.close()

@@ -13,6 +13,29 @@ needed. We would like to reach feature parity. If there is something that you
 need, let us know.
 
 
+How do I cancel a pending I/O operation (viTerminate)?
+------------------------------------------------------
+
+For HiSLIP sessions (``TCPIP::host::hislip0::INSTR``), ``viTerminate()`` is
+supported.  This allows one thread to cancel a blocking read that is running
+in another thread, without destroying the session.
+
+The blocked read will return with ``VI_ERROR_ABORT``.  After the read returns,
+call ``viClear()`` to reset the HiSLIP protocol before performing further I/O::
+
+    import pyvisa
+    rm = pyvisa.ResourceManager('@py')
+    inst = rm.open_resource('TCPIP::192.168.1.100::hislip0::INSTR')
+
+    # From another thread, to cancel a blocked read:
+    inst.visalib.terminate(inst.session, None, None)
+
+    # After the blocked read returns VI_ERROR_ABORT, reset the protocol:
+    inst.clear()
+
+``viTerminate()`` is not yet supported for VXI-11, USBTMC, or serial sessions.
+
+
 Why are you developing this?
 ----------------------------
 
