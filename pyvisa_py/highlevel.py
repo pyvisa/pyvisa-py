@@ -221,6 +221,42 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
             return self.handle_return_value(session, StatusCode.error_invalid_object)
         return self.handle_return_value(session, sess.clear())
 
+    def terminate(
+        self,
+        session: VISASession,
+        degree: None,
+        job_id,
+    ) -> StatusCode:
+        """Request a VISA session to terminate normal execution of an operation.
+
+        Corresponds to viTerminate function of the VISA library.
+
+        For HiSLIP sessions, this cancels a pending read by signalling the
+        CancellableSocket's cancel pipe.  The blocked read returns with
+        StatusCode.error_abort.
+
+        Parameters
+        ----------
+        session : VISASession
+            Unique logical identifier to a session.
+        degree : None
+            Not used in this version of the VISA specification.
+        job_id :
+            Specifies an operation identifier.  If None, aborts all calls
+            on the specified session.
+
+        Returns
+        -------
+        StatusCode
+            Return value of the library call.
+
+        """
+        try:
+            sess = self.sessions[session]
+        except KeyError:
+            return self.handle_return_value(session, StatusCode.error_invalid_object)
+        return self.handle_return_value(session, sess.terminate())
+
     def flush(
         self, session: VISASession, mask: constants.BufferOperation
     ) -> StatusCode:

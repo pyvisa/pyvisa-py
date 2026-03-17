@@ -419,6 +419,19 @@ class Session(metaclass=abc.ABCMeta):
         """
         return StatusCode.error_nonsupported_operation
 
+    def terminate(self) -> StatusCode:
+        """Cancel a pending I/O operation.
+
+        Corresponds to viTerminate function of the VISA library.
+
+        Returns
+        -------
+        StatusCode
+            Return value of the library call.
+
+        """
+        return StatusCode.error_nonsupported_operation
+
     def flush(self, mask: constants.BufferOperation) -> StatusCode:
         """Flush the specified buffers.
 

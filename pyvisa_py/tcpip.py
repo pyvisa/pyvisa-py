@@ -273,6 +273,9 @@ class TCPIPInstrHiSLIP(Session):
                 else StatusCode.success
             )
 
+        except hislip.HiSLIPInterruptedError:
+            data, status = b"", StatusCode.error_abort
+
         except socket.timeout:
             data, status = b"", StatusCode.error_timeout
 
@@ -330,6 +333,46 @@ class TCPIPInstrHiSLIP(Session):
         errorcode = StatusCode.success
 
         return stb, errorcode
+
+    def terminate(self) -> StatusCode:
+        """Cancel a pending I/O operation on this session.
+
+        Corresponds to viTerminate function of the VISA library.
+
+        Thread-safe: may be called from any thread while another thread is
+        blocked in read().  The blocked read() will return with
+        StatusCode.error_abort.
+
+        After the blocked operation returns, the caller MUST call
+        complete_terminate() to reset the HiSLIP protocol before performing
+        further I/O.
+
+        Returns
+        -------
+        StatusCode
+            Return value of the library call.
+
+        """
+        interface = cast(hislip.Instrument, self.interface)
+        interface.terminate()
+        return StatusCode.success
+
+    def complete_terminate(self) -> StatusCode:
+        """Reset HiSLIP protocol state after terminate().
+
+        Must be called after terminate() and after the blocked read thread
+        has exited.  Performs a full HiSLIP device clear to re-synchronize
+        the synchronous channel.
+
+        Returns
+        -------
+        StatusCode
+            Return value of the library call.
+
+        """
+        interface = cast(hislip.Instrument, self.interface)
+        interface.complete_terminate()
+        return StatusCode.success
 
     def _get_attribute(self, attribute: ResourceAttribute) -> Tuple[Any, StatusCode]:
         """Get the value for a given VISA attribute for this session.

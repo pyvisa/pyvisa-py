@@ -4,6 +4,7 @@ Python implementation of HiSLIP protocol.  Based on the HiSLIP spec:
 http://www.ivifoundation.org/downloads/Class%20Specifications/IVI-6.1_HiSLIP-1.1-2024-02-24.pdf
 """
 
+import select
 import socket
 import struct
 import time
@@ -114,6 +115,90 @@ HEADER_FORMAT = "!2sBBIQ"
 HEADER_SIZE = struct.calcsize(HEADER_FORMAT)
 
 DEFAULT_MAX_MSG_SIZE = 1 << 20  # from VISA spec
+
+
+class HiSLIPInterruptedError(Exception):
+    """Raised when a pending I/O operation is cancelled via terminate().
+
+    This is the pyvisa-py equivalent of NI-VISA's VI_ERROR_ABORT.
+    """
+
+    def __init__(self, message_id: int = 0):
+        self.message_id = message_id
+        super().__init__(f"HiSLIP I/O terminated (message_id={message_id:#x})")
+
+
+class CancellableSocket:
+    """Socket wrapper that supports cross-thread cancellation via select().
+
+    Wraps a TCP socket and interposes a cancel pipe on recv_into().
+    When cancel() is called from another thread, any blocked recv_into()
+    returns immediately with HiSLIPInterruptedError.
+
+    This implements the same "self-pipe trick" that NI-VISA uses internally
+    for viTerminate() support.
+    """
+
+    def __init__(self, sock: socket.socket) -> None:
+        self._sock = sock
+        self._cancel_r, self._cancel_w = socket.socketpair()
+        self._cancel_r.setblocking(False)
+        self._cancel_w.setblocking(False)
+
+    def recv_into(self, buffer, nbytes: int = 0, flags: int = 0) -> int:
+        """Cancellable recv_into using select().
+
+        Blocks until data is available on the underlying socket OR the cancel
+        pipe is signalled.  Honours the underlying socket's timeout.
+        """
+        timeout = self._sock.gettimeout()
+        readable, _, _ = select.select([self._sock, self._cancel_r], [], [], timeout)
+        if not readable:
+            raise socket.timeout("timed out")
+        if self._cancel_r in readable:
+            self._drain_cancel()
+            raise HiSLIPInterruptedError(0)
+        return self._sock.recv_into(buffer, nbytes, flags)
+
+    def cancel(self) -> None:
+        """Signal cancellation — unblocks any pending recv_into()."""
+        try:
+            self._cancel_w.send(b"\x00")
+        except BlockingIOError:
+            pass  # already signalled
+
+    def _drain_cancel(self) -> None:
+        """Drain all bytes from the cancel pipe."""
+        try:
+            while self._cancel_r.recv(1024):
+                pass
+        except BlockingIOError:
+            pass
+
+    # -- Delegate everything else to the underlying socket --
+
+    def sendall(self, data: bytes, flags: int = 0) -> None:
+        return self._sock.sendall(data, flags)
+
+    def settimeout(self, timeout) -> None:
+        return self._sock.settimeout(timeout)
+
+    def gettimeout(self):
+        return self._sock.gettimeout()
+
+    def setsockopt(self, *args) -> None:
+        return self._sock.setsockopt(*args)
+
+    def connect(self, *args) -> None:
+        return self._sock.connect(*args)
+
+    def close(self) -> None:
+        self._cancel_r.close()
+        self._cancel_w.close()
+        self._sock.close()
+
+    def fileno(self) -> int:
+        return self._sock.fileno()
 
 
 #########################################################################################
@@ -405,6 +490,11 @@ class Instrument:
         # We set the user timeout once we managed to initialize the connection.
         self._async.settimeout(timeout)
 
+        # Wrap the sync socket for viTerminate() support.
+        # The CancellableSocket interposes select() on recv_into() so that
+        # a cancel() call from another thread can unblock a pending read.
+        self._sync = CancellableSocket(self._sync)
+
         # initialize variables
         self.max_msg_size = DEFAULT_MAX_MSG_SIZE
         self.keepalive = False
@@ -572,6 +662,12 @@ class Instrument:
                 ):
                     break
 
+            if header.msg_type == "Interrupted":
+                # Server sent Interrupted in response to AsyncDeviceClear.
+                # Per IVI-6.1, the client should discard buffered data and
+                # signal the abort to the caller.
+                raise HiSLIPInterruptedError(header.message_parameter)
+
             # we're out of sync.  flush this message and continue.
             receive_flush(self._sync, header.payload_length)
 
@@ -586,6 +682,87 @@ class Instrument:
         self.device_clear_complete(feature)
         # reset messageID and resume normal opreation
         self._message_id = 0xFFFF_FF00
+
+    def terminate(self) -> None:
+        """Cancel a pending I/O operation on the synchronous channel.
+
+        This is the pyvisa-py equivalent of NI-VISA's viTerminate().
+        It writes to the cancel pipe, which causes any blocked recv_into()
+        in the CancellableSocket to return immediately with
+        HiSLIPInterruptedError (mapped to VI_ERROR_ABORT at the session layer).
+
+        Thread-safe: may be called from any thread while another thread is
+        blocked in receive().
+
+        After the blocked operation returns, the caller MUST call
+        complete_terminate() to reset the HiSLIP protocol state before
+        performing further I/O on this session.
+        """
+        self._sync.cancel()
+
+    def complete_terminate(self) -> None:
+        """Reset HiSLIP protocol state after terminate().
+
+        Must be called after terminate() and after the blocked I/O thread
+        has returned.  Performs a full HiSLIP device clear to re-sync the
+        synchronous channel:
+
+        1. Drain the cancel pipe (so it doesn't interfere with reads)
+        2. Drain any partial/garbled data from the sync socket buffer
+        3. Full HiSLIP AsyncDeviceClear → Interrupted → DeviceClearComplete
+        4. Reset message counters
+        """
+        # 1. Drain the cancel pipe
+        self._sync._drain_cancel()
+
+        # 2. Drain any bytes left in the sync socket buffer.
+        #    After terminate() interrupted a read mid-stream, there may be
+        #    partial HiSLIP message data in the buffer.
+        raw = self._sync._sock
+        raw.setblocking(False)
+        try:
+            while True:
+                try:
+                    chunk = raw.recv(65536)
+                    if not chunk:
+                        break
+                except BlockingIOError:
+                    break
+        finally:
+            raw.setblocking(True)
+            raw.settimeout(self._timeout)
+
+        # 3. Full device clear: AsyncDeviceClear → Interrupted →
+        #    DeviceClearComplete → DeviceClearAcknowledge
+        feature = self.async_device_clear()
+
+        # Read from the sync channel until we get the Interrupted message.
+        # The server sends Interrupted after acknowledging AsyncDeviceClear.
+        saved_timeout = raw.gettimeout()
+        raw.settimeout(2.0)
+        try:
+            while True:
+                header = RxHeader(raw)
+                if header.msg_type == "Interrupted":
+                    break
+                # Discard payload of any other messages
+                if header.payload_length > 0:
+                    receive_flush(raw, header.payload_length)
+        except socket.timeout:
+            # Server didn't send Interrupted — proceed anyway.
+            # DeviceClearComplete will still reset the protocol.
+            pass
+        finally:
+            raw.settimeout(saved_timeout)
+
+        self.device_clear_complete(feature)
+
+        # 4. Reset all protocol state
+        self._message_id = 0xFFFF_FF00
+        self._last_message_id = None
+        self._rmt = 0
+        self._payload_remaining = 0
+        self._msg_type = ""
 
     def initialize(
         self,
