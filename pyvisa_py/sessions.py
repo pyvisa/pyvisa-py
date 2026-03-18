@@ -24,7 +24,7 @@ from typing import (
 
 from pyvisa import attributes, constants, rname
 from pyvisa.constants import ResourceAttribute, StatusCode
-from pyvisa.typing import VISARMSession
+from pyvisa.typing import VISAJobID, VISARMSession
 
 from .common import LOGGER, int_to_byte
 
@@ -410,6 +410,25 @@ class Session(metaclass=abc.ABCMeta):
         """Clears a device.
 
         Corresponds to viClear function of the VISA library.
+
+        Returns
+        -------
+        StatusCode
+            Return value of the library call.
+
+        """
+        return StatusCode.error_nonsupported_operation
+
+    def terminate(self, job_id: VISAJobID = None) -> StatusCode:
+        """Cancel a pending I/O operation.
+
+        Corresponds to viTerminate function of the VISA library.
+
+        Parameters
+        ----------
+        job_id : VISAJobID, optional
+            Specifies an operation identifier.  If None, aborts all calls
+            on this session.
 
         Returns
         -------

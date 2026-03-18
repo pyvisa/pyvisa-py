@@ -17,6 +17,7 @@ from typing import Any, Dict, List, Optional, Tuple, Type, cast
 
 from pyvisa import attributes, constants, errors, rname
 from pyvisa.constants import BufferOperation, ResourceAttribute, StatusCode
+from pyvisa.typing import VISAJobID
 
 from .common import LOGGER, int_to_byte
 from .protocols import hislip, rpc, vxi11
@@ -273,6 +274,12 @@ class TCPIPInstrHiSLIP(Session):
                 else StatusCode.success
             )
 
+        except hislip.HiSLIPInterruptedError:
+            # terminate() was called from another thread.  Reset the HiSLIP
+            # protocol state so the session is ready for further I/O.
+            self.interface.complete_terminate()
+            data, status = b"", StatusCode.error_abort
+
         except socket.timeout:
             data, status = b"", StatusCode.error_timeout
 
@@ -330,6 +337,32 @@ class TCPIPInstrHiSLIP(Session):
         errorcode = StatusCode.success
 
         return stb, errorcode
+
+    def terminate(self, job_id: VISAJobID = None) -> StatusCode:
+        """Cancel a pending I/O operation on this session.
+
+        Corresponds to viTerminate function of the VISA library.
+
+        Thread-safe: may be called from any thread while another thread is
+        blocked in read().  The blocked read() will return with
+        StatusCode.error_abort and automatically reset the HiSLIP protocol
+        state so the session is ready for further I/O.
+
+        Parameters
+        ----------
+        job_id : VISAJobID, optional
+            Specifies an operation identifier.  If None, aborts all calls
+            on this session.
+
+        Returns
+        -------
+        StatusCode
+            Return value of the library call.
+
+        """
+        interface = cast(hislip.Instrument, self.interface)
+        interface.terminate()
+        return StatusCode.success
 
     def _get_attribute(self, attribute: ResourceAttribute) -> Tuple[Any, StatusCode]:
         """Get the value for a given VISA attribute for this session.
