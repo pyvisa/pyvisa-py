@@ -23,7 +23,7 @@ from typing import (
 
 from pyvisa import constants, highlevel, rname
 from pyvisa.constants import StatusCode
-from pyvisa.typing import VISAEventContext, VISARMSession, VISASession
+from pyvisa.typing import VISAEventContext, VISAJobID, VISARMSession, VISASession
 from pyvisa.util import DebugInfo, LibraryPath
 
 from .common import LOGGER
@@ -225,15 +225,11 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
         self,
         session: VISASession,
         degree: None,
-        job_id,
+        job_id: VISAJobID,
     ) -> StatusCode:
         """Request a VISA session to terminate normal execution of an operation.
 
         Corresponds to viTerminate function of the VISA library.
-
-        For HiSLIP sessions, this cancels a pending read by signalling the
-        CancellableSocket's cancel pipe.  The blocked read returns with
-        StatusCode.error_abort.
 
         Parameters
         ----------
@@ -241,7 +237,7 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
             Unique logical identifier to a session.
         degree : None
             Not used in this version of the VISA specification.
-        job_id :
+        job_id : VISAJobID
             Specifies an operation identifier.  If None, aborts all calls
             on the specified session.
 
@@ -255,7 +251,7 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
             sess = self.sessions[session]
         except KeyError:
             return self.handle_return_value(session, StatusCode.error_invalid_object)
-        return self.handle_return_value(session, sess.terminate())
+        return self.handle_return_value(session, sess.terminate(job_id))
 
     def flush(
         self, session: VISASession, mask: constants.BufferOperation

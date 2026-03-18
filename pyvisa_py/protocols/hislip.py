@@ -140,6 +140,10 @@ class CancellableSocket(socket.socket):
     """
 
     def __init__(self, sock: socket.socket) -> None:
+        # Transfer the file descriptor from the original socket.  Socket
+        # options (TCP_NODELAY, SO_KEEPALIVE, etc.) are properties of the
+        # kernel fd and are preserved across detach/re-attach.  Only
+        # Python-level state (timeout) needs explicit transfer.
         family, type_, proto = sock.family, sock.type, sock.proto
         timeout = sock.gettimeout()
         fd = sock.detach()

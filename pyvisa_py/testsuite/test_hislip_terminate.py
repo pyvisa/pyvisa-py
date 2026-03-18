@@ -9,6 +9,7 @@ import socket
 import struct
 import threading
 import time
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -106,6 +107,50 @@ class TestCancellableSocket:
         with pytest.raises(HiSLIPInterruptedError):
             self.client.recv_into(buf, 100)
 
+    def test_recv_into_bypass_when_cancel_disabled(self):
+        """recv_into bypasses select() when _cancel_enabled is False."""
+        self.client._cancel_enabled = False
+        self.server.sendall(b"bypass")
+        buf = bytearray(6)
+        n = self.client.recv_into(buf, 6)
+        assert n == 6
+        assert buf == b"bypass"
+
+    def test_cancel_idempotent(self):
+        """Multiple cancel() calls don't raise — already-signalled is a no-op."""
+        self.client.cancel()
+        self.client.cancel()  # should not raise
+        # Drain and verify socket is still usable
+        self.client.drain_cancel()
+        self.server.sendall(b"ok")
+        buf = bytearray(2)
+        n = self.client.recv_into(buf, 2)
+        assert n == 2
+        assert buf == b"ok"
+
+    def test_socket_options_preserved(self):
+        """Socket options set before wrapping are preserved."""
+        raw_server, raw_client = socket.socketpair()
+        raw_client.settimeout(3.5)
+        wrapped = CancellableSocket(raw_client)
+        assert wrapped.gettimeout() == 3.5
+        wrapped.close()
+        raw_server.close()
+
+
+class TestHiSLIPInterruptedError:
+    """Test HiSLIPInterruptedError attributes and formatting."""
+
+    def test_default_message_id(self):
+        err = HiSLIPInterruptedError()
+        assert err.message_id == 0
+        assert "message_id=0x0" in str(err)
+
+    def test_custom_message_id(self):
+        err = HiSLIPInterruptedError(0xDEAD)
+        assert err.message_id == 0xDEAD
+        assert "0xdead" in str(err)
+
 
 class TestHiSLIPInterruptedInHeader:
     """Test that Interrupted messages in _next_data_header raise properly."""
@@ -137,20 +182,70 @@ class TestHiSLIPInterruptedInHeader:
 
     def test_interrupted_message_raises(self):
         """Receiving an Interrupted message raises HiSLIPInterruptedError."""
-        # We can't easily construct an Instrument without a real server,
-        # so we test _next_data_header indirectly by testing that RxHeader
-        # + our handling works.
-        #
-        # Send an Interrupted header on the "sync" channel.
         interrupted_hdr = self._make_hislip_header("Interrupted", 0, 0xFFFF_FF00, 0)
         self.server.sendall(interrupted_hdr)
 
-        # Read it as an RxHeader and verify msg_type
         from pyvisa_py.protocols.hislip import RxHeader
 
         header = RxHeader(self.client)
         assert header.msg_type == "Interrupted"
         assert header.message_parameter == 0xFFFF_FF00
+
+
+class TestInstrumentTerminate:
+    """Test Instrument.terminate() and complete_terminate() via mocking."""
+
+    def test_terminate_calls_cancel(self):
+        """Instrument.terminate() signals the CancellableSocket cancel pipe."""
+        from pyvisa_py.protocols.hislip import Instrument
+
+        inst = object.__new__(Instrument)
+        mock_sync = MagicMock(spec=CancellableSocket)
+        inst._sync = mock_sync
+
+        inst.terminate()
+        mock_sync.cancel.assert_called_once()
+
+    def test_complete_terminate_resets_state(self):
+        """complete_terminate() drains cancel, clears socket, does device clear."""
+        from pyvisa_py.protocols.hislip import Instrument
+
+        inst = object.__new__(Instrument)
+        mock_sync = MagicMock(spec=CancellableSocket)
+        mock_sync.gettimeout.return_value = 5.0
+        # Make recv return empty to end drain loop
+        mock_sync.recv.side_effect = BlockingIOError
+        inst._sync = mock_sync
+        inst._timeout = 5.0
+        inst._message_id = 0xABCD
+        inst._last_message_id = 0x1234
+        inst._rmt = 1
+        inst._payload_remaining = 42
+        inst._msg_type = "Data"
+
+        # Mock the async channel methods that complete_terminate calls
+        inst.async_device_clear = MagicMock(return_value=0)
+        inst.device_clear_complete = MagicMock(return_value=0)
+
+        # Mock RxHeader to return an Interrupted message
+        mock_header = MagicMock()
+        mock_header.msg_type = "Interrupted"
+        mock_header.payload_length = 0
+        with patch("pyvisa_py.protocols.hislip.RxHeader", return_value=mock_header):
+            inst.complete_terminate()
+
+        # Verify state was reset
+        assert inst._message_id == 0xFFFF_FF00
+        assert inst._last_message_id is None
+        assert inst._rmt == 0
+        assert inst._payload_remaining == 0
+        assert inst._msg_type == ""
+
+        # Verify cancel pipe was drained
+        mock_sync.drain_cancel.assert_called_once()
+        # Verify device clear was performed
+        inst.async_device_clear.assert_called_once()
+        inst.device_clear_complete.assert_called_once()
 
 
 class TestTerminateConcurrency:
@@ -189,3 +284,127 @@ class TestTerminateConcurrency:
 
         client.close()
         server.close()
+
+
+class TestSessionTerminateBase:
+    """Test Session.terminate() base class default."""
+
+    def test_base_session_terminate_returns_nonsupported(self):
+        from pyvisa.constants import StatusCode
+        from pyvisa_py.sessions import Session
+
+        # Session is abstract, so test the default through a minimal mock
+        sess = MagicMock(spec=Session)
+        result = Session.terminate(sess)
+        assert result == StatusCode.error_nonsupported_operation
+
+    def test_base_session_terminate_accepts_job_id(self):
+        from pyvisa.constants import StatusCode
+        from pyvisa_py.sessions import Session
+
+        sess = MagicMock(spec=Session)
+        result = Session.terminate(sess, job_id=None)
+        assert result == StatusCode.error_nonsupported_operation
+
+
+class TestTCPIPInstrHiSLIPTerminate:
+    """Test TCPIPInstrHiSLIP.terminate() and read() abort path."""
+
+    def _make_session(self):
+        """Create a TCPIPInstrHiSLIP with a mocked HiSLIP Instrument."""
+        from pyvisa_py.tcpip import TCPIPInstrHiSLIP
+
+        sess = object.__new__(TCPIPInstrHiSLIP)
+        sess.interface = MagicMock()
+        return sess
+
+    def test_terminate_calls_interface(self):
+        from pyvisa.constants import StatusCode
+
+        sess = self._make_session()
+        result = sess.terminate()
+        assert result == StatusCode.success
+        sess.interface.terminate.assert_called_once()
+
+    def test_terminate_accepts_job_id(self):
+        from pyvisa.constants import StatusCode
+
+        sess = self._make_session()
+        result = sess.terminate(job_id=None)
+        assert result == StatusCode.success
+
+    def test_read_abort_calls_complete_terminate(self):
+        """When read() catches HiSLIPInterruptedError, it auto-resets."""
+        from pyvisa.constants import StatusCode
+
+        sess = self._make_session()
+        sess.interface.receive.side_effect = HiSLIPInterruptedError(0)
+
+        data, status = sess.read(1024)
+        assert data == b""
+        assert status == StatusCode.error_abort
+        sess.interface.complete_terminate.assert_called_once()
+
+    def test_read_timeout(self):
+        from pyvisa.constants import StatusCode
+
+        sess = self._make_session()
+        sess.interface.receive.side_effect = socket.timeout("timed out")
+
+        data, status = sess.read(1024)
+        assert data == b""
+        assert status == StatusCode.error_timeout
+
+    def test_read_success_rmt(self):
+        """read() returns success_termination_character_read when rmt is set."""
+        from pyvisa.constants import StatusCode
+
+        sess = self._make_session()
+        sess.interface.receive.return_value = b"*IDN? response\n"
+        sess.interface._rmt = 1
+
+        data, status = sess.read(4096)
+        assert data == b"*IDN? response\n"
+        assert status == StatusCode.success_termination_character_read
+
+    def test_read_success_max_count(self):
+        """read() returns success_max_count_read when buffer is full."""
+        from pyvisa.constants import StatusCode
+
+        sess = self._make_session()
+        sess.interface.receive.return_value = b"abcd"
+        sess.interface._rmt = 0
+
+        data, status = sess.read(4)
+        assert data == b"abcd"
+        assert status == StatusCode.success_max_count_read
+
+
+class TestHighlevelTerminate:
+    """Test PyVisaLibrary.terminate() dispatcher."""
+
+    def test_terminate_dispatches_to_session(self):
+        from pyvisa.constants import StatusCode
+        from pyvisa_py.highlevel import PyVisaLibrary
+
+        lib = object.__new__(PyVisaLibrary)
+        mock_sess = MagicMock()
+        mock_sess.terminate.return_value = StatusCode.success
+        lib.sessions = {42: mock_sess}
+        # Stub handle_return_value to pass through
+        lib.handle_return_value = lambda sess, val: val
+
+        result = lib.terminate(42, None, None)
+        assert result == StatusCode.success
+        mock_sess.terminate.assert_called_once_with(None)
+
+    def test_terminate_invalid_session(self):
+        from pyvisa.constants import StatusCode
+        from pyvisa_py.highlevel import PyVisaLibrary
+
+        lib = object.__new__(PyVisaLibrary)
+        lib.sessions = {}
+        lib.handle_return_value = lambda sess, val: val
+
+        result = lib.terminate(999, None, None)
+        assert result == StatusCode.error_invalid_object
