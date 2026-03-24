@@ -196,13 +196,21 @@ class TestInstrumentTerminate:
     """Test Instrument.terminate() and complete_terminate() via mocking."""
 
     def test_terminate_calls_cancel(self):
-        """Instrument.terminate() signals the CancellableSocket cancel pipe."""
+        """Instrument.terminate() signals cancel only when receiving."""
+        import threading
         from pyvisa_py.protocols.hislip import Instrument
 
         inst = object.__new__(Instrument)
         mock_sync = MagicMock(spec=CancellableSocket)
         inst._sync = mock_sync
+        inst._receiving = threading.Event()
 
+        # When no receive is in progress, terminate is a no-op
+        inst.terminate()
+        mock_sync.cancel.assert_not_called()
+
+        # When a receive is in progress, terminate signals cancel
+        inst._receiving.set()
         inst.terminate()
         mock_sync.cancel.assert_called_once()
 

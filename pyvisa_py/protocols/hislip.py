@@ -7,6 +7,7 @@ http://www.ivifoundation.org/downloads/Class%20Specifications/IVI-6.1_HiSLIP-1.1
 import select
 import socket
 import struct
+import threading
 import time
 from typing import Dict, Optional, Tuple
 
@@ -496,6 +497,7 @@ class Instrument:
         self._last_message_id: Optional[int] = None
         self._msg_type: str = ""
         self._payload_remaining: int = 0
+        self._receiving = threading.Event()
 
     # ================ #
     # MEMBER FUNCTIONS #
@@ -597,39 +599,43 @@ class Instrument:
         # note the use of receive_exact_into (which calls socket.recv_into),
         # avoiding unnecessary copies.
         #
-        recv_buffer = bytearray(max_len)
-        view = memoryview(recv_buffer)
-        bytes_recvd = 0
+        self._receiving.set()
+        try:
+            recv_buffer = bytearray(max_len)
+            view = memoryview(recv_buffer)
+            bytes_recvd = 0
 
-        while bytes_recvd < max_len:
-            if self._payload_remaining <= 0:
-                if self._msg_type == "DataEnd":
-                    # truncate to the actual number of bytes received
-                    recv_buffer = recv_buffer[:bytes_recvd]
-                    break
-                self._msg_type, self._payload_remaining = self._next_data_header()
+            while bytes_recvd < max_len:
+                if self._payload_remaining <= 0:
+                    if self._msg_type == "DataEnd":
+                        # truncate to the actual number of bytes received
+                        recv_buffer = recv_buffer[:bytes_recvd]
+                        break
+                    self._msg_type, self._payload_remaining = self._next_data_header()
 
-            request_size = min(self._payload_remaining, max_len - bytes_recvd)
-            receive_exact_into(self._sync, view[:request_size])
-            self._payload_remaining -= request_size
-            bytes_recvd += request_size
-            view = view[request_size:]
+                request_size = min(self._payload_remaining, max_len - bytes_recvd)
+                receive_exact_into(self._sync, view[:request_size])
+                self._payload_remaining -= request_size
+                bytes_recvd += request_size
+                view = view[request_size:]
 
-        if bytes_recvd > max_len:
-            raise MemoryError("scribbled past end of recv_buffer")
+            if bytes_recvd > max_len:
+                raise MemoryError("scribbled past end of recv_buffer")
 
-        # if there is no data remaining, set the RMT flag
-        if self._payload_remaining == 0 and self._msg_type == "DataEnd":
-            #
-            # From IEEE Std 488.2: Response Message Terminator.
-            #
-            # RMT is the new-line accompanied by END sent from the server
-            # to the client at the end of a response. Note that with HiSLIP
-            # this is implied by the DataEND message.
-            #
-            self._rmt = 1
+            # if there is no data remaining, set the RMT flag
+            if self._payload_remaining == 0 and self._msg_type == "DataEnd":
+                #
+                # From IEEE Std 488.2: Response Message Terminator.
+                #
+                # RMT is the new-line accompanied by END sent from the server
+                # to the client at the end of a response. Note that with HiSLIP
+                # this is implied by the DataEND message.
+                #
+                self._rmt = 1
 
-        return recv_buffer
+            return recv_buffer
+        finally:
+            self._receiving.clear()
 
     def _next_data_header(self) -> Tuple[str, int]:
         """
@@ -686,10 +692,15 @@ class Instrument:
         Thread-safe: may be called from any thread while another thread is
         blocked in receive().
 
+        If no receive() is currently in progress, this is a no-op (matching
+        the behavior of Keysight VISA's viTerminate on idle sessions).
+
         After the blocked operation returns, the caller MUST call
         complete_terminate() to reset the HiSLIP protocol state before
         performing further I/O on this session.
         """
+        if not self._receiving.is_set():
+            return
         self._sync.cancel()
 
     def complete_terminate(self) -> None:
