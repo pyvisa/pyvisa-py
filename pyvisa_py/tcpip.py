@@ -338,7 +338,7 @@ class TCPIPInstrHiSLIP(Session):
 
         return stb, errorcode
 
-    def terminate(self, job_id: VISAJobID = None) -> StatusCode:
+    def terminate(self, job_id: VISAJobID | None = None) -> StatusCode:
         """Cancel a pending I/O operation on this session.
 
         Corresponds to viTerminate function of the VISA library.
@@ -348,9 +348,20 @@ class TCPIPInstrHiSLIP(Session):
         StatusCode.error_abort and automatically reset the HiSLIP protocol
         state so the session is ready for further I/O.
 
+        .. note::
+
+            This implementation goes beyond what mainstream VISA libraries
+            (e.g. Keysight IO Libraries) provide for synchronous HiSLIP reads.
+            Keysight's ``viTerminate()`` returns ``VI_SUCCESS`` but does not
+            actually cancel a blocked synchronous ``viRead()``; the read
+            continues until the normal timeout expires.  This implementation
+            truly cancels the blocked read via a cancel pipe and performs a
+            HiSLIP device clear to re-sync the protocol.  Code relying on
+            this behavior may not be portable to other VISA backends.
+
         Parameters
         ----------
-        job_id : VISAJobID, optional
+        job_id : VISAJobID | None, optional
             Specifies an operation identifier.  If None, aborts all calls
             on this session.
 

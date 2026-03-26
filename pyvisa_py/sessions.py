@@ -419,14 +419,14 @@ class Session(metaclass=abc.ABCMeta):
         """
         return StatusCode.error_nonsupported_operation
 
-    def terminate(self, job_id: VISAJobID = None) -> StatusCode:
+    def terminate(self, job_id: VISAJobID | None = None) -> StatusCode:
         """Cancel a pending I/O operation.
 
         Corresponds to viTerminate function of the VISA library.
 
         Parameters
         ----------
-        job_id : VISAJobID, optional
+        job_id : VISAJobID | None, optional
             Specifies an operation identifier.  If None, aborts all calls
             on this session.
 

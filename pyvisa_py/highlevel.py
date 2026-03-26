@@ -225,7 +225,7 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
         self,
         session: VISASession,
         degree: None,
-        job_id: VISAJobID,
+        job_id: VISAJobID | None,
     ) -> StatusCode:
         """Request a VISA session to terminate normal execution of an operation.
 
@@ -237,7 +237,7 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
             Unique logical identifier to a session.
         degree : None
             Not used in this version of the VISA specification.
-        job_id : VISAJobID
+        job_id : VISAJobID | None
             Specifies an operation identifier.  If None, aborts all calls
             on the specified session.
 
