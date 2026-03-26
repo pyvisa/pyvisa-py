@@ -197,7 +197,6 @@ class TestInstrumentTerminate:
 
     def test_terminate_calls_cancel(self):
         """Instrument.terminate() signals cancel only when receiving."""
-        import threading
         from pyvisa_py.protocols.hislip import Instrument
 
         inst = object.__new__(Instrument)
