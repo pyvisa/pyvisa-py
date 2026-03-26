@@ -5,6 +5,10 @@ PyVISA-py Changelog
 ------------------
 
 - Added read_stb, assert_trigger and gpib_control_run functions to usbtmc PR #532
+- Implement viTerminate() for HiSLIP sessions using a CancellableSocket
+  (self-pipe trick on recv_into), enabling cross-thread I/O cancellation
+  without destroying the session. Also handle HiSLIP Interrupted messages
+  in the receive path. Closes #566
 
 0.8.1 (04-09-2025)
 ------------------
