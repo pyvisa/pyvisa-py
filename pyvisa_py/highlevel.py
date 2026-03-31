@@ -23,7 +23,7 @@ from typing import (
 
 from pyvisa import constants, highlevel, rname
 from pyvisa.constants import StatusCode
-from pyvisa.typing import VISAEventContext, VISARMSession, VISASession
+from pyvisa.typing import VISAEventContext, VISAJobID, VISARMSession, VISASession
 from pyvisa.util import DebugInfo, LibraryPath
 
 from .common import LOGGER
@@ -220,6 +220,38 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
         except KeyError:
             return self.handle_return_value(session, StatusCode.error_invalid_object)
         return self.handle_return_value(session, sess.clear())
+
+    def terminate(
+        self,
+        session: VISASession,
+        degree: None,
+        job_id: VISAJobID | None,
+    ) -> StatusCode:
+        """Request a VISA session to terminate normal execution of an operation.
+
+        Corresponds to viTerminate function of the VISA library.
+
+        Parameters
+        ----------
+        session : VISASession
+            Unique logical identifier to a session.
+        degree : None
+            Not used in this version of the VISA specification.
+        job_id : VISAJobID | None
+            Specifies an operation identifier.  If None, aborts all calls
+            on the specified session.
+
+        Returns
+        -------
+        StatusCode
+            Return value of the library call.
+
+        """
+        try:
+            sess = self.sessions[session]
+        except KeyError:
+            return self.handle_return_value(session, StatusCode.error_invalid_object)
+        return self.handle_return_value(session, sess.terminate(job_id))
 
     def flush(
         self, session: VISASession, mask: constants.BufferOperation
