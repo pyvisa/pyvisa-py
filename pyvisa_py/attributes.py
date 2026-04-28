@@ -30,9 +30,5 @@ class AttrVI_ATTR_TCPIP_KEEPALIVE(former_keepalive):
     resources = [
         (constants.InterfaceType.tcpip, "SOCKET"),
         (constants.InterfaceType.tcpip, "INSTR"),
-        *(
-            [(_vicp, "INSTR")]
-            if _vicp is not None
-            else []
-        ),
+        *([(_vicp, "INSTR")] if _vicp is not None else []),
     ]

@@ -125,9 +125,7 @@ class EventQueue:
             if event_type is None:
                 self._deque.clear()
             else:
-                kept = [
-                    ctx for ctx in self._deque if ctx.event_type != event_type
-                ]
+                kept = [ctx for ctx in self._deque if ctx.event_type != event_type]
                 self._deque.clear()
                 self._deque.extend(kept)
 
@@ -198,9 +196,7 @@ class HandlerRegistry:
             try:
                 handler(session, event_type, context_id, user_handle)
             except Exception:
-                LOGGER.exception(
-                    "Exception in event handler for %s", event_type
-                )
+                LOGGER.exception("Exception in event handler for %s", event_type)
 
 
 class EventState:

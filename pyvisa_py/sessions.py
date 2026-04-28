@@ -374,9 +374,7 @@ class Session(metaclass=abc.ABCMeta):
         """
         pass
 
-    def _fire_event(
-        self, event_type: constants.EventType, ctx: EventContext
-    ) -> None:
+    def _fire_event(self, event_type: constants.EventType, ctx: EventContext) -> None:
         """Dispatch an event occurrence to the queue and/or handlers.
 
         This method is called by transport-specific monitor threads when an
@@ -389,9 +387,7 @@ class Session(metaclass=abc.ABCMeta):
             self._event_state.queue.put(ctx)
         if handler_enabled:
             session_handle = getattr(self, "_session_handle", self)
-            self._event_state.registry.fire(
-                event_type, session_handle, ctx.context_id
-            )
+            self._event_state.registry.fire(event_type, session_handle, ctx.context_id)
 
     def _start_srq_monitor(self) -> StatusCode:
         """Start a background thread to watch for SRQ assertions.

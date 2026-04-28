@@ -432,10 +432,7 @@ class SrqInterruptServer(rpc.UDPServer):
     def _fire_srq(self):
         try:
             # Defensive: session may have been closed while we were spawned
-            if (
-                self.session.interface is None
-                or self.session.link == 0
-            ):
+            if self.session.interface is None or self.session.link == 0:
                 return
             stb, status = self.session.read_stb()
             if status == StatusCode.success and (stb & STB_RQS_BIT):
@@ -565,10 +562,7 @@ class SrqInterruptTCPServer(rpc.TCPServer):
     def _fire_srq(self):
         try:
             # Defensive: session may have been closed while we were spawned
-            if (
-                self.session.interface is None
-                or self.session.link == 0
-            ):
+            if self.session.interface is None or self.session.link == 0:
                 return
             stb, status = self.session.read_stb()
             if status == StatusCode.success and (stb & STB_RQS_BIT):

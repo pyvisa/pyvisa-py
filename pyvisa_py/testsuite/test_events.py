@@ -122,13 +122,9 @@ class TestEventQueue:
         q.put(ctx_io)
         q.put(ctx_srq)
         assert (
-            q.get_matching(constants.EventType.service_request, timeout_ms=0)
-            is ctx_srq
+            q.get_matching(constants.EventType.service_request, timeout_ms=0) is ctx_srq
         )
-        assert (
-            q.get_matching(constants.EventType.io_completion, timeout_ms=0)
-            is ctx_io
-        )
+        assert q.get_matching(constants.EventType.io_completion, timeout_ms=0) is ctx_io
 
     def test_get_matching_non_matching_returns_none(self):
         q = EventQueue()
@@ -146,8 +142,7 @@ class TestEventQueue:
         t = threading.Thread(target=delayed_put)
         t.start()
         assert (
-            q.get_matching(constants.EventType.service_request, timeout_ms=None)
-            is ctx
+            q.get_matching(constants.EventType.service_request, timeout_ms=None) is ctx
         )
         t.join()
 
@@ -170,8 +165,7 @@ class TestEventQueue:
         t = threading.Thread(target=delayed_put)
         t.start()
         assert (
-            q.get_matching(constants.EventType.service_request, timeout_ms=200)
-            is ctx
+            q.get_matching(constants.EventType.service_request, timeout_ms=200) is ctx
         )
         t.join()
 
@@ -273,9 +267,7 @@ class TestEventState:
         st.enable(constants.EventType.service_request, constants.EventMechanism.queue)
         assert st.is_queue_enabled(constants.EventType.service_request) is True
         assert st.is_handler_enabled(constants.EventType.service_request) is False
-        st.enable(
-            constants.EventType.service_request, constants.EventMechanism.handler
-        )
+        st.enable(constants.EventType.service_request, constants.EventMechanism.handler)
         assert st.is_handler_enabled(constants.EventType.service_request) is True
         st.disable(constants.EventType.service_request, constants.EventMechanism.queue)
         assert st.is_queue_enabled(constants.EventType.service_request) is False
@@ -318,15 +310,9 @@ class TestEventState:
 
     def test_disable_all_clears_everything(self):
         st = EventState()
-        st.enable(
-            constants.EventType.service_request, constants.EventMechanism.queue
-        )
-        st.enable(
-            constants.EventType.service_request, constants.EventMechanism.handler
-        )
-        st.disable(
-            constants.EventType.service_request, constants.EventMechanism.all
-        )
+        st.enable(constants.EventType.service_request, constants.EventMechanism.queue)
+        st.enable(constants.EventType.service_request, constants.EventMechanism.handler)
+        st.disable(constants.EventType.service_request, constants.EventMechanism.all)
         assert st.is_queue_enabled(constants.EventType.service_request) is False
         assert st.is_handler_enabled(constants.EventType.service_request) is False
         assert constants.EventType.service_request not in st.enabled
@@ -357,9 +343,7 @@ class TestHighlevelEventMethods:
             constants.EventMechanism.queue,
         )
         assert result == StatusCode.success
-        assert sess._event_state.is_queue_enabled(
-            constants.EventType.service_request
-        )
+        assert sess._event_state.is_queue_enabled(constants.EventType.service_request)
         sess._start_srq_monitor.assert_called_once()
 
     def test_disable_event_delegates_and_stops_monitor(self, lib_and_session):
@@ -495,17 +479,13 @@ class TestHighlevelEventMethods:
     def test_wait_on_event_timeout_raises(self, lib_and_session):
         lib, sess, sid = lib_and_session
         with pytest.raises(errors.VisaIOError) as exc_info:
-            lib.wait_on_event(
-                sid, constants.EventType.service_request, 50
-            )
+            lib.wait_on_event(sid, constants.EventType.service_request, 50)
         assert exc_info.value.error_code == StatusCode.error_timeout
 
     def test_wait_on_event_zero_timeout_raises(self, lib_and_session):
         lib, sess, sid = lib_and_session
         with pytest.raises(errors.VisaIOError) as exc_info:
-            lib.wait_on_event(
-                sid, constants.EventType.service_request, 0
-            )
+            lib.wait_on_event(sid, constants.EventType.service_request, 0)
         assert exc_info.value.error_code == StatusCode.error_timeout
 
     def test_wait_on_event_invalid_session(self, lib_and_session):
@@ -619,9 +599,7 @@ class TestVxi11SrqFlow:
         sess.interface.sock.getsockname.return_value = ("192.168.1.2", 12345)
 
         # Patch SrqInterruptTCPServer so we don't bind a real TCP socket
-        with patch(
-            "pyvisa_py.tcpip.vxi11.SrqInterruptTCPServer"
-        ) as MockServer:
+        with patch("pyvisa_py.tcpip.vxi11.SrqInterruptTCPServer") as MockServer:
             mock_sock = MagicMock()
             mock_sock.getsockname.return_value = ("127.0.0.1", 65432)
             MockServer.return_value.sock = mock_sock
@@ -671,9 +649,7 @@ class TestVxi11SrqFlow:
         sess = mock_vxi11_session
         sess._event_state.monitor_thread = None
         TCPIPInstrVxi11._stop_srq_monitor(sess)
-        sess.interface.device_enable_srq.assert_called_once_with(
-            sess.link, False, b""
-        )
+        sess.interface.device_enable_srq.assert_called_once_with(sess.link, False, b"")
         sess.interface.destroy_intr_chan.assert_called_once()
 
     def test_fire_event_then_wait_on_event(self, lib_and_session):
@@ -717,6 +693,4 @@ class TestVxi11SrqFlow:
         from pyvisa_py.sessions import Session
 
         Session._fire_event(sess, constants.EventType.service_request, ctx)
-        assert calls == [
-            (constants.EventType.service_request, 5555, "uh")
-        ]
+        assert calls == [(constants.EventType.service_request, 5555, "uh")]

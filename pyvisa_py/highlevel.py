@@ -827,9 +827,7 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
         except KeyError:
             return self.handle_return_value(session, StatusCode.error_invalid_object)
         if event_type not in sess._supported_event_types:
-            return self.handle_return_value(
-                session, StatusCode.error_invalid_event
-            )
+            return self.handle_return_value(session, StatusCode.error_invalid_event)
         sess._event_state.enable(event_type, mechanism)
         status = sess._start_srq_monitor()
         if status != StatusCode.success:
