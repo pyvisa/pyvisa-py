@@ -94,6 +94,9 @@ No. We have implemented those attributes and methods that are most commonly
 needed. We would like to reach feature parity. If there is something that you
 need, let us know.
 
+Event handling (``wait_on_event``, ``install_handler``, etc.) is currently
+supported for **TCPIP INSTR** (VXI-11) resources only.
+
 
 Why are you developing this?
 ----------------------------

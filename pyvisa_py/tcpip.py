@@ -7,10 +7,13 @@
 
 """
 
+from __future__ import annotations
+
 import ipaddress
 import random
 import select
 import socket
+import threading
 import time
 import warnings
 from typing import Any, Dict, List, Optional, Tuple, Type, cast
@@ -431,6 +434,7 @@ class Vxi11CoreClient(vxi11.CoreClient):
     def __init__(
         self, host: str, port: Optional[int], open_timeout: Optional[int] = 5000
     ) -> None:
+        self._lock = threading.Lock()
         self.packer = vxi11.Vxi11Packer()
         self.unpacker = vxi11.Vxi11Unpacker(b"")
         prog, vers = vxi11.DEVICE_CORE_PROG, vxi11.DEVICE_CORE_VERS
@@ -441,6 +445,10 @@ class Vxi11CoreClient(vxi11.CoreClient):
             # bypass the portmapper lookup and use the specified port instead
             rpc.RawTCPClient.__init__(self, host, prog, vers, port, open_timeout)
 
+    def make_call(self, proc, args, pack_func, unpack_func):
+        with self._lock:
+            return super().make_call(proc, args, pack_func, unpack_func)
+
 
 class TCPIPInstrVxi11(Session):
     """A TCPIP Session built on socket standard library using VXI-11 protocol."""
@@ -449,6 +457,8 @@ class TCPIPInstrVxi11(Session):
     # want it to be registered in the _session_classes array, but we still
     # need to define session_type to make the set_attribute machinery work.
     session_type = (constants.InterfaceType.tcpip, "INSTR")
+
+    _supported_event_types = {constants.EventType.service_request}
 
     #: Maximum size of a chunk of data in bytes.
     max_recv_size: int
@@ -541,6 +551,8 @@ class TCPIPInstrVxi11(Session):
 
         self.client_id = random.getrandbits(31)
         self.keepalive = False
+        self._srq_server: vxi11.SrqInterruptServer | vxi11.SrqInterruptTCPServer | None = None
+        self._srq_lifecycle_lock = threading.Lock()
 
         error, link, _abort_port, max_recv_size = self.interface.create_link(
             self.client_id, 0, self.lock_timeout, self.parsed.lan_device_name
@@ -561,6 +573,7 @@ class TCPIPInstrVxi11(Session):
             self.attrs[attribute] = attributes.AttributesByID[attribute].default
 
     def close(self) -> StatusCode:
+        self._stop_srq_monitor()
         try:
             self.interface.destroy_link(self.link)
         except (errors.VisaIOError, socket.error, rpc.RPCError) as e:
@@ -571,6 +584,106 @@ class TCPIPInstrVxi11(Session):
         self.interface = None
 
         return StatusCode.success
+
+    def _start_srq_monitor(self) -> StatusCode:
+        """Start the VXI-11 interrupt server and enable SRQ on the device."""
+        with self._srq_lifecycle_lock:
+            with self._event_state._lock:
+                if (
+                    self._event_state.monitor_thread is not None
+                    and self._event_state.monitor_thread.is_alive()
+                ):
+                    return StatusCode.success
+                if not self._event_state.should_monitor():
+                    return StatusCode.success
+
+            self._event_state.stop_flag.clear()
+
+            server = vxi11.SrqInterruptTCPServer(
+                "",
+                vxi11.DEVICE_INTR_PROG,
+                vxi11.DEVICE_INTR_VERS,
+                0,
+                self,
+            )
+            port = server.sock.getsockname()[1]
+
+            local_ip_str = self.interface.sock.getsockname()[0]
+            host_addr = int(ipaddress.IPv4Address(local_ip_str))
+
+            error = self.interface.create_intr_chan(
+                host_addr,
+                port,
+                vxi11.DEVICE_INTR_PROG,
+                vxi11.DEVICE_INTR_VERS,
+                vxi11.DEVICE_TCP,
+            )
+            if error:
+                LOGGER.error("create_intr_chan failed with error %d", error)
+                try:
+                    server.sock.close()
+                except Exception:
+                    pass
+                return StatusCode.error_nonsupported_operation
+
+            error = self.interface.device_enable_srq(self.link, True, b"srq")
+            if error:
+                LOGGER.error("device_enable_srq failed with error %d", error)
+                try:
+                    self.interface.destroy_intr_chan()
+                except Exception:
+                    pass
+                try:
+                    server.sock.close()
+                except Exception:
+                    pass
+                return StatusCode.error_io
+
+            with self._event_state._lock:
+                if (
+                    self._event_state.monitor_thread is not None
+                    and self._event_state.monitor_thread.is_alive()
+                ):
+                    try:
+                        server.sock.close()
+                    except Exception:
+                        pass
+                    return StatusCode.success
+                thread = threading.Thread(target=server.loop, daemon=True)
+                self._event_state.monitor_thread = thread
+                self._srq_server = server
+            thread.start()
+            return StatusCode.success
+
+    def _stop_srq_monitor(self) -> None:
+        """Disable SRQ and stop the interrupt server thread."""
+        with self._srq_lifecycle_lock:
+            self._event_state.stop_flag.set()
+            try:
+                self.interface.device_enable_srq(self.link, False, b"")
+            except Exception:
+                LOGGER.exception("Error disabling VXI-11 SRQ")
+            try:
+                self.interface.destroy_intr_chan()
+            except Exception:
+                LOGGER.exception("Error destroying VXI-11 interrupt channel")
+            with self._event_state._lock:
+                thread = self._event_state.monitor_thread
+                self._event_state.monitor_thread = None
+                server = self._srq_server
+                self._srq_server = None
+
+        if thread is not None:
+            thread.join(timeout=1.0)
+        if server is not None:
+            try:
+                server.stop()
+            except Exception:
+                pass
+            try:
+                server.sock.close()
+            except Exception:
+                pass
 
     def read(self, count: int) -> Tuple[bytes, StatusCode]:
         """Reads data from device or interface synchronously.

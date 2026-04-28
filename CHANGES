@@ -15,6 +15,14 @@ PyVISA-py Changelog
   A second addressed issue is that timeout values never decrement to 0. A timeout value 
   of 0 is undefined in VXI-11 standard. It can mean "timeout immediately if no data 
   is in buffer" or "block permanently until transfer is finished".
+- Implement the VISA event subsystem for VXI-11 (TCPIP::INSTR) resources:
+  `viEnableEvent`, `viDisableEvent`, `viDiscardEvents`, `viWaitOnEvent`,
+  `viInstallHandler`, and `viUninstallHandler`. SRQ (service request) events
+  are now supported via both queue-based (`wait_on_event`) and handler-based
+  (`install_handler`) delivery. A daemon thread runs an ONC RPC UDP interrupt
+  server to receive VXI-11 `DEVICE_INTR_SRQ` callbacks. This also fixes the
+  `create_intr_chan` XDR packer in `protocols/vxi11.py`.
+  Other transports (GPIB, USBTMC, HiSLIP, Serial) remain unsupported for now.
 
 0.8.1 (04-09-2025)
 ------------------

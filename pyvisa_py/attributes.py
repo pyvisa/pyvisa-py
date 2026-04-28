@@ -10,6 +10,9 @@ For additional information and VISA attributes see pyvisa.constants
 from pyvisa import constants
 from pyvisa.attributes import AttrVI_ATTR_TCPIP_KEEPALIVE as former_keepalive
 
+# vicp may not exist in older pyvisa versions
+_vicp = getattr(constants.InterfaceType, "vicp", None)
+
 
 class AttrVI_ATTR_TCPIP_KEEPALIVE(former_keepalive):
     """Requests that a TCP/IP provider enable the use of keep-alive packets.
@@ -27,5 +30,9 @@ class AttrVI_ATTR_TCPIP_KEEPALIVE(former_keepalive):
     resources = [
         (constants.InterfaceType.tcpip, "SOCKET"),
         (constants.InterfaceType.tcpip, "INSTR"),
-        (constants.InterfaceType.vicp, "INSTR"),
+        *(
+            [(_vicp, "INSTR")]
+            if _vicp is not None
+            else []
+        ),
     ]

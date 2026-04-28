@@ -7,6 +7,8 @@
 
 """
 
+from __future__ import annotations
+
 import random
 from collections import OrderedDict
 from typing import (
@@ -197,7 +199,9 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
         except OpenError as e:
             return VISASession(0), self.handle_return_value(None, e.error_code)
 
-        return self._register(sess), StatusCode.success
+        visa_session = self._register(sess)
+        sess._session_handle = visa_session
+        return visa_session, StatusCode.success
 
     def clear(self, session: VISASession) -> StatusCode:
         """Clears a device.
@@ -790,6 +794,49 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
             return self.handle_return_value(session, StatusCode.error_invalid_object)
         return self.handle_return_value(session, sess.unlock())
 
+    def enable_event(
+        self,
+        session: VISASession,
+        event_type: constants.EventType,
+        mechanism: constants.EventMechanism,
+        context: None = None,
+    ) -> StatusCode:
+        """Enable notification for an event type via the specified mechanism.
+
+        Corresponds to viEnableEvent function of the VISA library.
+
+        Parameters
+        ----------
+        session : VISASession
+            Unique logical identifier to a session.
+        event_type : constants.EventType
+            Event type.
+        mechanism : constants.EventMechanism
+            Event handling mechanisms to be enabled.
+        context : None, optional
+            Not used in pyvisa-py.
+
+        Returns
+        -------
+        StatusCode
+            Return value of the library call.
+
+        """
+        try:
+            sess = self.sessions[session]
+        except KeyError:
+            return self.handle_return_value(session, StatusCode.error_invalid_object)
+        if event_type not in sess._supported_event_types:
+            return self.handle_return_value(
+                session, StatusCode.error_invalid_event
+            )
+        sess._event_state.enable(event_type, mechanism)
+        status = sess._start_srq_monitor()
+        if status != StatusCode.success:
+            sess._event_state.disable(event_type, mechanism)
+            return self.handle_return_value(session, status)
+        return self.handle_return_value(session, StatusCode.success)
+
     def disable_event(
         self,
         session: VISASession,
@@ -815,7 +862,18 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
             Return value of the library call.
 
         """
-        return StatusCode.error_nonimplemented_operation
+        try:
+            sess = self.sessions[session]
+        except KeyError:
+            return self.handle_return_value(session, StatusCode.error_invalid_object)
+        if event_type == constants.EventType.all_enabled:
+            for et in list(sess._event_state.enabled.keys()):
+                sess._event_state.disable(et, mechanism)
+        else:
+            sess._event_state.disable(event_type, mechanism)
+        if not sess._event_state.any_enabled():
+            sess._stop_srq_monitor()
+        return self.handle_return_value(session, StatusCode.success)
 
     def discard_events(
         self,
@@ -831,7 +889,7 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
         ----------
         session : VISASession
             Unique logical identifier to a session.
-        event_type : constans.EventType
+        event_type : constants.EventType
             Logical event identifier.
         mechanism : constants.EventMechanism
             Specifies event handling mechanisms to be discarded.
@@ -842,4 +900,143 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
             Return value of the library call.
 
         """
-        return StatusCode.error_nonimplemented_operation
+        try:
+            sess = self.sessions[session]
+        except KeyError:
+            return self.handle_return_value(session, StatusCode.error_invalid_object)
+        mech = int(mechanism)
+        if mech == int(constants.EventMechanism.all) or mech & int(
+            constants.EventMechanism.queue
+        ):
+            et = None if event_type == constants.EventType.all_enabled else event_type
+            sess._event_state.queue.discard_all(et)
+        return self.handle_return_value(session, StatusCode.success)
+
+    def wait_on_event(
+        self, session: VISASession, in_event_type: constants.EventType, timeout: int
+    ) -> Tuple[constants.EventType, VISAEventContext, StatusCode]:
+        """Wait for an event occurrence for a given type.
+
+        Corresponds to viWaitOnEvent function of the VISA library.
+
+        Parameters
+        ----------
+        session : VISASession
+            Unique logical identifier to a session.
+        in_event_type : constants.EventType
+            Event type to wait for.
+        timeout : int
+            Timeout in milliseconds.
+
+        Returns
+        -------
+        constants.EventType
+            Type of the event that occurred.
+        VISAEventContext
+            Context identifier for the event.
+        StatusCode
+            Return value of the library call.
+
+        """
+        try:
+            sess = self.sessions[session]
+        except KeyError:
+            return (
+                in_event_type,
+                0,
+                self.handle_return_value(session, StatusCode.error_invalid_object),
+            )
+        et = None if in_event_type == constants.EventType.all_enabled else in_event_type
+        ctx = sess._event_state.queue.get_matching(et, timeout)
+        if ctx is None:
+            return (
+                in_event_type,
+                0,
+                self.handle_return_value(session, StatusCode.error_timeout),
+            )
+        return ctx.event_type, ctx.context_id, StatusCode.success
+
+    def install_handler(
+        self,
+        session: VISASession,
+        event_type: constants.EventType,
+        handler: Any,
+        user_handle: Any,
+    ) -> Tuple[Any, Any, Any, StatusCode]:
+        """Install a handler for an event type.
+
+        Corresponds to viInstallHandler function of the VISA library.
+
+        Parameters
+        ----------
+        session : VISASession
+            Unique logical identifier to a session.
+        event_type : constants.EventType
+            Event type.
+        handler : Any
+            Handler function to install.
+        user_handle : Any
+            User handle passed to the handler.
+
+        Returns
+        -------
+        Any
+            The handler that was installed.
+        Any
+            The user handle.
+        Any
+            The handler that was installed.
+        StatusCode
+            Return value of the library call.
+
+        """
+        try:
+            sess = self.sessions[session]
+        except KeyError:
+            return (
+                handler,
+                user_handle,
+                handler,
+                self.handle_return_value(session, StatusCode.error_invalid_object),
+            )
+        sess._event_state.registry.install(event_type, handler, user_handle)
+        return (handler, user_handle, handler, StatusCode.success)
+
+    def uninstall_handler(
+        self,
+        session: VISASession,
+        event_type: constants.EventType,
+        handler: Any,
+        user_handle: Any = None,
+    ) -> StatusCode:
+        """Uninstall a handler for an event type.
+
+        Corresponds to viUninstallHandler function of the VISA library.
+
+        Parameters
+        ----------
+        session : VISASession
+            Unique logical identifier to a session.
+        event_type : constants.EventType
+            Event type.
+        handler : Any
+            Handler function to uninstall.
+        user_handle : Any, optional
+            User handle associated with the handler.
+
+        Returns
+        -------
+        StatusCode
+            Return value of the library call.
+
+        """
+        try:
+            sess = self.sessions[session]
+        except KeyError:
+            return self.handle_return_value(session, StatusCode.error_invalid_object)
+        found = sess._event_state.registry.uninstall(event_type, handler, user_handle)
+        if not found:
+            return self.handle_return_value(
+                session, StatusCode.error_handler_not_installed
+            )
+        return self.handle_return_value(session, StatusCode.success)
