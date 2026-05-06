@@ -6,8 +6,6 @@ subsystem: event contexts, queues, handler registries, and per-session state.
 
 """
 
-from __future__ import annotations
-
 import collections
 import random
 import threading

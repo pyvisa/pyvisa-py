@@ -7,8 +7,6 @@
 
 """
 
-from __future__ import annotations
-
 import random
 from collections import OrderedDict
 from typing import (
@@ -826,6 +824,7 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
             sess = self.sessions[session]
         except KeyError:
             return self.handle_return_value(session, StatusCode.error_invalid_object)
+
         if event_type not in sess._supported_event_types:
             return self.handle_return_value(session, StatusCode.error_invalid_event)
         sess._event_state.enable(event_type, mechanism)
@@ -864,6 +863,7 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
             sess = self.sessions[session]
         except KeyError:
             return self.handle_return_value(session, StatusCode.error_invalid_object)
+
         if event_type == constants.EventType.all_enabled:
             for et in list(sess._event_state.enabled.keys()):
                 sess._event_state.disable(et, mechanism)
@@ -902,6 +902,7 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
             sess = self.sessions[session]
         except KeyError:
             return self.handle_return_value(session, StatusCode.error_invalid_object)
+
         mech = int(mechanism)
         if mech == int(constants.EventMechanism.all) or mech & int(
             constants.EventMechanism.queue
@@ -944,6 +945,7 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
                 0,
                 self.handle_return_value(session, StatusCode.error_invalid_object),
             )
+
         et = None if in_event_type == constants.EventType.all_enabled else in_event_type
         ctx = sess._event_state.queue.get_matching(et, timeout)
         if ctx is None:
@@ -997,6 +999,7 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
                 handler,
                 self.handle_return_value(session, StatusCode.error_invalid_object),
             )
+
         sess._event_state.registry.install(event_type, handler, user_handle)
         return (handler, user_handle, handler, StatusCode.success)
 
@@ -1032,6 +1035,7 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
             sess = self.sessions[session]
         except KeyError:
             return self.handle_return_value(session, StatusCode.error_invalid_object)
+
         found = sess._event_state.registry.uninstall(event_type, handler, user_handle)
         if not found:
             return self.handle_return_value(
