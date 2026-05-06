@@ -20,7 +20,7 @@ from pyvisa import constants
 from .common import LOGGER
 
 
-@dataclass
+@dataclass(frozen=True, slots=True)
 class EventContext:
     """Immutable description of a single VISA event occurrence."""
 
