@@ -17,7 +17,7 @@ import pytest
 from pyvisa import constants, errors
 from pyvisa.constants import StatusCode
 
-from pyvisa_py.events import EventContext, EventQueue, EventState, HandlerRegistry
+from pyvisa_py.events import EventContext, EventMechanism, EventQueue, EventState, HandlerRegistry
 from pyvisa_py.highlevel import PyVisaLibrary
 from pyvisa_py.protocols import vxi11
 
@@ -265,16 +265,23 @@ class TestEventState:
     def test_enable_disable(self):
         st = EventState()
         st.enable(constants.EventType.service_request, constants.EventMechanism.queue)
+        assert st.enabled[constants.EventType.service_request] is EventMechanism.QUEUE
         assert st.is_queue_enabled(constants.EventType.service_request) is True
         assert st.is_handler_enabled(constants.EventType.service_request) is False
         st.enable(constants.EventType.service_request, constants.EventMechanism.handler)
+        assert (
+            st.enabled[constants.EventType.service_request]
+            is (EventMechanism.QUEUE | EventMechanism.HANDLER)
+        )
         assert st.is_handler_enabled(constants.EventType.service_request) is True
         st.disable(constants.EventType.service_request, constants.EventMechanism.queue)
+        assert st.enabled[constants.EventType.service_request] is EventMechanism.HANDLER
         assert st.is_queue_enabled(constants.EventType.service_request) is False
         assert st.is_handler_enabled(constants.EventType.service_request) is True
         st.disable(
             constants.EventType.service_request, constants.EventMechanism.handler
         )
+        assert constants.EventType.service_request not in st.enabled
         assert st.any_enabled() is False
 
     def test_any_enabled_and_should_monitor(self):
@@ -282,12 +289,14 @@ class TestEventState:
         assert st.any_enabled() is False
         assert st.should_monitor() is False
         st.enable(constants.EventType.io_completion, constants.EventMechanism.queue)
+        assert st.enabled[constants.EventType.io_completion] is EventMechanism.QUEUE
         assert st.any_enabled() is True
         assert st.should_monitor() is True
 
     def test_disable_removes_empty_event_type(self):
         st = EventState()
         st.enable(constants.EventType.service_request, constants.EventMechanism.queue)
+        assert st.enabled[constants.EventType.service_request] is EventMechanism.QUEUE
         st.disable(constants.EventType.service_request, constants.EventMechanism.queue)
         # Internal dict should be clean
         assert constants.EventType.service_request not in st.enabled
@@ -296,6 +305,10 @@ class TestEventState:
         st = EventState()
         combined = constants.EventMechanism.queue | constants.EventMechanism.handler
         st.enable(constants.EventType.service_request, combined)
+        assert (
+            st.enabled[constants.EventType.service_request]
+            is (EventMechanism.QUEUE | EventMechanism.HANDLER)
+        )
         assert st.is_queue_enabled(constants.EventType.service_request) is True
         assert st.is_handler_enabled(constants.EventType.service_request) is True
 
@@ -304,6 +317,7 @@ class TestEventState:
         combined = constants.EventMechanism.queue | constants.EventMechanism.handler
         st.enable(constants.EventType.service_request, combined)
         st.disable(constants.EventType.service_request, combined)
+        assert constants.EventType.service_request not in st.enabled
         assert st.is_queue_enabled(constants.EventType.service_request) is False
         assert st.is_handler_enabled(constants.EventType.service_request) is False
         assert st.any_enabled() is False
@@ -312,6 +326,10 @@ class TestEventState:
         st = EventState()
         st.enable(constants.EventType.service_request, constants.EventMechanism.queue)
         st.enable(constants.EventType.service_request, constants.EventMechanism.handler)
+        assert (
+            st.enabled[constants.EventType.service_request]
+            is (EventMechanism.QUEUE | EventMechanism.HANDLER)
+        )
         st.disable(constants.EventType.service_request, constants.EventMechanism.all)
         assert st.is_queue_enabled(constants.EventType.service_request) is False
         assert st.is_handler_enabled(constants.EventType.service_request) is False
