@@ -575,7 +575,7 @@ class TCPIPInstrVxi11(Session):
             self.attrs[attribute] = attributes.AttributesByID[attribute].default
 
     def close(self) -> StatusCode:
-        self._stop_srq_monitor()
+        self._stop_event_monitor()
         try:
             self.interface.destroy_link(self.link)
         except (errors.VisaIOError, socket.error, rpc.RPCError) as e:
@@ -587,8 +587,8 @@ class TCPIPInstrVxi11(Session):
 
         return StatusCode.success
 
-    def _start_srq_monitor(self) -> StatusCode:
-        """Start the VXI-11 interrupt server and enable SRQ on the device."""
+    def _start_event_monitor(self) -> StatusCode:
+        """Start the VXI-11 interrupt server and enable events on the device."""
         with self._srq_lifecycle_lock:
             with self._event_state._lock:
                 if (
@@ -657,8 +657,8 @@ class TCPIPInstrVxi11(Session):
             thread.start()
             return StatusCode.success
 
-    def _stop_srq_monitor(self) -> None:
-        """Disable SRQ and stop the interrupt server thread."""
+    def _stop_event_monitor(self) -> None:
+        """Disable events and stop the interrupt server thread."""
         with self._srq_lifecycle_lock:
             self._event_state.stop_flag.set()
             try:

@@ -387,10 +387,10 @@ class Session(metaclass=abc.ABCMeta):
             session_handle = getattr(self, "_session_handle", self)
             self._event_state.registry.fire(event_type, session_handle, ctx.context_id)
 
-    def _start_srq_monitor(self) -> StatusCode:
-        """Start a background thread to watch for SRQ assertions.
+    def _start_event_monitor(self) -> StatusCode:
+        """Start a background thread to watch for event assertions.
 
-        Transports that support asynchronous SRQ (VXI-11, GPIB, USBTMC)
+        Transports that support asynchronous events (VXI-11, GPIB, USBTMC)
         should override this method.  The base implementation is a no-op.
 
         Returns
@@ -400,8 +400,8 @@ class Session(metaclass=abc.ABCMeta):
         """
         return StatusCode.success
 
-    def _stop_srq_monitor(self) -> None:
-        """Stop the SRQ monitor thread.
+    def _stop_event_monitor(self) -> None:
+        """Stop the event monitor thread.
 
         Transports should override this to signal their monitor thread
         (via ``self._event_state.stop_flag.set()``) and join it.

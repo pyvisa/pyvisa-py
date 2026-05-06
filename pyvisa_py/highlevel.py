@@ -828,7 +828,7 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
         if event_type not in sess._supported_event_types:
             return self.handle_return_value(session, StatusCode.error_invalid_event)
         sess._event_state.enable(event_type, mechanism)
-        status = sess._start_srq_monitor()
+        status = sess._start_event_monitor()
         if status != StatusCode.success:
             sess._event_state.disable(event_type, mechanism)
             return self.handle_return_value(session, status)
@@ -870,7 +870,7 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
         else:
             sess._event_state.disable(event_type, mechanism)
         if not sess._event_state.any_enabled():
-            sess._stop_srq_monitor()
+            sess._stop_event_monitor()
         return self.handle_return_value(session, StatusCode.success)
 
     def discard_events(
