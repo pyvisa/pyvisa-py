@@ -614,9 +614,18 @@ class TCPIPInstrVxi11(Session):
         while reason & end_reason == 0:
             # Decrease timeout so that the total timeout does not get larger
             # than the specified timeout.
-            timeout = max(0, timeout - int((time.time() - start_time) * 1000))
+
+            # Calculate timeout for current chunk.
+            # Limit the minimum timeout to 10ms, because 0 is undefined
+            # according to VXI-11 spec (done also by Visas)
+            chunk_timeout = max(10, timeout - int((time.time() - start_time) * 1000))
             error, reason, data = read_fun(
-                self.link, chunk_length, timeout, self.lock_timeout, flags, term_char
+                self.link,
+                chunk_length,
+                chunk_timeout,
+                self.lock_timeout,
+                flags,
+                term_char,
             )
 
             if error == vxi11.ErrorCodes.io_timeout:
