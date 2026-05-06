@@ -150,6 +150,11 @@ class EventQueue:
                 self._deque.extend(kept)
 
 
+# HandlerCallback: callable invoked when a VISA event fires.
+#   Arg 0 (Any):                  session handle (vi)
+#   Arg 1 (constants.EventType):  the event type that fired
+#   Arg 2 (int):                  event context id
+#   Arg 3 (Any):                  user-supplied handle passed at install_handler time
 HandlerCallback = Callable[[Any, constants.EventType, int, Any], None]
 
 
