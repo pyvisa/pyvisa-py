@@ -159,9 +159,9 @@ class HandlerRegistry:
     def __init__(self) -> None:
         self._lock = threading.RLock()
         # event_type -> list of (handler, user_handle)
-        self._handlers: dict[
+        self._handlers: collections.defaultdict[
             constants.EventType, list[tuple[HandlerCallback, Any]]
-        ] = {}
+        ] = collections.defaultdict(list)
 
     def install(
         self,
@@ -171,7 +171,7 @@ class HandlerRegistry:
     ) -> None:
         """Register a handler for the given event type."""
         with self._lock:
-            self._handlers.setdefault(event_type, []).append((handler, user_handle))
+            self._handlers[event_type].append((handler, user_handle))
 
     def uninstall(
         self,
