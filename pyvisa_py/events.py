@@ -10,6 +10,7 @@ import collections
 import random
 import threading
 import time
+import warnings
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
@@ -208,8 +209,8 @@ class HandlerRegistry:
 
         Each handler is called as ``handler(session, event_type, context_id,
         user_handle)`` where *user_handle* is the value supplied at
-        installation.  Exceptions raised by a handler are logged but do not
-        prevent subsequent handlers from running.
+        installation.  Exceptions raised by a handler are warned via
+        ``warnings.warn`` and do not prevent subsequent handlers from running.
 
         """
         with self._lock:
@@ -218,8 +219,11 @@ class HandlerRegistry:
         for handler, user_handle in handlers:
             try:
                 handler(session, event_type, context_id, user_handle)
-            except Exception:
-                LOGGER.exception("Exception in event handler for %s", event_type)
+            except Exception as exc:
+                warnings.warn(
+                    f"Event handler {handler!r} raised an exception: {exc!r}",
+                    stacklevel=2,
+                )
 
 
 class EventState:
