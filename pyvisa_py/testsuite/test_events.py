@@ -246,8 +246,8 @@ class TestHandlerRegistry:
 
         reg.install(constants.EventType.service_request, bad, None)
         reg.install(constants.EventType.service_request, good, None)
-        # Should not raise
-        reg.fire(constants.EventType.service_request, "session", 1)
+        with pytest.warns(UserWarning, match="boom"):
+            reg.fire(constants.EventType.service_request, "session", 1)
         assert calls == ["good"]
 
     def test_fire_no_handlers_noop(self):
@@ -347,7 +347,7 @@ def lib_and_session():
     sess = MagicMock()
     sess._event_state = EventState()
     sess._supported_event_types = {constants.EventType.service_request}
-    sess._start_srq_monitor.return_value = StatusCode.success
+    sess._start_event_monitor.return_value = StatusCode.success
     session_id = lib._register(sess)
     return lib, sess, session_id
 
@@ -362,7 +362,7 @@ class TestHighlevelEventMethods:
         )
         assert result == StatusCode.success
         assert sess._event_state.is_queue_enabled(constants.EventType.service_request)
-        sess._start_srq_monitor.assert_called_once()
+        sess._start_event_monitor.assert_called_once()
 
     def test_disable_event_delegates_and_stops_monitor(self, lib_and_session):
         lib, sess, sid = lib_and_session
@@ -382,7 +382,7 @@ class TestHighlevelEventMethods:
         assert not sess._event_state.is_queue_enabled(
             constants.EventType.service_request
         )
-        sess._stop_srq_monitor.assert_called_once()
+        sess._stop_event_monitor.assert_called_once()
 
     def test_disable_event_does_not_stop_when_other_enabled(self, lib_and_session):
         lib, sess, sid = lib_and_session
@@ -396,15 +396,15 @@ class TestHighlevelEventMethods:
             constants.EventType.service_request,
             constants.EventMechanism.handler,
         )
-        sess._start_srq_monitor.reset_mock()
-        sess._stop_srq_monitor.reset_mock()
+        sess._start_event_monitor.reset_mock()
+        sess._stop_event_monitor.reset_mock()
         lib.disable_event(
             sid,
             constants.EventType.service_request,
             constants.EventMechanism.queue,
         )
         # Handler still enabled -> monitor should NOT be stopped
-        sess._stop_srq_monitor.assert_not_called()
+        sess._stop_event_monitor.assert_not_called()
 
     def test_discard_events_queue(self, lib_and_session):
         lib, sess, sid = lib_and_session
@@ -546,7 +546,7 @@ class TestHighlevelEventMethods:
     def test_enable_event_rollback_on_monitor_failure(self, lib_and_session):
         lib, sess, sid = lib_and_session
         sess._supported_event_types = {constants.EventType.service_request}
-        sess._start_srq_monitor.return_value = StatusCode.error_io
+        sess._start_event_monitor.return_value = StatusCode.error_io
         with pytest.raises(errors.VisaIOError) as exc_info:
             lib.enable_event(
                 sid,
@@ -607,7 +607,7 @@ class TestVxi11SrqFlow:
         sess._srq_lifecycle_lock = threading.Lock()
         return sess
 
-    def test_start_srq_monitor_calls_enable(self, mock_vxi11_session):
+    def test_start_event_monitor_calls_enable(self, mock_vxi11_session):
         from pyvisa_py.tcpip import TCPIPInstrVxi11
 
         sess = mock_vxi11_session
@@ -622,7 +622,7 @@ class TestVxi11SrqFlow:
             mock_sock.getsockname.return_value = ("127.0.0.1", 65432)
             MockServer.return_value.sock = mock_sock
 
-            result = TCPIPInstrVxi11._start_srq_monitor(sess)
+            result = TCPIPInstrVxi11._start_event_monitor(sess)
 
             assert result == StatusCode.success
             sess.interface.create_intr_chan.assert_called_once_with(
@@ -641,7 +641,7 @@ class TestVxi11SrqFlow:
             if sess._event_state.monitor_thread is not None:
                 sess._event_state.monitor_thread.join(timeout=0.5)
 
-    def test_start_srq_monitor_create_intr_chan_error(self, mock_vxi11_session):
+    def test_start_event_monitor_create_intr_chan_error(self, mock_vxi11_session):
         from pyvisa_py.tcpip import TCPIPInstrVxi11
 
         sess = mock_vxi11_session
@@ -656,17 +656,17 @@ class TestVxi11SrqFlow:
             mock_sock.getsockname.return_value = ("127.0.0.1", 65432)
             MockServer.return_value.sock = mock_sock
 
-            result = TCPIPInstrVxi11._start_srq_monitor(sess)
+            result = TCPIPInstrVxi11._start_event_monitor(sess)
 
             assert result == StatusCode.error_nonsupported_operation
             assert sess._event_state.monitor_thread is None
 
-    def test_stop_srq_monitor_calls_disable(self, mock_vxi11_session):
+    def test_stop_event_monitor_calls_disable(self, mock_vxi11_session):
         from pyvisa_py.tcpip import TCPIPInstrVxi11
 
         sess = mock_vxi11_session
         sess._event_state.monitor_thread = None
-        TCPIPInstrVxi11._stop_srq_monitor(sess)
+        TCPIPInstrVxi11._stop_event_monitor(sess)
         sess.interface.device_enable_srq.assert_called_once_with(sess.link, False, b"")
         sess.interface.destroy_intr_chan.assert_called_once()
 
