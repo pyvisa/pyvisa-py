@@ -24,7 +24,7 @@ from typing import (
 
 from pyvisa import attributes, constants, rname
 from pyvisa.constants import ResourceAttribute, StatusCode
-from pyvisa.typing import VISAJobID, VISARMSession
+from pyvisa.typing import VISAJobID, VISARMSession, VISASession
 
 from .common import LOGGER, BytesBuffer, int_to_byte
 from .events import EventContext, EventState
@@ -147,6 +147,9 @@ class Session(metaclass=abc.ABCMeta):
 
     #: Timeout in milliseconds to use when opening the resource.
     open_timeout: Optional[int]
+
+    #: VISA session handle assigned by the library after registration.
+    _session_handle: VISASession
 
     #: Value of the timeout in seconds used for general operation
     timeout: Optional[float]
@@ -333,6 +336,7 @@ class Session(metaclass=abc.ABCMeta):
         self.after_parsing()
 
         self._event_state = EventState()
+        self._session_handle = VISASession(0)
 
     def after_parsing(self) -> None:
         """Override this method to provide custom initialization code, to be
