@@ -17,7 +17,13 @@ import pytest
 from pyvisa import constants, errors
 from pyvisa.constants import StatusCode
 
-from pyvisa_py.events import EventContext, EventMechanism, EventQueue, EventState, HandlerRegistry
+from pyvisa_py.events import (
+    EventContext,
+    EventMechanism,
+    EventQueue,
+    EventState,
+    HandlerRegistry,
+)
 from pyvisa_py.highlevel import PyVisaLibrary
 from pyvisa_py.protocols import vxi11
 
@@ -269,9 +275,8 @@ class TestEventState:
         assert st.is_queue_enabled(constants.EventType.service_request) is True
         assert st.is_handler_enabled(constants.EventType.service_request) is False
         st.enable(constants.EventType.service_request, constants.EventMechanism.handler)
-        assert (
-            st.enabled[constants.EventType.service_request]
-            is (EventMechanism.QUEUE | EventMechanism.HANDLER)
+        assert st.enabled[constants.EventType.service_request] is (
+            EventMechanism.QUEUE | EventMechanism.HANDLER
         )
         assert st.is_handler_enabled(constants.EventType.service_request) is True
         st.disable(constants.EventType.service_request, constants.EventMechanism.queue)
@@ -305,9 +310,8 @@ class TestEventState:
         st = EventState()
         combined = constants.EventMechanism.queue | constants.EventMechanism.handler
         st.enable(constants.EventType.service_request, combined)
-        assert (
-            st.enabled[constants.EventType.service_request]
-            is (EventMechanism.QUEUE | EventMechanism.HANDLER)
+        assert st.enabled[constants.EventType.service_request] is (
+            EventMechanism.QUEUE | EventMechanism.HANDLER
         )
         assert st.is_queue_enabled(constants.EventType.service_request) is True
         assert st.is_handler_enabled(constants.EventType.service_request) is True
@@ -326,9 +330,8 @@ class TestEventState:
         st = EventState()
         st.enable(constants.EventType.service_request, constants.EventMechanism.queue)
         st.enable(constants.EventType.service_request, constants.EventMechanism.handler)
-        assert (
-            st.enabled[constants.EventType.service_request]
-            is (EventMechanism.QUEUE | EventMechanism.HANDLER)
+        assert st.enabled[constants.EventType.service_request] is (
+            EventMechanism.QUEUE | EventMechanism.HANDLER
         )
         st.disable(constants.EventType.service_request, constants.EventMechanism.all)
         assert st.is_queue_enabled(constants.EventType.service_request) is False

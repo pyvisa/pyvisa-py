@@ -30,10 +30,10 @@ class EventMechanism(enum.Flag):
     """
 
     NONE = 0
-    QUEUE = 1      # VI_QUEUE   (1)
-    HANDLER = 2    # VI_HNDLR   (2)
-    SUSPEND = 4    # VI_SUSPEND_HNDLR (4)
-    ALL = 0xFFFF   # VI_ALL_MECH (0xFFFF)
+    QUEUE = 1  # VI_QUEUE   (1)
+    HANDLER = 2  # VI_HNDLR   (2)
+    SUSPEND = 4  # VI_SUSPEND_HNDLR (4)
+    ALL = 0xFFFF  # VI_ALL_MECH (0xFFFF)
 
 
 from .common import LOGGER
@@ -248,7 +248,9 @@ class EventState:
         with self._lock:
             if m is EventMechanism.ALL:
                 self.enabled[event_type] = (
-                    EventMechanism.QUEUE | EventMechanism.HANDLER | EventMechanism.SUSPEND
+                    EventMechanism.QUEUE
+                    | EventMechanism.HANDLER
+                    | EventMechanism.SUSPEND
                 )
             else:
                 self.enabled[event_type] = (
