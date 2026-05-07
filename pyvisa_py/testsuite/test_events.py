@@ -349,6 +349,7 @@ def lib_and_session():
     sess._supported_event_types = {constants.EventType.service_request}
     sess._start_event_monitor.return_value = StatusCode.success
     session_id = lib._register(sess)
+    sess._session_handle = session_id
     return lib, sess, session_id
 
 
@@ -697,7 +698,7 @@ class TestVxi11SrqFlow:
         calls = []
 
         def my_handler(session, event_type, context_id, user_handle):
-            calls.append((event_type, context_id, user_handle))
+            calls.append((session, event_type, context_id, user_handle))
 
         sess._event_state.registry.install(
             constants.EventType.service_request, my_handler, "uh"
@@ -711,4 +712,4 @@ class TestVxi11SrqFlow:
         from pyvisa_py.sessions import Session
 
         Session._fire_event(sess, constants.EventType.service_request, ctx)
-        assert calls == [(constants.EventType.service_request, 5555, "uh")]
+        assert calls == [(sid, constants.EventType.service_request, 5555, "uh")]

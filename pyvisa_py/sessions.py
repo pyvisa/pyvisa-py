@@ -384,7 +384,7 @@ class Session(metaclass=abc.ABCMeta):
         if queue_enabled:
             self._event_state.queue.put(ctx)
         if handler_enabled:
-            session_handle = getattr(self, "_session_handle", self)
+            session_handle = self._session_handle
             self._event_state.registry.fire(event_type, session_handle, ctx.context_id)
 
     def _start_event_monitor(self) -> StatusCode:
