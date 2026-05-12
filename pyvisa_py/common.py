@@ -15,8 +15,10 @@ LOGGER = logging.LoggerAdapter(logger, {"backend": "py"})  # type: ignore
 
 if TYPE_CHECKING:
     BytesBuffer = bytes | bytearray | memoryview[int]
+    MutableBytesBuffer = bytearray | memoryview[int]
 else:
     BytesBuffer = bytes | bytearray | memoryview
+    MutableBytesBuffer = bytearray | memoryview
 
 
 class NamedObject(object):

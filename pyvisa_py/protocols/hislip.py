@@ -11,7 +11,7 @@ import threading
 import time
 from typing import Dict, Optional, Tuple
 
-from pyvisa_py.common import BytesBuffer
+from pyvisa_py.common import BytesBuffer, MutableBytesBuffer
 
 PORT = 4880
 
@@ -216,7 +216,7 @@ def receive_flush(sock: socket.socket, recv_len: int) -> None:
         bytes_recvd += data_len
 
 
-def receive_exact(sock: socket.socket, recv_len: int) -> BytesBuffer:
+def receive_exact(sock: socket.socket, recv_len: int) -> bytearray:
     """
     receive exactly 'recv_len' bytes from 'sock'.
     no explicit timeout is specified, since it is assumed
@@ -228,7 +228,7 @@ def receive_exact(sock: socket.socket, recv_len: int) -> BytesBuffer:
     return recv_buffer
 
 
-def receive_exact_into(sock: socket.socket, recv_buffer: BytesBuffer) -> None:
+def receive_exact_into(sock: socket.socket, recv_buffer: MutableBytesBuffer) -> None:
     """
     receive data from 'sock' to exactly fill 'recv_buffer'.
     no explicit timeout is specified, since it is assumed
