@@ -7,11 +7,18 @@
 """
 
 import logging
-from typing import Iterator, Optional
+from typing import TYPE_CHECKING, Iterator, Optional
 
 from pyvisa import logger
 
 LOGGER = logging.LoggerAdapter(logger, {"backend": "py"})  # type: ignore
+
+if TYPE_CHECKING:
+    BytesBuffer = bytes | bytearray | memoryview[int]
+    MutableBytesBuffer = bytearray | memoryview[int]
+else:
+    BytesBuffer = bytes | bytearray | memoryview
+    MutableBytesBuffer = bytearray | memoryview
 
 
 class NamedObject(object):

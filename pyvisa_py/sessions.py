@@ -26,7 +26,7 @@ from pyvisa import attributes, constants, rname
 from pyvisa.constants import ResourceAttribute, StatusCode
 from pyvisa.typing import VISAJobID, VISARMSession
 
-from .common import LOGGER, int_to_byte
+from .common import LOGGER, BytesBuffer, int_to_byte
 
 #: Type var used when typing register.
 T = TypeVar("T", bound=Type["Session"])
@@ -764,9 +764,9 @@ class Session(metaclass=abc.ABCMeta):
 
     def _read(
         self,
-        reader: Callable[[], bytes],
+        reader: Callable[[], BytesBuffer],
         count: int,
-        end_indicator_checker: Callable[[bytes], bool],
+        end_indicator_checker: Callable[[BytesBuffer], bool],
         suppress_end_en: bool,
         termination_char: Optional[int],
         termination_char_en: bool,
@@ -817,7 +817,7 @@ class Session(metaclass=abc.ABCMeta):
             try:
                 current = reader()
             except timeout_exception:
-                return out, StatusCode.error_timeout
+                return bytes(out), StatusCode.error_timeout
 
             if current:
                 out.extend(current)

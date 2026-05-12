@@ -11,6 +11,8 @@ import threading
 import time
 from typing import Dict, Optional, Tuple
 
+from pyvisa_py.common import BytesBuffer, MutableBytesBuffer
+
 PORT = 4880
 
 MESSAGETYPE_STR: Dict[int, str] = {
@@ -214,7 +216,7 @@ def receive_flush(sock: socket.socket, recv_len: int) -> None:
         bytes_recvd += data_len
 
 
-def receive_exact(sock: socket.socket, recv_len: int) -> bytes:
+def receive_exact(sock: socket.socket, recv_len: int) -> bytearray:
     """
     receive exactly 'recv_len' bytes from 'sock'.
     no explicit timeout is specified, since it is assumed
@@ -226,7 +228,7 @@ def receive_exact(sock: socket.socket, recv_len: int) -> bytes:
     return recv_buffer
 
 
-def receive_exact_into(sock: socket.socket, recv_buffer: bytes) -> None:
+def receive_exact_into(sock: socket.socket, recv_buffer: MutableBytesBuffer) -> None:
     """
     receive data from 'sock' to exactly fill 'recv_buffer'.
     no explicit timeout is specified, since it is assumed
@@ -253,7 +255,7 @@ def send_msg(
     msg_type: str,
     control_code: int,
     message_parameter: Optional[int],
-    payload: bytes = b"",
+    payload: BytesBuffer = b"",
 ) -> None:
     """Send a message on sock w/ payload."""
     msg = bytearray(
@@ -559,7 +561,7 @@ class Instrument:
         self._sync.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, bool(keepalive))
         self._async.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, bool(keepalive))
 
-    def send(self, data: bytes) -> int:
+    def send(self, data: BytesBuffer) -> int:
         """Send the data on the synchronous channel.
 
         More than one packet may be necessary in order
@@ -633,7 +635,7 @@ class Instrument:
                 #
                 self._rmt = 1
 
-            return recv_buffer
+            return bytes(recv_buffer)
         finally:
             self._receiving.clear()
 
@@ -907,13 +909,13 @@ class Instrument:
         self.last_message_id = self._message_id
         self._message_id = (self._message_id + 2) & 0xFFFF_FFFF
 
-    def _send_data_packet(self, payload: bytes) -> None:
+    def _send_data_packet(self, payload: BytesBuffer) -> None:
         """send a Data packet on the sync channel"""
         send_msg(self._sync, "Data", self._rmt, self._message_id, payload)
         self.last_message_id = self._message_id
         self._message_id = (self._message_id + 2) & 0xFFFF_FFFF
 
-    def _send_data_end_packet(self, payload: bytes) -> None:
+    def _send_data_end_packet(self, payload: BytesBuffer) -> None:
         """send a DataEnd packet on the sync channel"""
         send_msg(self._sync, "DataEnd", self._rmt, self._message_id, payload)
         self.last_message_id = self._message_id
