@@ -88,6 +88,16 @@ __version__ = "{version}"
 
 [tool.pytest.ini_options]
   minversion = "6.0"
+  addopts = "--pyvisa-backend-id=py"
+  testpaths = ["tests"]
+  markers = [
+    "pyvisa_contract: Shared backend contract tests exposed through pyvisa.testing.",
+    "pyvisa_hardware: Tests that require an instrument profile and may skip by default.",
+    "pyvisa_keysight_assisted: Tests that require the Keysight virtual instrument.",
+    "pyvisa_tester_assisted: Tests that rely on pyvisa-tester-assisted endpoints or mocks.",
+    "pyvisa_tester_shared: Transport-shared assisted API tests.",
+    "pyvisa_tester_usb: USB-assisted tests intended for PYVISA_LIBRARY=@py.",
+  ]
 
 [tool.mypy]
   follow_imports  = "normal"

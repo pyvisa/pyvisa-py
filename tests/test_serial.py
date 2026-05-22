@@ -1,24 +1,19 @@
-"""Test creating a resource manager using PyVISA-Py as a backend.
-
-
-:copyright: 2014-2024 by PyVISA-py Authors, see AUTHORS for more details.
-:license: MIT, see LICENSE for more details.
-
-"""
+"""Serial loopback tests for pyvisa-py backend."""
 
 import pytest
 
 from pyvisa import ResourceManager
-from pyvisa.testsuite import BaseTestCase
+from tests import BaseTestCase
+
+# TODO move this to pyvisa-tester
 
 
 class TestSerial(BaseTestCase):
-    """Test generic property of PyVisaLibrary."""
+    """Test serial support through pyserial loopback."""
 
     serial = pytest.importorskip("serial", reason="PySerial not installed")
 
     def test_serial(self):
-        """Test loop://"""
         msg = b"Test01234567890"
 
         available = ["loop://"]
@@ -29,7 +24,6 @@ class TestSerial(BaseTestCase):
         rm = ResourceManager("@py")
         try:
             dut = rm.open_resource("ASRLloop://::INSTR")
-            print("opened")
             dut.timeout = 3000
             dut.read_termination = "\r\n"
             dut.write_termination = "\r\n"

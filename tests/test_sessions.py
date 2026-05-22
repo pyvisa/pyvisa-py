@@ -1,16 +1,11 @@
-"""Test loading resources.
-
-
-:copyright: 2014-2024 by PyVISA-py Authors, see AUTHORS for more details.
-:license: MIT, see LICENSE for more details.
-
-"""
+"""Session loading and optional transport availability checks."""
 
 import ctypes
 
-from pyvisa.constants import InterfaceType
-from pyvisa.testsuite import BaseTestCase
 from pyvisa_py.sessions import Session
+
+from pyvisa.constants import InterfaceType
+from tests import BaseTestCase
 
 
 class TestSessions(BaseTestCase):
@@ -32,7 +27,6 @@ class TestSessions(BaseTestCase):
             import usb
 
             _ = usb.core.find()
-
             expected.extend(usbs)
         except Exception:
             exp_missing.extend(usbs)
@@ -47,7 +41,6 @@ class TestSessions(BaseTestCase):
                 import gpib  # noqa
                 from Gpib import Gpib  # noqa
             else:
-                # Add some extra binding not available by default
                 extra_funcs = [
                     ("ibcac", [ctypes.c_int, ctypes.c_int], ctypes.c_int),
                     ("ibgts", [ctypes.c_int, ctypes.c_int], ctypes.c_int),
@@ -81,6 +74,5 @@ class TestSessions(BaseTestCase):
         except Exception:
             exp_missing.append(vicp)
 
-        print(available, missing)
         assert sorted(available) == sorted(expected)
         assert sorted(missing) == sorted(exp_missing)

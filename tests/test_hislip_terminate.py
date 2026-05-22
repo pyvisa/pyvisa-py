@@ -12,7 +12,6 @@ import time
 from unittest.mock import MagicMock, patch
 
 import pytest
-
 from pyvisa_py.protocols.hislip import (
     HEADER_FORMAT,
     MESSAGETYPE,
@@ -297,8 +296,9 @@ class TestSessionTerminateBase:
     """Test Session.terminate() base class default."""
 
     def test_base_session_terminate_returns_nonsupported(self):
-        from pyvisa.constants import StatusCode
         from pyvisa_py.sessions import Session
+
+        from pyvisa.constants import StatusCode
 
         # Session is abstract, so test the default through a minimal mock
         sess = MagicMock(spec=Session)
@@ -306,8 +306,9 @@ class TestSessionTerminateBase:
         assert result == StatusCode.error_nonsupported_operation
 
     def test_base_session_terminate_accepts_job_id(self):
-        from pyvisa.constants import StatusCode
         from pyvisa_py.sessions import Session
+
+        from pyvisa.constants import StatusCode
 
         sess = MagicMock(spec=Session)
         result = Session.terminate(sess, job_id=None)
@@ -391,8 +392,9 @@ class TestHighlevelTerminate:
     """Test PyVisaLibrary.terminate() dispatcher."""
 
     def test_terminate_dispatches_to_session(self):
-        from pyvisa.constants import StatusCode
         from pyvisa_py.highlevel import PyVisaLibrary
+
+        from pyvisa.constants import StatusCode
 
         lib = object.__new__(PyVisaLibrary)
         mock_sess = MagicMock()
@@ -406,8 +408,9 @@ class TestHighlevelTerminate:
         mock_sess.terminate.assert_called_once_with(None)
 
     def test_terminate_invalid_session(self):
-        from pyvisa.constants import StatusCode
         from pyvisa_py.highlevel import PyVisaLibrary
+
+        from pyvisa.constants import StatusCode
 
         lib = object.__new__(PyVisaLibrary)
         lib.sessions = {}
