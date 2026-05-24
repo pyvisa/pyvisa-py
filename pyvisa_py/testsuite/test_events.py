@@ -16,6 +16,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from pyvisa import constants, errors
 from pyvisa.constants import StatusCode
+from pyvisa.typing import VISASession
 
 from pyvisa_py.events import (
     EventContext,
@@ -196,8 +197,8 @@ class TestHandlerRegistry:
             calls.append((sess, etype, cid, uhandle))
 
         reg.install(constants.EventType.service_request, handler, "h1")
-        reg.fire(constants.EventType.service_request, "session", 42)
-        assert calls == [("session", constants.EventType.service_request, 42, "h1")]
+        reg.fire(constants.EventType.service_request, VISASession(42), 42)
+        assert calls == [(VISASession(42), constants.EventType.service_request, 42, "h1")]
 
     def test_multiple_handlers_fire(self):
         reg = HandlerRegistry()
@@ -211,7 +212,7 @@ class TestHandlerRegistry:
 
         reg.install(constants.EventType.service_request, h1, None)
         reg.install(constants.EventType.service_request, h2, None)
-        reg.fire(constants.EventType.service_request, "session", 1)
+        reg.fire(constants.EventType.service_request, VISASession(1), 1)
         assert set(calls) == {"h1", "h2"}
 
     def test_uninstall_by_identity_and_handle(self):
@@ -253,13 +254,13 @@ class TestHandlerRegistry:
         reg.install(constants.EventType.service_request, bad, None)
         reg.install(constants.EventType.service_request, good, None)
         with pytest.warns(UserWarning, match="boom"):
-            reg.fire(constants.EventType.service_request, "session", 1)
+            reg.fire(constants.EventType.service_request, VISASession(1), 1)
         assert calls == ["good"]
 
     def test_fire_no_handlers_noop(self):
         reg = HandlerRegistry()
         # Should not raise
-        reg.fire(constants.EventType.service_request, "session", 1)
+        reg.fire(constants.EventType.service_request, VISASession(1), 1)
 
 
 # ---------------------------------------------------------------------------

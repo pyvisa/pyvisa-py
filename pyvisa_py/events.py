@@ -15,6 +15,7 @@ from dataclasses import dataclass, field
 from typing import Any, Callable
 
 from pyvisa import constants
+from pyvisa.typing import VISASession
 
 import enum
 
@@ -154,12 +155,20 @@ class EventQueue:
                 self._deque.extend(kept)
 
 
-# HandlerCallback: callable invoked when a VISA event fires.
-#   Arg 0 (Any):                  session handle (vi)
-#   Arg 1 (constants.EventType):  the event type that fired
-#   Arg 2 (int):                  event context id
-#   Arg 3 (Any):                  user-supplied handle passed at install_handler time
-HandlerCallback = Callable[[Any, constants.EventType, int, Any], None]
+HandlerCallback = Callable[[VISASession, constants.EventType, int, Any], None]
+"""Callable invoked when a VISA event fires.
+
+Parameters
+----------
+session : VISASession
+    Session handle (vi).
+event_type : constants.EventType
+    The event type that fired.
+context_id : int
+    Event context id.
+user_handle : Any
+    User-supplied handle passed at install_handler time.
+"""
 
 
 class HandlerRegistry:
@@ -207,7 +216,7 @@ class HandlerRegistry:
     def fire(
         self,
         event_type: constants.EventType,
-        session: Any,
+        session: VISASession,
         context_id: int,
     ) -> None:
         """Invoke all handlers registered for *event_type*.
