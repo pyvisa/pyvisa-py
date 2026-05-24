@@ -22,10 +22,10 @@ from pyvisa.typing import VISASession
 class EventMechanismFlag(enum.Flag):
     """Internal Flag enum mirroring VISA event-delivery mechanisms.
 
-        ``ALL`` is a convenience alias for ``QUEUE | HANDLER | SUSPEND``.
-        The `from_int` classmethod canonicalises the VISA sentinel
-        ``0xFFFF`` (``constants.EventMechanism.all``) to this composite
-        value so that bitwise ``~`` works correctly.
+    ``ALL`` is a convenience alias for ``QUEUE | HANDLER | SUSPEND``.
+    The `from_int` classmethod canonicalises the VISA sentinel
+    ``0xFFFF`` (``constants.EventMechanism.all``) to this composite
+    value so that bitwise ``~`` works correctly.
     """
 
     NONE = 0
@@ -39,7 +39,6 @@ class EventMechanismFlag(enum.Flag):
         if value == int(constants.EventMechanism.all):  # 0xFFFF
             return cls.ALL
         return cls(value & (cls.QUEUE | cls.HANDLER | cls.SUSPEND).value)
-
 
 
 @dataclass(frozen=True, slots=True)
@@ -281,7 +280,8 @@ class EventState:
         """Return whether queue delivery is enabled for *event_type*."""
         with self._lock:
             return bool(
-                self.enabled.get(event_type, EventMechanismFlag.NONE) & EventMechanismFlag.QUEUE
+                self.enabled.get(event_type, EventMechanismFlag.NONE)
+                & EventMechanismFlag.QUEUE
             )
 
     def is_handler_enabled(self, event_type: constants.EventType) -> bool:
@@ -310,5 +310,3 @@ class EventState:
         """Return ``True`` if any event type has any mechanism enabled."""
         with self._lock:
             return any(m is not EventMechanismFlag.NONE for m in self.enabled.values())
-
-
