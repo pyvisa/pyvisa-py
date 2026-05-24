@@ -198,7 +198,9 @@ class TestHandlerRegistry:
 
         reg.install(constants.EventType.service_request, handler, "h1")
         reg.fire(constants.EventType.service_request, VISASession(42), 42)
-        assert calls == [(VISASession(42), constants.EventType.service_request, 42, "h1")]
+        assert calls == [
+            (VISASession(42), constants.EventType.service_request, 42, "h1")
+        ]
 
     def test_multiple_handlers_fire(self):
         reg = HandlerRegistry()
@@ -272,7 +274,9 @@ class TestEventState:
     def test_enable_disable(self):
         st = EventState()
         st.enable(constants.EventType.service_request, constants.EventMechanism.queue)
-        assert st.enabled[constants.EventType.service_request] is EventMechanismFlag.QUEUE
+        assert (
+            st.enabled[constants.EventType.service_request] is EventMechanismFlag.QUEUE
+        )
         assert st.is_queue_enabled(constants.EventType.service_request) is True
         assert st.is_handler_enabled(constants.EventType.service_request) is False
         st.enable(constants.EventType.service_request, constants.EventMechanism.handler)
@@ -281,7 +285,10 @@ class TestEventState:
         )
         assert st.is_handler_enabled(constants.EventType.service_request) is True
         st.disable(constants.EventType.service_request, constants.EventMechanism.queue)
-        assert st.enabled[constants.EventType.service_request] is EventMechanismFlag.HANDLER
+        assert (
+            st.enabled[constants.EventType.service_request]
+            is EventMechanismFlag.HANDLER
+        )
         assert st.is_queue_enabled(constants.EventType.service_request) is False
         assert st.is_handler_enabled(constants.EventType.service_request) is True
         st.disable(
@@ -300,7 +307,9 @@ class TestEventState:
     def test_disable_removes_empty_event_type(self):
         st = EventState()
         st.enable(constants.EventType.service_request, constants.EventMechanism.queue)
-        assert st.enabled[constants.EventType.service_request] is EventMechanismFlag.QUEUE
+        assert (
+            st.enabled[constants.EventType.service_request] is EventMechanismFlag.QUEUE
+        )
         st.disable(constants.EventType.service_request, constants.EventMechanism.queue)
         # Internal dict should be clean
         assert constants.EventType.service_request not in st.enabled
