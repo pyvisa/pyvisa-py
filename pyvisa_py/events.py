@@ -7,6 +7,7 @@ subsystem: event contexts, queues, handler registries, and per-session state.
 """
 
 import collections
+import enum
 import random
 import threading
 import time
@@ -16,8 +17,6 @@ from typing import Any, Callable
 
 from pyvisa import constants
 from pyvisa.typing import VISASession
-
-import enum
 
 
 class EventMechanismFlag(enum.Flag):
@@ -41,8 +40,6 @@ class EventMechanismFlag(enum.Flag):
             return cls.ALL
         return cls(value & (cls.QUEUE | cls.HANDLER | cls.SUSPEND).value)
 
-
-from .common import LOGGER
 
 
 @dataclass(frozen=True, slots=True)

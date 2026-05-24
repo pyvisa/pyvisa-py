@@ -18,10 +18,10 @@ import threading
 
 from pyvisa import constants
 from pyvisa.constants import StatusCode
-from ..common import LOGGER
-from ..events import EventContext
 
 from . import rpc
+from ..common import LOGGER
+from ..events import EventContext
 
 # fmt: off
 # VXI-11 RPC constants
@@ -413,7 +413,7 @@ class SrqInterruptTCPServer(rpc.TCPServer):
         stop_flag = self.session._event_state.stop_flag
         while not stop_flag.is_set():
             try:
-                conn, addr = self.sock.accept()
+                conn, _addr = self.sock.accept()
             except socket.timeout:
                 continue
             except OSError:

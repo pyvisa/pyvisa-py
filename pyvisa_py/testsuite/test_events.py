@@ -471,7 +471,7 @@ class TestHighlevelEventMethods:
         assert result == StatusCode.success
 
     def test_uninstall_handler_not_installed_raises(self, lib_and_session):
-        lib, sess, sid = lib_and_session
+        lib, _sess, sid = lib_and_session
 
         def my_handler(*_):
             pass
@@ -498,13 +498,13 @@ class TestHighlevelEventMethods:
         assert status == StatusCode.success
 
     def test_wait_on_event_timeout_raises(self, lib_and_session):
-        lib, sess, sid = lib_and_session
+        lib, _sess, sid = lib_and_session
         with pytest.raises(errors.VisaIOError) as exc_info:
             lib.wait_on_event(sid, constants.EventType.service_request, 50)
         assert exc_info.value.error_code == StatusCode.error_timeout
 
     def test_wait_on_event_zero_timeout_raises(self, lib_and_session):
-        lib, sess, sid = lib_and_session
+        lib, _sess, sid = lib_and_session
         with pytest.raises(errors.VisaIOError) as exc_info:
             lib.wait_on_event(sid, constants.EventType.service_request, 0)
         assert exc_info.value.error_code == StatusCode.error_timeout
@@ -696,7 +696,7 @@ class TestVxi11SrqFlow:
         assert status == StatusCode.success
 
     def test_vxi11_fire_event_handler_mechanism(self, lib_and_session):
-        lib, sess, sid = lib_and_session
+        _lib, sess, sid = lib_and_session
         calls = []
 
         def my_handler(session, event_type, context_id, user_handle):
