@@ -911,6 +911,7 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
         ):
             et = None if event_type == constants.EventType.all_enabled else event_type
             sess._event_state.queue.discard_all(et)
+
         return self.handle_return_value(session, StatusCode.success)
 
     def wait_on_event(
