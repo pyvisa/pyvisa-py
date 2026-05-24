@@ -551,9 +551,7 @@ class TCPIPInstrVxi11(Session):
 
         self.client_id = random.getrandbits(31)
         self.keepalive = False
-        self._srq_server: (
-            vxi11.SrqInterruptServer | vxi11.SrqInterruptTCPServer | None
-        ) = None
+        self._srq_server: vxi11.SrqInterruptTCPServer | None = None
         self._srq_lifecycle_lock = threading.Lock()
 
         error, link, _abort_port, max_recv_size = self.interface.create_link(
