@@ -871,8 +871,10 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
                 sess._event_state.disable(et, mechanism)
         else:
             sess._event_state.disable(event_type, mechanism)
+
         if not sess._event_state.any_enabled():
             sess._stop_event_monitor()
+
         return self.handle_return_value(session, StatusCode.success)
 
     def discard_events(
