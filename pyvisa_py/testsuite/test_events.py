@@ -14,10 +14,10 @@ import time
 from unittest.mock import MagicMock, patch
 
 import pytest
+
 from pyvisa import constants, errors
 from pyvisa.constants import StatusCode
 from pyvisa.typing import VISASession
-
 from pyvisa_py.events import (
     EventContext,
     EventMechanismFlag,
@@ -27,7 +27,6 @@ from pyvisa_py.events import (
 )
 from pyvisa_py.highlevel import PyVisaLibrary
 from pyvisa_py.protocols import vxi11
-
 
 # ---------------------------------------------------------------------------
 # EventContext

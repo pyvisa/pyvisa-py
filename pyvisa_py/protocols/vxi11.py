@@ -19,9 +19,9 @@ import threading
 from pyvisa import constants
 from pyvisa.constants import StatusCode
 
-from . import rpc
 from ..common import LOGGER
 from ..events import EventContext
+from . import rpc
 
 # fmt: off
 # VXI-11 RPC constants

@@ -33,7 +33,7 @@ class EventMechanismFlag(enum.Flag):
     HANDLER = 2  # VI_HNDLR   (2)
     SUSPEND = 4  # VI_SUSPEND_HNDLR (4)
     ALL = QUEUE | HANDLER | SUSPEND  # = 7, not VI_ALL_MECH (0xFFFF)
-    
+
     @classmethod
     def from_int(cls, value: int) -> "EventMechanismFlag":
         if value == int(constants.EventMechanism.all):  # 0xFFFF
