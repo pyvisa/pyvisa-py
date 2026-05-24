@@ -27,6 +27,7 @@ from pyvisa.typing import VISAEventContext, VISAJobID, VISARMSession, VISASessio
 from pyvisa.util import DebugInfo, LibraryPath
 
 from .common import LOGGER
+from .events import EventMechanismFlag
 from .sessions import OpenError, Session
 
 
@@ -907,10 +908,8 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
         except KeyError:
             return self.handle_return_value(session, StatusCode.error_invalid_object)
 
-        mech = int(mechanism)
-        if mech == int(constants.EventMechanism.all) or mech & int(
-            constants.EventMechanism.queue
-        ):
+        mech = EventMechanismFlag.from_int(int(mechanism))
+        if mech & EventMechanismFlag.QUEUE:
             et = None if event_type == constants.EventType.all_enabled else event_type
             sess._event_state.queue.discard_all(et)
 

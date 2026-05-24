@@ -19,21 +19,26 @@ from pyvisa import constants
 import enum
 
 
-class EventMechanism(enum.Flag):
+class EventMechanismFlag(enum.Flag):
     """Internal Flag enum mirroring VISA event-delivery mechanisms.
 
-    ``ALL = OxFFFF`` is an *atypical* sentinel: it does **not**
-    bitwise-compose from the auto-generated flags (``QUEUE | HANDLER |
-    SUSPEND == 7``), but it is accepted from ``constants.EventMechanism.all``
-    and is canonicalised to the three real flags on store so that bitwise
-    ``~`` works correctly.
+        ``ALL`` is a convenience alias for ``QUEUE | HANDLER | SUSPEND``.
+        The `from_int` classmethod canonicalises the VISA sentinel
+        ``0xFFFF`` (``constants.EventMechanism.all``) to this composite
+        value so that bitwise ``~`` works correctly.
     """
 
     NONE = 0
     QUEUE = 1  # VI_QUEUE   (1)
     HANDLER = 2  # VI_HNDLR   (2)
     SUSPEND = 4  # VI_SUSPEND_HNDLR (4)
-    ALL = 0xFFFF  # VI_ALL_MECH (0xFFFF)
+    ALL = QUEUE | HANDLER | SUSPEND  # = 7, not VI_ALL_MECH (0xFFFF)
+    
+    @classmethod
+    def from_int(cls, value: int) -> "EventMechanismFlag":
+        if value == int(constants.EventMechanism.all):  # 0xFFFF
+            return cls.ALL
+        return cls(value & (cls.QUEUE | cls.HANDLER | cls.SUSPEND).value)
 
 
 from .common import LOGGER
@@ -230,9 +235,9 @@ class EventState:
     """Per-session container for event enablement, queuing, and handlers."""
 
     def __init__(self) -> None:
-        # {event_type: EventMechanism}
+        # {event_type: EventMechanismFlag}
         self._lock = threading.RLock()
-        self.enabled: dict[constants.EventType, EventMechanism] = {}
+        self.enabled: dict[constants.EventType, EventMechanismFlag] = {}
         self.queue = EventQueue()
         self.registry = HandlerRegistry()
         self.monitor_thread: threading.Thread | None = None
@@ -243,52 +248,42 @@ class EventState:
         event_type: constants.EventType,
         mechanism: constants.EventMechanism,
     ) -> None:
-        """Enable delivery of *event_type* via *mechanism*."""
-        m = EventMechanism(int(mechanism))
+        """Enable delivery of *event_type* via *mechanism_flag*."""
+        m = EventMechanismFlag.from_int(int(mechanism))
         with self._lock:
-            if m is EventMechanism.ALL:
-                self.enabled[event_type] = (
-                    EventMechanism.QUEUE
-                    | EventMechanism.HANDLER
-                    | EventMechanism.SUSPEND
-                )
-            else:
-                self.enabled[event_type] = (
-                    self.enabled.get(event_type, EventMechanism.NONE) | m
-                )
+            self.enabled[event_type] = (
+                self.enabled.get(event_type, EventMechanismFlag.NONE) | m
+            )
 
     def disable(
         self,
         event_type: constants.EventType,
         mechanism: constants.EventMechanism,
     ) -> None:
-        """Disable delivery of *event_type* via *mechanism*."""
-        m = EventMechanism(int(mechanism))
+        """Disable delivery of *event_type* via *mechanism_flag*."""
+        m = EventMechanismFlag.from_int(int(mechanism))
         with self._lock:
             if event_type not in self.enabled:
                 return
-            if m is EventMechanism.ALL:
+            new = self.enabled[event_type] & ~m
+            if new is EventMechanismFlag.NONE:
                 del self.enabled[event_type]
             else:
-                new = self.enabled[event_type] & ~m
-                if new is EventMechanism.NONE:
-                    del self.enabled[event_type]
-                else:
-                    self.enabled[event_type] = new
+                self.enabled[event_type] = new
 
     def is_queue_enabled(self, event_type: constants.EventType) -> bool:
         """Return whether queue delivery is enabled for *event_type*."""
         with self._lock:
             return bool(
-                self.enabled.get(event_type, EventMechanism.NONE) & EventMechanism.QUEUE
+                self.enabled.get(event_type, EventMechanismFlag.NONE) & EventMechanismFlag.QUEUE
             )
 
     def is_handler_enabled(self, event_type: constants.EventType) -> bool:
         """Return whether handler (callback) delivery is enabled for *event_type*."""
         with self._lock:
             return bool(
-                self.enabled.get(event_type, EventMechanism.NONE)
-                & EventMechanism.HANDLER
+                self.enabled.get(event_type, EventMechanismFlag.NONE)
+                & EventMechanismFlag.HANDLER
             )
 
     def get_delivery_mechanisms(
@@ -299,17 +294,15 @@ class EventState:
         The check is performed atomically under the state lock.
         """
         with self._lock:
-            mech = self.enabled.get(event_type, EventMechanism.NONE)
+            mech = self.enabled.get(event_type, EventMechanismFlag.NONE)
             return (
-                bool(mech & EventMechanism.QUEUE),
-                bool(mech & EventMechanism.HANDLER),
+                bool(mech & EventMechanismFlag.QUEUE),
+                bool(mech & EventMechanismFlag.HANDLER),
             )
 
     def any_enabled(self) -> bool:
         """Return ``True`` if any event type has any mechanism enabled."""
         with self._lock:
-            return any(m is not EventMechanism.NONE for m in self.enabled.values())
+            return any(m is not EventMechanismFlag.NONE for m in self.enabled.values())
 
-    def should_monitor(self) -> bool:
-        """Convenience alias for :meth:`any_enabled`."""
-        return self.any_enabled()
+

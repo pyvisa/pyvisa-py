@@ -596,7 +596,7 @@ class TCPIPInstrVxi11(Session):
                     and self._event_state.monitor_thread.is_alive()
                 ):
                     return StatusCode.success
-                if not self._event_state.should_monitor():
+                if not self._event_state.any_enabled():
                     return StatusCode.success
 
             self._event_state.stop_flag.clear()
