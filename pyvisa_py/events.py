@@ -286,10 +286,10 @@ class EventState:
     def is_handler_enabled(self, event_type: constants.EventType) -> bool:
         """Return whether handler (callback) delivery is enabled for *event_type*."""
         with self._lock:
-            return (
+            return bool(
                 self.enabled.get(event_type, EventMechanism.NONE)
                 & EventMechanism.HANDLER
-            ) is not EventMechanism.NONE
+            )
 
     def get_delivery_mechanisms(
         self, event_type: constants.EventType
