@@ -301,8 +301,8 @@ class EventState:
         with self._lock:
             mech = self.enabled.get(event_type, EventMechanism.NONE)
             return (
-                (mech & EventMechanism.QUEUE) is not EventMechanism.NONE,
-                (mech & EventMechanism.HANDLER) is not EventMechanism.NONE,
+                bool(mech & EventMechanism.QUEUE),
+                bool(mech & EventMechanism.HANDLER),
             )
 
     def any_enabled(self) -> bool:
