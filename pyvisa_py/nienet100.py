@@ -313,8 +313,15 @@ class NIEnet100InstrSession(Session):
     def read(self, count: int) -> Tuple[bytes, StatusCode]:
         if self.interface is None:
             return b"", StatusCode.error_connection_lost
+        # Propagate the pyvisa session timeout to the wire-level ibrd as
+        # tmo_ms. self.timeout is in seconds; None means infinite (no
+        # ceiling) — fall back to the wire layer's default in that case.
+        if self.timeout is None:
+            tmo_ms = nienet100.DEFAULT_IBRD_TMO_MS
+        else:
+            tmo_ms = max(int(self.timeout * 1000), 1)
         try:
-            data = self.interface.ibrd()
+            data = self.interface.ibrd(tmo_ms=tmo_ms)
         except nienet100.NIEnet100IOError as e:
             return b"", _map_iberr_to_status(e.err)
 
