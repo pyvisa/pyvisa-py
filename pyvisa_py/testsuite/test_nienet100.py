@@ -232,6 +232,23 @@ def _make_bound_connection(client_sock: socket.socket) -> nienet100.EnetConnecti
     conn = nienet100.EnetConnection.__new__(nienet100.EnetConnection)
     conn.main = client_sock
     conn.companion = None
+    conn.wait = None
+    conn.control = None
+    conn.host = "test-peer"
+    conn._open_timeout = 1.0
+    conn._timeout = 1.0
+    return conn
+
+
+def _make_empty_connection() -> nienet100.EnetConnection:
+    """Build an EnetConnection with no sockets bound, for tests that drive
+    socket-lifecycle methods (ensure_wait_socket, ensure_control_socket)
+    via a monkey-patched ``_connect``."""
+    conn = nienet100.EnetConnection.__new__(nienet100.EnetConnection)
+    conn.main = None
+    conn.companion = None
+    conn.wait = None
+    conn.control = None
     conn.host = "test-peer"
     conn._open_timeout = 1.0
     conn._timeout = 1.0
@@ -341,3 +358,237 @@ def test_set_io_timeout_sends_property_set_frame():
     finally:
         sock.close()
         t.join(timeout=2.0)
+
+
+# --- wait/control socket lifecycle (B1) ------------------------------------
+
+
+def _expected_async_register(main_ip: str, main_port: int) -> bytes:
+    return nienet100.pack_command(
+        cmd_id=0x55,
+        b1=0x01,
+        w1=nienet100.EnetConnection.ASYNC_REGISTER_FLAGS_DEVICE,
+        w2=0,
+        w3=main_port,
+        dw=nienet100._u32_from_ip(main_ip),
+    )
+
+
+def _expected_online_reconfirm() -> bytes:
+    return struct.pack("!BBB9x", 0x50, 0x10, 0x01)
+
+
+def test_ensure_wait_socket_sends_async_register_and_online_reconfirm():
+    # The main socket must be a real socket so getsockname() works.
+    main_a, main_b = socket.socketpair()
+    try:
+        main_ip, main_port = main_a.getsockname()
+        script = [
+            ("recv", _expected_async_register(main_ip, main_port)),
+            ("send", _status_ok()),
+            ("recv", _expected_online_reconfirm()),
+            ("send", _status_ok()),
+        ]
+        wait_sock, t = _run_scripted_peer(script)
+        try:
+            conn = _make_empty_connection()
+            conn.main = main_a
+            # Monkey-patch _connect to hand out the scripted peer for PORT_WAIT
+            conn._connect = (
+                lambda port: wait_sock
+                if port == nienet100.PORT_WAIT
+                else (_ for _ in ()).throw(AssertionError(f"unexpected port {port}"))
+            )
+            conn.ensure_wait_socket()
+            assert conn.wait is wait_sock
+            # Idempotent: second call sends nothing more (script would fail otherwise)
+            conn.ensure_wait_socket()
+        finally:
+            wait_sock.close()
+            t.join(timeout=2.0)
+    finally:
+        main_a.close()
+        main_b.close()
+
+
+def test_ensure_wait_socket_requires_main_socket():
+    conn = _make_empty_connection()
+    with pytest.raises(nienet100.NIEnet100Error, match="main socket is not open"):
+        conn.ensure_wait_socket()
+
+
+def test_ensure_control_socket_is_lazy_and_idempotent():
+    fake_sock = object()
+    calls: List[int] = []
+
+    def fake_connect(port: int):
+        calls.append(port)
+        return fake_sock
+
+    conn = _make_empty_connection()
+    conn._connect = fake_connect
+    conn.ensure_control_socket()
+    conn.ensure_control_socket()
+    assert calls == [nienet100.PORT_CONTROL]
+    assert conn.control is fake_sock
+
+
+# --- ibwait (B2) -----------------------------------------------------------
+
+
+def test_ibwait_sends_mask_and_returns_sta():
+    mask = nienet100.STA_RQS | nienet100.STA_TIMO
+    expected_frame = nienet100.pack_command(cmd_id=0x54, b1=0x00, w1=mask)
+    response_sta = nienet100.STA_RQS | nienet100.STA_CMPL
+    script = [
+        ("recv", expected_frame),
+        ("send", struct.pack("!HH4xL", response_sta, 0xFFFF, 0)),
+    ]
+    wait_sock, t = _run_scripted_peer(script)
+    try:
+        conn = _make_bound_connection(socket.socket())  # main present, unused here
+        conn.wait = wait_sock
+        sta = conn.ibwait(mask)
+        assert sta == response_sta
+    finally:
+        wait_sock.close()
+        t.join(timeout=2.0)
+
+
+def test_ibwait_raises_on_error_status():
+    script = [
+        ("recv", nienet100.pack_command(cmd_id=0x54, b1=0x00, w1=nienet100.STA_RQS)),
+        (
+            "send",
+            struct.pack(
+                "!HH4xL",
+                nienet100.STA_ERR | nienet100.STA_CMPL,
+                nienet100.ERR_EARG,
+                0,
+            ),
+        ),
+    ]
+    wait_sock, t = _run_scripted_peer(script)
+    try:
+        conn = _make_bound_connection(socket.socket())
+        conn.wait = wait_sock
+        with pytest.raises(nienet100.NIEnet100IOError) as excinfo:
+            conn.ibwait(nienet100.STA_RQS)
+        assert excinfo.value.err == nienet100.ERR_EARG
+    finally:
+        wait_sock.close()
+        t.join(timeout=2.0)
+
+
+# --- ibsic + notify-off (B3) ----------------------------------------------
+
+
+def _expected_o_verb(
+    sub_op: int, leading_u16: int, main_ip: str, main_port: int
+) -> bytes:
+    return struct.pack(
+        "!BBHLH2x",
+        0x4F,
+        sub_op,
+        leading_u16,
+        nienet100._u32_from_ip(main_ip),
+        main_port,
+    )
+
+
+def test_ibsic_sends_o49_with_main_address():
+    main_a, main_b = socket.socketpair()
+    try:
+        main_ip, main_port = main_a.getsockname()
+        expected = _expected_o_verb(0x49, 0, main_ip, main_port)
+        control_sock, t = _run_scripted_peer(
+            [("recv", expected), ("send", _status_ok())]
+        )
+        try:
+            conn = _make_empty_connection()
+            conn.main = main_a
+            conn.control = control_sock
+            conn.ibsic()
+        finally:
+            control_sock.close()
+            t.join(timeout=2.0)
+    finally:
+        main_a.close()
+        main_b.close()
+
+
+def test_notify_off_async_device_sends_o4e_with_main_address():
+    main_a, main_b = socket.socketpair()
+    try:
+        main_ip, main_port = main_a.getsockname()
+        expected = _expected_o_verb(0x4E, 1, main_ip, main_port)
+        control_sock, t = _run_scripted_peer(
+            [("recv", expected), ("send", _status_ok())]
+        )
+        try:
+            conn = _make_empty_connection()
+            conn.main = main_a
+            conn.control = control_sock
+            conn.notify_off_async_device()
+        finally:
+            control_sock.close()
+            t.join(timeout=2.0)
+    finally:
+        main_a.close()
+        main_b.close()
+
+
+def test_close_runs_notify_off_when_wait_socket_was_opened():
+    main_a, main_b = socket.socketpair()
+    try:
+        main_ip, main_port = main_a.getsockname()
+        expected_notify = _expected_o_verb(0x4E, 1, main_ip, main_port)
+        control_sock, t = _run_scripted_peer(
+            [("recv", expected_notify), ("send", _status_ok())]
+        )
+        try:
+            # wait socket is just a real-ish socket that close() will close().
+            fake_wait = socket.socket()
+            conn = _make_empty_connection()
+            conn.main = main_a
+            conn.wait = fake_wait
+            conn.control = control_sock
+            conn.close()
+            assert conn.main is None
+            assert conn.wait is None
+            assert conn.control is None
+        finally:
+            t.join(timeout=2.0)
+    finally:
+        main_b.close()
+
+
+def test_close_skips_notify_off_when_wait_socket_was_not_opened():
+    # No peer for control: notify-off must not fire because no wait socket
+    # was ever opened. The test passes by not deadlocking.
+    main_a, _main_b = socket.socketpair()
+    try:
+        conn = _make_empty_connection()
+        conn.main = main_a
+        conn.close()
+        assert conn.main is None
+    finally:
+        _main_b.close()
+
+
+def test_close_swallows_notify_off_errors():
+    # Control socket is closed before notify-off would be sent; the close
+    # path should log and proceed without raising.
+    main_a, main_b = socket.socketpair()
+    try:
+        fake_wait = socket.socket()
+        fake_control = socket.socket()
+        fake_control.close()  # writes will fail
+        conn = _make_empty_connection()
+        conn.main = main_a
+        conn.wait = fake_wait
+        conn.control = fake_control
+        conn.close()  # must not raise
+        assert conn.wait is None and conn.control is None
+    finally:
+        main_b.close()
