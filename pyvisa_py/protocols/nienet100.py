@@ -205,11 +205,14 @@ def parse_chunk_header(buf: bytes) -> Tuple[int, int]:
 
 
 # --- Chunk reader -----------------------------------------------------------
-# Read responses are framed as: 12-B preliminary status header, then a stream
-# of payload chunks, then (typically) a 12-B final status header. The chunk
-# stream is stateful: chunks may be split across TCP segments and several
-# chunks may arrive in one segment. The caller drives recv via the
-# ``read_exactly`` callable so this layer is socket-agnostic and testable.
+# Every response from the bridge is framed as a sequence of chunks: each chunk
+# is a 4-byte header (flags, length) followed by ``length`` bytes of data.
+# Status headers are themselves data chunks with length=12; payload bytes for
+# ibrd / ibrsp are additional data chunks; the end-of-stream marker is its
+# own chunk (flags=1, length=0). The chunk stream is stateful: chunks may be
+# split across TCP segments and several chunks may arrive in one segment.
+# Callers drive recv via the ``read_exactly`` callable so this layer is
+# socket-agnostic and testable.
 
 
 def read_chunks_until_end(read_exactly: Callable[[int], bytes]) -> bytes:
@@ -287,6 +290,24 @@ def read_one_data_chunk(read_exactly: Callable[[int], bytes]) -> bytes:
             raise NIEnet100ProtocolError(
                 "expected data chunk, got flags=0x%04x length=%d" % (flags, length)
             )
+
+
+def read_status_chunk(read_exactly: Callable[[int], bytes]) -> Tuple[int, int, int]:
+    """Read a chunk-wrapped 12-byte status header and parse it.
+
+    The bridge wraps every status header in the standard chunk framing
+    (``[flags=0, length=12][12B body]``) — there is no such thing as a
+    "raw" 12-byte status read on the wire. Callers must use this helper
+    rather than reading 12 bytes directly, or successive operations will
+    accumulate a 4-byte misalignment per status read.
+    """
+    body = read_one_data_chunk(read_exactly)
+    if len(body) != STATUS_HEADER_SIZE:
+        raise NIEnet100ProtocolError(
+            "expected %d-byte status chunk body, got %d bytes"
+            % (STATUS_HEADER_SIZE, len(body))
+        )
+    return parse_status_header(body)
 
 
 class NIEnet100Error(Exception):
@@ -542,8 +563,8 @@ class EnetConnection:
         self.main.sendall(data)
 
     def read_status_main(self) -> Tuple[int, int, int]:
-        """Read and parse a 12-byte status header from the main socket."""
-        return parse_status_header(self.recv_main_exactly(STATUS_HEADER_SIZE))
+        """Read a chunk-wrapped status header from the main socket and parse it."""
+        return read_status_chunk(self.recv_main_exactly)
 
     def transact_main(self, frame: bytes, operation: str = "") -> Tuple[int, int, int]:
         """Send a command frame and read the status header on the main socket.
@@ -578,9 +599,8 @@ class EnetConnection:
             dw=_u32_from_ip(local_ip),
         )
         self.companion.sendall(frame)
-        sta, err, _cnt = parse_status_header(
-            self._recv_exactly(self.companion, STATUS_HEADER_SIZE)
-        )
+        companion = self.companion
+        sta, err, _cnt = read_status_chunk(lambda n: self._recv_exactly(companion, n))
         if sta & STA_ERR:
             raise NIEnet100IOError(sta, err, "companion hello")
 
@@ -603,9 +623,7 @@ class EnetConnection:
             dw=_u32_from_ip(main_ip),
         )
         wait_sock.sendall(frame)
-        sta, err, _cnt = parse_status_header(
-            self._recv_exactly(wait_sock, STATUS_HEADER_SIZE)
-        )
+        sta, err, _cnt = read_status_chunk(lambda n: self._recv_exactly(wait_sock, n))
         if sta & STA_ERR:
             raise NIEnet100IOError(sta, err, "async register device")
 
@@ -617,9 +635,7 @@ class EnetConnection:
         before the box will accept ibwait polls.
         """
         wait_sock.sendall(_pack_property_set(0x10, 0x01))
-        sta, err, _cnt = parse_status_header(
-            self._recv_exactly(wait_sock, STATUS_HEADER_SIZE)
-        )
+        sta, err, _cnt = read_status_chunk(lambda n: self._recv_exactly(wait_sock, n))
         if sta & STA_ERR:
             raise NIEnet100IOError(sta, err, "wait online re-confirm")
 
@@ -900,9 +916,8 @@ def _ibsic(self: EnetConnection) -> None:
         port=main_port,
     )
     self.control.sendall(frame)
-    sta, err, _cnt = parse_status_header(
-        self._recv_exactly(self.control, STATUS_HEADER_SIZE)
-    )
+    control = self.control
+    sta, err, _cnt = read_status_chunk(lambda n: self._recv_exactly(control, n))
     if sta & STA_ERR:
         raise NIEnet100IOError(sta, err, "ibsic")
 
@@ -930,9 +945,8 @@ def _notify_off_async_device(self: EnetConnection) -> None:
         port=main_port,
     )
     self.control.sendall(frame)
-    sta, err, _cnt = parse_status_header(
-        self._recv_exactly(self.control, STATUS_HEADER_SIZE)
-    )
+    control = self.control
+    sta, err, _cnt = read_status_chunk(lambda n: self._recv_exactly(control, n))
     if sta & STA_ERR:
         raise NIEnet100IOError(sta, err, "notify-off async device")
 
@@ -963,9 +977,8 @@ def _ibwait(self: EnetConnection, mask: int) -> int:
     self.ensure_wait_socket()
     assert self.wait is not None  # ensure_wait_socket guarantees this
     self.wait.sendall(pack_command(cmd_id=0x54, b1=0x00, w1=mask))
-    sta, err, _cnt = parse_status_header(
-        self._recv_exactly(self.wait, STATUS_HEADER_SIZE)
-    )
+    wait = self.wait
+    sta, err, _cnt = read_status_chunk(lambda n: self._recv_exactly(wait, n))
     if sta & STA_ERR:
         raise NIEnet100IOError(sta, err, "ibwait")
     return sta
