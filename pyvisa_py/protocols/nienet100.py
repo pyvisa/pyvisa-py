@@ -822,6 +822,40 @@ def _transact_main_status(
     return sta, err, cnt
 
 
+def _ibwait(self: EnetConnection, mask: int) -> int:
+    """Issue one ibwait round-trip on the wait socket and return ``sta``.
+
+    Sends a single ``0x54`` poll frame carrying ``mask`` (a 16-bit ibsta
+    bitmask of the events the caller is interested in — typically
+    ``STA_RQS`` for SRQ, optionally OR'd with ``STA_TIMO`` so the box's
+    own IbcTMO surfaces as a timeout event). The box responds
+    synchronously with a 12-byte status header that the caller inspects
+    against ``mask``:
+
+        sta = conn.ibwait(STA_RQS | STA_TIMO)
+        if sta & STA_RQS:
+            stb = conn.ibrsp()   # quittiert RQS
+        elif sta & STA_TIMO:
+            ...   # no SRQ within IbcTMO
+
+    Polling-loop semantics are not built in here — see the wire spec
+    section 3.9.5 for the standard pattern. A poll interval of 0.2-0.5 s
+    is plenty for single-threaded adapters.
+
+    Wire layout: ``54 00 [htons(mask):2] 00*8``. The wait socket is
+    opened lazily via :meth:`ensure_wait_socket` on first call.
+    """
+    self.ensure_wait_socket()
+    assert self.wait is not None  # ensure_wait_socket guarantees this
+    self.wait.sendall(pack_command(cmd_id=0x54, b1=0x00, w1=mask))
+    sta, err, _cnt = parse_status_header(
+        self._recv_exactly(self.wait, STATUS_HEADER_SIZE)
+    )
+    if sta & STA_ERR:
+        raise NIEnet100IOError(sta, err, "ibwait")
+    return sta
+
+
 # Attach verbs to EnetConnection. Keeping them as module-level functions
 # makes the wire-bytes-per-verb mapping straightforward to read in this
 # file; binding them here gives users the familiar `conn.ibwrt(...)` API.
@@ -831,5 +865,6 @@ EnetConnection.ibclr = _ibclr
 EnetConnection.ibtrg = _ibtrg
 EnetConnection.ibloc = _ibloc
 EnetConnection.ibrsp = _ibrsp
+EnetConnection.ibwait = _ibwait
 EnetConnection.set_io_timeout = _set_io_timeout
 EnetConnection.transact_main_status = _transact_main_status
