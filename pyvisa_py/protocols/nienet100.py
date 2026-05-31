@@ -797,18 +797,42 @@ def _ibwrt(self: EnetConnection, data: bytes) -> int:
     return cnt
 
 
-def _ibrd(self: EnetConnection, tmo_ms: int = 0) -> bytes:
+#: Default per-call read timeout in milliseconds when the caller passes
+#: nothing. ``tmo_ms=0`` on the wire is **not** "use the session default"
+#: — the bridge interprets it as "do not wait" and returns immediately
+#: with cnt=0 and no END marker. 10 s matches NI's default IbcTMO for
+#: measurement equipment and is the conservative choice for callers that
+#: do not know better.
+DEFAULT_IBRD_TMO_MS = 10_000
+
+
+def _ibrd(self: EnetConnection, tmo_ms: int = DEFAULT_IBRD_TMO_MS) -> bytes:
     """Read one message from the addressed device.
 
     The wire-level read pulls bytes until the device signals end-of-message
-    (EOI/EOS). The box does not take a maximum-byte argument — callers that
-    want to truncate must do so after the fact.
+    (EOI/EOS) or the bridge's per-read timeout fires. The box does not
+    take a maximum-byte argument — callers that want to truncate must do
+    so after the fact.
 
     Wire layout: ``16 00 00 00 [htonl(tmo_ms):4] 00 00 00 00``. ``tmo_ms``
-    is a per-read override; ``0`` means use the session default timeout.
+    is the bridge-side timeout for waiting on device data — **not** a
+    session default fallback. ``0`` makes the bridge return immediately
+    with no data; pass a positive value (the default is 10 s) to give
+    the device time to respond.
 
-    Response sequence: preliminary status header, data chunks until END,
-    final status header (whose ``cnt`` matches the payload length).
+    Response shape depends on whether the device returned data within
+    the timeout:
+
+    - **With data** (per wire spec): preliminary status chunk, then one
+      or more data chunks (each a chunk-wrapped block of device bytes),
+      then an END marker (flags=1 length=0), then the final status
+      chunk whose ``cnt`` equals the total payload length.
+    - **Without data** (timeout or no response): preliminary status
+      chunk, then the final status chunk directly — no END marker, no
+      intermediate data chunks. The parser distinguishes the two paths
+      by inspecting the body of each candidate-data chunk: a 12-byte
+      chunk whose body parses as a status header with CMPL/ERR/END/TIMO
+      bits set is the final status, not data.
     """
     # Frame: 16 00 00 00 [htonl(tmo_ms):4] 00 00 00 00
     frame = struct.pack("!BBHL4x", 0x16, 0x00, 0x0000, tmo_ms)
@@ -817,13 +841,55 @@ def _ibrd(self: EnetConnection, tmo_ms: int = 0) -> bytes:
     sta_p, err_p, _ = self.read_status_main()
     if sta_p & STA_ERR:
         raise NIEnet100IOError(sta_p, err_p, "ibrd preliminary")
-    # Payload chunks until END.
-    data = read_chunks_until_end(self.recv_main_exactly)
-    # Final status with the real count.
-    sta_f, err_f, _cnt = self.read_status_main()
-    if sta_f & STA_ERR:
-        raise NIEnet100IOError(sta_f, err_f, "ibrd final")
-    return data
+
+    payload = bytearray()
+    _status_bits = STA_CMPL | STA_ERR | STA_END | STA_TIMO
+    while True:
+        flags, length = parse_chunk_header(self.recv_main_exactly(CHUNK_HEADER_SIZE))
+
+        if flags == CHUNK_FLAG_END:
+            # Spec path: END marker, followed by the final status chunk.
+            if length != 0:
+                raise NIEnet100ProtocolError(
+                    "END chunk has non-zero length %d" % length
+                )
+            sta_f, err_f, _cnt = self.read_status_main()
+            if sta_f & STA_ERR:
+                raise NIEnet100IOError(sta_f, err_f, "ibrd final")
+            return bytes(payload)
+
+        if flags == CHUNK_FLAG_SIGNAL:
+            self.recv_main_exactly(1)
+            continue
+
+        if flags != CHUNK_FLAG_DATA:
+            if length == 0:
+                LOGGER.warning(
+                    "treating unknown chunk flag 0x%04x (length=0) as end-of-stream",
+                    flags,
+                )
+                return bytes(payload)
+            raise NIEnet100ProtocolError(
+                "unknown chunk flag 0x%04x with non-zero length %d" % (flags, length)
+            )
+
+        body = self.recv_main_exactly(length) if length else b""
+
+        # No-data path: the bridge sends the final status as a length-12
+        # data chunk without a preceding END marker. Detect by parsing
+        # the body as a status header and checking for CMPL/ERR/END/TIMO
+        # bits. Real device data of exactly 12 bytes whose first u16 is
+        # one of those status values is in principle ambiguous, but the
+        # leading 0x0100/0x8100/etc. patterns are rare enough in raw
+        # instrument data that this heuristic is reliable in practice.
+        if length == STATUS_HEADER_SIZE:
+            sta_c, err_c, _cnt_c = parse_status_header(body)
+            if sta_c & _status_bits:
+                if sta_c & STA_ERR:
+                    raise NIEnet100IOError(sta_c, err_c, "ibrd final")
+                return bytes(payload)
+
+        payload.extend(body)
 
 
 def _ibclr(self: EnetConnection) -> None:
