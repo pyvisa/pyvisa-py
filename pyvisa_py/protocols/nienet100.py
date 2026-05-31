@@ -499,15 +499,30 @@ class EnetConnection:
         return bytes(buf)
 
     def recv_main_exactly(self, n: int) -> bytes:
-        """Read exactly ``n`` bytes from the main socket or raise."""
+        """Read exactly ``n`` bytes from the main socket or raise.
+
+        At DEBUG log level the bytes received are hex-dumped — invaluable
+        for diagnosing wire-protocol surprises against real hardware. Set
+        ``--log-cli-level=DEBUG`` on pytest to see the dumps, or attach a
+        handler to ``pyvisa_py.protocols.nienet100`` in your own code.
+        """
         if self.main is None:
             raise NIEnet100Error("main socket is not open")
-        return self._recv_exactly(self.main, n)
+        data = self._recv_exactly(self.main, n)
+        if LOGGER.isEnabledFor(logging.DEBUG):
+            LOGGER.debug("← main: %s", data.hex())
+        return data
 
     def send_main(self, data: bytes) -> None:
-        """Send ``data`` on the main socket in a single ``sendall``."""
+        """Send ``data`` on the main socket in a single ``sendall``.
+
+        At DEBUG log level the bytes sent are hex-dumped — see
+        :meth:`recv_main_exactly` for details.
+        """
         if self.main is None:
             raise NIEnet100Error("main socket is not open")
+        if LOGGER.isEnabledFor(logging.DEBUG):
+            LOGGER.debug("→ main: %s", data.hex())
         self.main.sendall(data)
 
     def read_status_main(self) -> Tuple[int, int, int]:
