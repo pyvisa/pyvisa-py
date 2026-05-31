@@ -231,8 +231,19 @@ def _run_scripted_peer(script: List[ScriptStep]):
     return a, t
 
 
+def _wrap_status(body: bytes) -> bytes:
+    """Wrap a 12-byte status body in the on-wire chunk header.
+
+    Every status header the bridge emits is delivered as a data chunk
+    (flags=0, length=12); the scripted peer must therefore prepend the
+    chunk header for the bridge driver to read aligned.
+    """
+    return struct.pack("!HH", 0, 12) + body
+
+
 def _status_ok(cnt: int = 0) -> bytes:
-    return struct.pack("!HH4xL", nienet100.STA_CMPL, 0, cnt)
+    body = struct.pack("!HH4xL", nienet100.STA_CMPL, 0, cnt)
+    return _wrap_status(body)
 
 
 def _make_bound_connection(client_sock: socket.socket) -> nienet100.EnetConnection:
@@ -288,7 +299,9 @@ def test_ibrd_reads_until_end_marker_and_consumes_final_status():
         ("send", _chunk(1, b"")),  # END
         (
             "send",
-            struct.pack("!HH4xL", nienet100.STA_END | nienet100.STA_CMPL, 0xFFFF, 6),
+            _wrap_status(
+                struct.pack("!HH4xL", nienet100.STA_END | nienet100.STA_CMPL, 0xFFFF, 6)
+            ),
         ),  # final status
     ]
     sock, t = _run_scripted_peer(script)
@@ -320,11 +333,13 @@ def test_ibclr_raises_iberr_on_error_status():
         ("recv", nienet100.pack_command(0x04)),
         (
             "send",
-            struct.pack(
-                "!HH4xL",
-                nienet100.STA_ERR | nienet100.STA_CMPL,
-                nienet100.ERR_ENOL,
-                0,
+            _wrap_status(
+                struct.pack(
+                    "!HH4xL",
+                    nienet100.STA_ERR | nienet100.STA_CMPL,
+                    nienet100.ERR_ENOL,
+                    0,
+                )
             ),
         ),
     ]
@@ -404,8 +419,8 @@ def test_ensure_wait_socket_sends_async_register_and_online_reconfirm():
             conn = _make_empty_connection()
             conn.main = main_a
             # Monkey-patch _connect to hand out the scripted peer for PORT_WAIT
-            conn._connect = (
-                lambda port: wait_sock
+            conn._connect = lambda port: (
+                wait_sock
                 if port == nienet100.PORT_WAIT
                 else (_ for _ in ()).throw(AssertionError(f"unexpected port {port}"))
             )
@@ -452,7 +467,7 @@ def test_ibwait_sends_mask_and_returns_sta():
     response_sta = nienet100.STA_RQS | nienet100.STA_CMPL
     script = [
         ("recv", expected_frame),
-        ("send", struct.pack("!HH4xL", response_sta, 0xFFFF, 0)),
+        ("send", _wrap_status(struct.pack("!HH4xL", response_sta, 0xFFFF, 0))),
     ]
     wait_sock, t = _run_scripted_peer(script)
     try:
@@ -470,11 +485,13 @@ def test_ibwait_raises_on_error_status():
         ("recv", nienet100.pack_command(cmd_id=0x54, b1=0x00, w1=nienet100.STA_RQS)),
         (
             "send",
-            struct.pack(
-                "!HH4xL",
-                nienet100.STA_ERR | nienet100.STA_CMPL,
-                nienet100.ERR_EARG,
-                0,
+            _wrap_status(
+                struct.pack(
+                    "!HH4xL",
+                    nienet100.STA_ERR | nienet100.STA_CMPL,
+                    nienet100.ERR_EARG,
+                    0,
+                )
             ),
         ),
     ]
