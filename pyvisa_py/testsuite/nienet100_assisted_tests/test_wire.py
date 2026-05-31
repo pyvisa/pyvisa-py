@@ -177,24 +177,24 @@ def test_trigger_round_trip(opened_session: nienet100.EnetConnection):
 def test_timeout_surfaces_as_iberr_eabo(
     opened_session: nienet100.EnetConnection,
 ):
-    """A read with no preceding write should hit the box's TMO and raise
-    NIEnet100IOError with iberr=EABO (6) once the configured timeout
-    fires. Uses a short box-side timeout (T100ms) so the test does not
-    spend seconds waiting."""
-    opened_session.set_io_timeout(nienet100.TMO_100ms)
+    """A read with no preceding write hits the per-call ibrd timeout and
+    surfaces as NIEnet100IOError with iberr=EABO (6).
+
+    Uses ibrd's per-call ``tmo_ms`` argument rather than the IbcTMO
+    property setter: per spec section 3.11 the bridge rejects several
+    property writes (PAD/SAD, and in practice IbcTMO too) once a
+    bracket is open, so the in-frame override is the only mid-session
+    way to test a short timeout.
+    """
     started = time.monotonic()
-    try:
-        with pytest.raises(nienet100.NIEnet100IOError) as excinfo:
-            opened_session.ibrd()
-        assert excinfo.value.err == nienet100.ERR_EABO, (
-            "expected EABO (timeout), got iberr=%d" % excinfo.value.err
-        )
-    finally:
-        # Restore a sane timeout so the fixture teardown does not stall.
-        opened_session.set_io_timeout(nienet100.TMO_3s)
+    with pytest.raises(nienet100.NIEnet100IOError) as excinfo:
+        opened_session.ibrd(tmo_ms=200)
+    assert excinfo.value.err == nienet100.ERR_EABO, (
+        "expected EABO (timeout), got iberr=%d" % excinfo.value.err
+    )
     elapsed = time.monotonic() - started
     assert elapsed < 5.0, (
-        "timeout took %.1fs — much longer than the configured 100 ms" % elapsed
+        "timeout took %.1fs — much longer than the configured 200 ms" % elapsed
     )
 
 
