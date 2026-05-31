@@ -614,3 +614,141 @@ def _pack_property_set(prop_idx: int, value_byte: int) -> bytes:
     Wire layout: ``50 [prop_idx] [value_byte] 00*9``.
     """
     return struct.pack("!BBB9x", 0x50, prop_idx, value_byte)
+
+
+# --- Device-level verbs -----------------------------------------------------
+# These methods are added to EnetConnection via assignment below. They cover
+# the minimal pyvisa-Resource API surface: write, read, clear, trigger,
+# serial poll, local-lockout release, and the I/O timeout setter. Async
+# verbs (ibwait, ibnotify) and board-level verbs (ibsic, ibcmd) live in
+# later commits since they require the wait/control sockets.
+
+
+def _ibwrt(self: EnetConnection, data: bytes) -> int:
+    """Write ``data`` to the addressed device.
+
+    Wire layout: ``62 00 00 00 [htonl(byte_count):4] 00 00 00 00`` followed
+    immediately by the raw payload in the same ``sendall``. Odd-length
+    payloads are zero-padded on the wire; ``byte_count`` is the original
+    unpadded length.
+
+    Returns the number of bytes the box reports as transferred.
+    """
+    byte_count = len(data)
+    # Frame: 62 00 00 00 [htonl(byte_count):4] 00 00 00 00
+    header = struct.pack("!BBHL4x", 0x62, 0x00, 0x0000, byte_count)
+    payload = data + (b"\x00" if byte_count % 2 else b"")
+    self.send_main(header + payload)
+    _sta, _err, cnt = self.transact_main_status("ibwrt")
+    return cnt
+
+
+def _ibrd(self: EnetConnection, tmo_ms: int = 0) -> bytes:
+    """Read one message from the addressed device.
+
+    The wire-level read pulls bytes until the device signals end-of-message
+    (EOI/EOS). The box does not take a maximum-byte argument — callers that
+    want to truncate must do so after the fact.
+
+    Wire layout: ``16 00 00 00 [htonl(tmo_ms):4] 00 00 00 00``. ``tmo_ms``
+    is a per-read override; ``0`` means use the session default timeout.
+
+    Response sequence: preliminary status header, data chunks until END,
+    final status header (whose ``cnt`` matches the payload length).
+    """
+    # Frame: 16 00 00 00 [htonl(tmo_ms):4] 00 00 00 00
+    frame = struct.pack("!BBHL4x", 0x16, 0x00, 0x0000, tmo_ms)
+    self.send_main(frame)
+    # Preliminary status (typically sta=0x0100 cnt=0, err may be 0xFFFF).
+    sta_p, err_p, _ = self.read_status_main()
+    if sta_p & STA_ERR:
+        raise NIEnet100IOError(sta_p, err_p, "ibrd preliminary")
+    # Payload chunks until END.
+    data = read_chunks_until_end(self.recv_main_exactly)
+    # Final status with the real count.
+    sta_f, err_f, _cnt = self.read_status_main()
+    if sta_f & STA_ERR:
+        raise NIEnet100IOError(sta_f, err_f, "ibrd final")
+    return data
+
+
+def _ibclr(self: EnetConnection) -> None:
+    """Clear the addressed device.
+
+    Wire layout: ``04 00*11``.
+    """
+    self.transact_main(pack_command(0x04), "ibclr")
+
+
+def _ibtrg(self: EnetConnection) -> None:
+    """Assert the device trigger on the addressed device.
+
+    Wire layout: ``20 00*11``.
+    """
+    self.transact_main(pack_command(0x20), "ibtrg")
+
+
+def _ibloc(self: EnetConnection) -> None:
+    """Send go-to-local to the addressed device.
+
+    Wire layout: ``10 00*11``.
+    """
+    self.transact_main(pack_command(0x10), "ibloc")
+
+
+def _ibrsp(self: EnetConnection) -> int:
+    """Serial-poll the addressed device and return the status byte (STB).
+
+    Wire layout (request): ``19 00*11``. The response is the standard
+    12-byte status header followed by a single data chunk carrying the
+    STB. Per the wire spec the END marker may be omitted — we deliberately
+    do not try to consume it and accept that the next operation will see
+    any trailing bytes if the firmware does emit them. If that turns out
+    to bite us in practice we will revisit with a peek-based consumer.
+    """
+    self.send_main(pack_command(0x19))
+    sta, err, _ = self.read_status_main()
+    if sta & STA_ERR:
+        raise NIEnet100IOError(sta, err, "ibrsp")
+    stb_bytes = read_one_data_chunk(self.recv_main_exactly)
+    if len(stb_bytes) != 1:
+        raise NIEnet100ProtocolError(
+            "ibrsp returned %d bytes, expected 1" % len(stb_bytes)
+        )
+    return stb_bytes[0]
+
+
+def _set_io_timeout(self: EnetConnection, tmo_code: int) -> None:
+    """Set the wire-level I/O timeout via the IbcTMO property (idx 0x03).
+
+    ``tmo_code`` is a discrete NI-488.2 timeout index, not milliseconds —
+    use :func:`seconds_to_tmo_code` to convert.
+    """
+    self.transact_main(_pack_property_set(0x03, tmo_code), "set IbcTMO")
+
+
+def _transact_main_status(
+    self: EnetConnection, operation: str = ""
+) -> Tuple[int, int, int]:
+    """Read a status header on the main socket and raise on error.
+
+    Sibling of :meth:`EnetConnection.transact_main` for verbs that have
+    already sent their frame (and any payload) via :meth:`send_main`.
+    """
+    sta, err, cnt = self.read_status_main()
+    if sta & STA_ERR:
+        raise NIEnet100IOError(sta, err, operation)
+    return sta, err, cnt
+
+
+# Attach verbs to EnetConnection. Keeping them as module-level functions
+# makes the wire-bytes-per-verb mapping straightforward to read in this
+# file; binding them here gives users the familiar `conn.ibwrt(...)` API.
+EnetConnection.ibwrt = _ibwrt
+EnetConnection.ibrd = _ibrd
+EnetConnection.ibclr = _ibclr
+EnetConnection.ibtrg = _ibtrg
+EnetConnection.ibloc = _ibloc
+EnetConnection.ibrsp = _ibrsp
+EnetConnection.set_io_timeout = _set_io_timeout
+EnetConnection.transact_main_status = _transact_main_status
