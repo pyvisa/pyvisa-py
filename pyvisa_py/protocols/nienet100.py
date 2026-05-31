@@ -16,8 +16,9 @@ All multi-byte fields are big-endian (network byte order).
 """
 
 import logging
+import socket
 import struct
-from typing import Callable, Tuple
+from typing import Callable, Optional, Tuple
 
 LOGGER = logging.getLogger("pyvisa_py.protocols.nienet100")
 
@@ -300,3 +301,188 @@ class NIEnet100IOError(NIEnet100Error):
             err,
         )
         super().__init__(msg)
+
+
+# --- Connection -------------------------------------------------------------
+# The box uses up to four parallel TCP sockets per session. The main socket
+# (5000) carries all synchronous Device-I/O. The companion socket (5015) is
+# mandatory on every firmware shipped in the last ~20 years and only carries
+# a single hello frame; it must stay open for the session lifetime. Wait
+# (5003) and control (5005) are lazy and only needed for ibwait / async
+# notify-off; they are not opened by this base class.
+
+
+def _u32_from_ip(ip: str) -> int:
+    """Convert dotted-quad IP to a 32-bit integer in host order.
+
+    The result is meant to be re-emitted via ``struct.pack('!L', ...)``,
+    which puts the high byte first on the wire — matching the box's
+    convention (e.g. 192.0.2.5 -> ``c0 00 02 05``).
+    """
+    return int.from_bytes(socket.inet_aton(ip), "big")
+
+
+class EnetConnection:
+    """Synchronous TCP transport to a single GPIB-ENET/100 box.
+
+    Opens the main socket (port 5000) and the companion socket (port 5015)
+    on instantiation and sends the mandatory companion hello frame. Wait
+    and control sockets are not opened here; subclasses or callers that
+    need SRQ polling open them lazily.
+
+    Parameters
+    ----------
+    host : str
+        Box IP or hostname.
+    open_timeout : float
+        Per-socket connect timeout in seconds.
+    timeout : Optional[float]
+        Per-operation socket timeout in seconds applied after connect.
+        ``None`` means blocking without timeout.
+
+    Attributes
+    ----------
+    host : str
+        The host string passed at construction time.
+    main : socket.socket
+        The synchronous main socket.
+    companion : socket.socket
+        The hello-only companion socket; kept open for the session lifetime.
+    """
+
+    #: Companion-hello flag word for device-mode sessions (single resource).
+    COMPANION_FLAGS_DEVICE = 2
+
+    def __init__(
+        self,
+        host: str,
+        open_timeout: float = 10.0,
+        timeout: Optional[float] = 10.0,
+    ) -> None:
+        self.host = host
+        self._open_timeout = open_timeout
+        self._timeout = timeout
+        self.main: Optional[socket.socket] = None
+        self.companion: Optional[socket.socket] = None
+
+    # --- lifecycle ------------------------------------------------------
+
+    def open(self) -> None:
+        """Open main and companion sockets and send the companion hello."""
+        self.main = self._connect(PORT_MAIN)
+        try:
+            self.companion = self._connect(PORT_COMPANION)
+        except Exception:
+            self.main.close()
+            self.main = None
+            raise
+        try:
+            self._send_companion_hello()
+        except Exception:
+            self.close()
+            raise
+
+    def close(self) -> None:
+        """Close every open socket. Idempotent."""
+        for attr in ("companion", "main"):
+            sock = getattr(self, attr, None)
+            if sock is not None:
+                try:
+                    sock.close()
+                except OSError as e:
+                    LOGGER.debug("error closing %s socket: %s", attr, e)
+                setattr(self, attr, None)
+
+    def set_socket_timeout(self, timeout: Optional[float]) -> None:
+        """Apply ``timeout`` (in seconds) to all currently open sockets.
+
+        Use ``None`` for blocking without timeout. The value is cached so
+        sockets opened later (wait/control) pick up the same setting.
+        """
+        self._timeout = timeout
+        for sock in (self.main, self.companion):
+            if sock is not None:
+                sock.settimeout(timeout)
+
+    # --- low-level helpers ---------------------------------------------
+
+    def _connect(self, port: int) -> socket.socket:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(self._open_timeout)
+        try:
+            sock.connect((self.host, port))
+        except Exception:
+            sock.close()
+            raise
+        sock.settimeout(self._timeout)
+        return sock
+
+    @staticmethod
+    def _recv_exactly(sock: socket.socket, n: int) -> bytes:
+        """Read exactly ``n`` bytes from ``sock`` or raise."""
+        buf = bytearray()
+        while len(buf) < n:
+            chunk = sock.recv(n - len(buf))
+            if not chunk:
+                raise NIEnet100Error(
+                    "connection closed by peer after %d/%d bytes" % (len(buf), n)
+                )
+            buf.extend(chunk)
+        return bytes(buf)
+
+    def recv_main_exactly(self, n: int) -> bytes:
+        """Read exactly ``n`` bytes from the main socket or raise."""
+        if self.main is None:
+            raise NIEnet100Error("main socket is not open")
+        return self._recv_exactly(self.main, n)
+
+    def send_main(self, data: bytes) -> None:
+        """Send ``data`` on the main socket in a single ``sendall``."""
+        if self.main is None:
+            raise NIEnet100Error("main socket is not open")
+        self.main.sendall(data)
+
+    def read_status_main(self) -> Tuple[int, int, int]:
+        """Read and parse a 12-byte status header from the main socket."""
+        return parse_status_header(self.recv_main_exactly(STATUS_HEADER_SIZE))
+
+    def transact_main(
+        self, frame: bytes, operation: str = ""
+    ) -> Tuple[int, int, int]:
+        """Send a command frame and read the status header on the main socket.
+
+        Raises :class:`NIEnet100IOError` if the status header has ``STA_ERR``
+        set. Returns ``(sta, err, cnt)`` on success.
+        """
+        self.send_main(frame)
+        sta, err, cnt = self.read_status_main()
+        if sta & STA_ERR:
+            raise NIEnet100IOError(sta, err, operation)
+        return sta, err, cnt
+
+    # --- companion socket ----------------------------------------------
+
+    def _send_companion_hello(self) -> None:
+        """Send the 'U 02' hello on the companion socket and read the status.
+
+        Sub-op layout: ``55 02 [htons(flags)] 00 00 [htons(port)] [ip:4]``.
+        ``port``/``ip`` are ``getsockname()`` of the companion socket — the
+        box does not validate the values, so NAT'd addresses are fine.
+        """
+        if self.companion is None:
+            raise NIEnet100Error("companion socket is not open")
+        local_ip, local_port = self.companion.getsockname()
+        frame = pack_command(
+            cmd_id=0x55,  # 'U'
+            b1=0x02,
+            w1=self.COMPANION_FLAGS_DEVICE,
+            w2=0,
+            w3=local_port,
+            dw=_u32_from_ip(local_ip),
+        )
+        self.companion.sendall(frame)
+        sta, err, _cnt = parse_status_header(
+            self._recv_exactly(self.companion, STATUS_HEADER_SIZE)
+        )
+        if sta & STA_ERR:
+            raise NIEnet100IOError(sta, err, "companion hello")
