@@ -15,6 +15,7 @@ See the package ``__init__`` docstring for environment-variable setup.
 
 """
 
+import socket
 import time
 from typing import Iterator
 
@@ -31,28 +32,50 @@ from . import (
     require_instrument,
 )
 
+
+def _resolve_host_ip() -> str:
+    """Resolve ``HOST`` to a dotted-quad IP for comparison against
+    discovery results, which always carry the bridge's IP. Falls back to
+    ``HOST`` as-is when DNS resolution fails (e.g. NetBIOS-only names on
+    a locked-down Windows box) so the test surfaces a meaningful diff
+    rather than a gaierror."""
+    try:
+        return socket.gethostbyname(HOST)
+    except socket.gaierror:
+        return HOST
+
+
 # --- bridge-only tests (no instrument required) ---------------------------
 
 
 @require_bridge
 def test_discovery_finds_configured_bridge():
     """The configured bridge must surface in a broadcast scan."""
+    expected_ip = _resolve_host_ip()
     boxes = nienet100_discovery.discover(timeout=2.0)
     assert boxes, "no bridges replied to broadcast"
     ips = [b.ip for b in boxes]
-    assert HOST in ips, "configured bridge %r not in discovered set %r" % (HOST, ips)
+    assert expected_ip in ips, (
+        "configured bridge %r (resolved to %r) not in discovered set %r"
+        % (HOST, expected_ip, ips)
+    )
 
 
 @require_bridge
 def test_unicast_discovery_against_configured_bridge():
     """Unicast probe to the known IP should return exactly that one box."""
+    expected_ip = _resolve_host_ip()
     boxes = nienet100_discovery.discover(
         timeout=2.0,
         broadcast_addr=HOST,
         port=nienet100_discovery.PORT_UNICAST,
     )
     ips = [b.ip for b in boxes]
-    assert HOST in ips, "unicast probe to %r returned %r" % (HOST, ips)
+    assert expected_ip in ips, "unicast probe to %r (resolved to %r) returned %r" % (
+        HOST,
+        expected_ip,
+        ips,
+    )
 
 
 @require_bridge
