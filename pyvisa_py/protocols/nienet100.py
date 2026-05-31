@@ -435,7 +435,21 @@ class EnetConnection:
         self.control = self._connect(PORT_CONTROL)
 
     def close(self) -> None:
-        """Close every open socket. Idempotent."""
+        """Close every open socket. Idempotent.
+
+        If the wait socket was opened (and the async-register frame was
+        therefore sent), best-effort sends the 'O 4e' notify-off frame on
+        the control socket before tearing the sockets down. Without this
+        the box keeps the stale registration around for a short while.
+        Errors during cleanup are logged and swallowed so socket teardown
+        always runs.
+        """
+        if self.wait is not None and self.main is not None:
+            try:
+                self.notify_off_async_device()
+            except (NIEnet100Error, OSError) as e:
+                LOGGER.debug("notify-off cleanup failed: %s", e)
+
         # Close in reverse open-order so the box sees the auxiliary sockets
         # disappear before main. The box does not require a goodbye frame.
         for attr in ("control", "wait", "companion", "main"):
@@ -697,6 +711,18 @@ def _pack_property_set(prop_idx: int, value_byte: int) -> bytes:
     return struct.pack("!BBB9x", 0x50, prop_idx, value_byte)
 
 
+def _pack_o_verb(sub_op: int, leading_u16: int, ip_u32: int, port: int) -> bytes:
+    """Build an 'O' control-socket verb with the IP-before-port layout.
+
+    Wire layout: ``4f [sub_op] [htons(leading_u16):2] [ip:4] [htons(port):2] 00 00``.
+
+    Used by ibsic, notify-off-async-board, notify-off-async-device, and
+    ibwait re-arm. Note that the layout differs from 'U' verbs (which put
+    port before ip); the inconsistency is part of the wire protocol.
+    """
+    return struct.pack("!BBHLH2x", 0x4F, sub_op, leading_u16, ip_u32, port)
+
+
 # --- Device-level verbs -----------------------------------------------------
 # These methods are added to EnetConnection via assignment below. They cover
 # the minimal pyvisa-Resource API surface: write, read, clear, trigger,
@@ -822,6 +848,64 @@ def _transact_main_status(
     return sta, err, cnt
 
 
+def _ibsic(self: EnetConnection) -> None:
+    """Pulse the GPIB IFC (Interface Clear) line on the bridge.
+
+    Sends ``'O 49'`` on the control socket (lazily opened). The frame
+    carries the main socket's ``getsockname()`` so the box knows which
+    session is asking. Wire layout::
+
+        4f 49 00 00 [ip_main:4] [htons(port_main):2] 00 00
+    """
+    self.ensure_control_socket()
+    assert self.control is not None
+    if self.main is None:
+        raise NIEnet100Error("cannot ibsic: main socket is not open")
+    main_ip, main_port = self.main.getsockname()
+    frame = _pack_o_verb(
+        sub_op=0x49,
+        leading_u16=0,
+        ip_u32=_u32_from_ip(main_ip),
+        port=main_port,
+    )
+    self.control.sendall(frame)
+    sta, err, _cnt = parse_status_header(
+        self._recv_exactly(self.control, STATUS_HEADER_SIZE)
+    )
+    if sta & STA_ERR:
+        raise NIEnet100IOError(sta, err, "ibsic")
+
+
+def _notify_off_async_device(self: EnetConnection) -> None:
+    """Deregister the device-mode async event channel.
+
+    Sends ``'O 4e'`` on the control socket. Pairs with the async-register
+    fired by :meth:`ensure_wait_socket`. Wire layout::
+
+        4f 4e 00 01 [ip_main:4] [htons(port_main):2] 00 00
+
+    Best-effort cleanup; callers typically ignore errors and close the
+    sockets anyway.
+    """
+    self.ensure_control_socket()
+    assert self.control is not None
+    if self.main is None:
+        raise NIEnet100Error("cannot notify-off: main socket is not open")
+    main_ip, main_port = self.main.getsockname()
+    frame = _pack_o_verb(
+        sub_op=0x4E,
+        leading_u16=1,
+        ip_u32=_u32_from_ip(main_ip),
+        port=main_port,
+    )
+    self.control.sendall(frame)
+    sta, err, _cnt = parse_status_header(
+        self._recv_exactly(self.control, STATUS_HEADER_SIZE)
+    )
+    if sta & STA_ERR:
+        raise NIEnet100IOError(sta, err, "notify-off async device")
+
+
 def _ibwait(self: EnetConnection, mask: int) -> int:
     """Issue one ibwait round-trip on the wait socket and return ``sta``.
 
@@ -866,5 +950,7 @@ EnetConnection.ibtrg = _ibtrg
 EnetConnection.ibloc = _ibloc
 EnetConnection.ibrsp = _ibrsp
 EnetConnection.ibwait = _ibwait
+EnetConnection.ibsic = _ibsic
+EnetConnection.notify_off_async_device = _notify_off_async_device
 EnetConnection.set_io_timeout = _set_io_timeout
 EnetConnection.transact_main_status = _transact_main_status
