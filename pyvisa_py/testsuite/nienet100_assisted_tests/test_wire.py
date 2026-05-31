@@ -15,6 +15,7 @@ See the package ``__init__`` docstring for environment-variable setup.
 
 """
 
+import os
 import socket
 import time
 from typing import Iterator
@@ -30,6 +31,19 @@ from . import (
     SAD,
     require_bridge,
     require_instrument,
+)
+
+#: The cross-subnet unicast variant (port 44516) needs a probe-source that
+#: is NOT on the same subnet as the bridge. Same-subnet probes on 44516
+#: tend to receive no reply (the box answers on the broadcast path). Set
+#: PYVISA_TEST_NIENET100_CROSS_SUBNET=1 to opt in when you have a
+#: cross-subnet host available.
+require_cross_subnet = pytest.mark.skipif(
+    os.environ.get("PYVISA_TEST_NIENET100_CROSS_SUBNET") != "1",
+    reason=(
+        "cross-subnet unicast (port 44516) needs a probe source on a "
+        "different subnet; set PYVISA_TEST_NIENET100_CROSS_SUBNET=1 to enable"
+    ),
 )
 
 
@@ -62,8 +76,10 @@ def test_discovery_finds_configured_bridge():
 
 
 @require_bridge
+@require_cross_subnet
 def test_unicast_discovery_against_configured_bridge():
-    """Unicast probe to the known IP should return exactly that one box."""
+    """Unicast probe to the known IP on the cross-subnet port should return
+    that box. Skipped by default — see ``require_cross_subnet`` for why."""
     expected_ip = _resolve_host_ip()
     boxes = nienet100_discovery.discover(
         timeout=2.0,
