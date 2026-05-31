@@ -46,16 +46,16 @@ CHUNK_HEADER_SIZE = 4
 
 # --- NI-488.2 ibsta bits (subset relevant to this protocol) -----------------
 
-STA_ERR = 0x8000   # operation error, ``err`` field carries the code
+STA_ERR = 0x8000  # operation error, ``err`` field carries the code
 STA_TIMO = 0x4000  # timeout during operation
-STA_END = 0x2000   # EOI or EOS match (talker signaled end-of-message)
+STA_END = 0x2000  # EOI or EOS match (talker signaled end-of-message)
 STA_SRQI = 0x1000  # SRQ detected while controller-in-charge
-STA_RQS = 0x0800   # device RQS asserted (set in ibrsp/ibwait responses)
+STA_RQS = 0x0800  # device RQS asserted (set in ibrsp/ibwait responses)
 STA_CMPL = 0x0100  # operation complete
-STA_LOK = 0x0080   # lockout state
-STA_REM = 0x0040   # remote state
-STA_CIC = 0x0020   # controller-in-charge
-STA_ATN = 0x0010   # ATN line asserted
+STA_LOK = 0x0080  # lockout state
+STA_REM = 0x0040  # remote state
+STA_CIC = 0x0020  # controller-in-charge
+STA_ATN = 0x0010  # ATN line asserted
 STA_TACS = 0x0008  # talker active
 STA_LACS = 0x0004  # listener active
 STA_DTAS = 0x0002  # device trigger state
@@ -64,20 +64,20 @@ STA_DCAS = 0x0001  # device clear state
 
 # --- NI-488.2 iberr codes (subset relevant to this protocol) ----------------
 
-ERR_EDVR = 0     # OS error (rare)
-ERR_ECIC = 1     # function requires controller-in-charge
-ERR_ENOL = 2     # no listener on the bus
-ERR_EADR = 3     # address error
-ERR_EARG = 4     # invalid argument to API
-ERR_ESAC = 5     # function requires system controller
-ERR_EABO = 6     # I/O aborted / timeout
-ERR_ENEB = 7     # non-existent board
-ERR_EBUS = 0xa   # bus error
-ERR_ECAP = 0xb   # capability disabled
-ERR_EFSO = 0xc   # file-system error
-ERR_EBNP = 0xd   # board not present
-ERR_ESTB = 0xe   # serial-poll status byte lost
-ERR_ESRQ = 0xf   # SRQ stuck on
+ERR_EDVR = 0  # OS error (rare)
+ERR_ECIC = 1  # function requires controller-in-charge
+ERR_ENOL = 2  # no listener on the bus
+ERR_EADR = 3  # address error
+ERR_EARG = 4  # invalid argument to API
+ERR_ESAC = 5  # function requires system controller
+ERR_EABO = 6  # I/O aborted / timeout
+ERR_ENEB = 7  # non-existent board
+ERR_EBUS = 0xA  # bus error
+ERR_ECAP = 0xB  # capability disabled
+ERR_EFSO = 0xC  # file-system error
+ERR_EBNP = 0xD  # board not present
+ERR_ESTB = 0xE  # serial-poll status byte lost
+ERR_ESRQ = 0xF  # SRQ stuck on
 
 
 # --- NI-488.2 timeout codes (TMO index, not milliseconds) -------------------
@@ -104,7 +104,7 @@ TMO_1000s = 17
 
 #: Discrete timeout values in seconds, indexed by TMO code. ``None`` = disabled.
 TIMETABLE: Tuple = (
-    None,    # TMO_NONE
+    None,  # TMO_NONE
     10e-6,
     30e-6,
     100e-6,
@@ -141,8 +141,8 @@ def seconds_to_tmo_code(timeout: float) -> int:
 
 # --- Chunk header flags (read stream after a status header) -----------------
 
-CHUNK_FLAG_DATA = 0    # data chunk; ``length`` bytes of payload follow
-CHUNK_FLAG_END = 1     # END marker; ``length`` must be 0, read complete
+CHUNK_FLAG_DATA = 0  # data chunk; ``length`` bytes of payload follow
+CHUNK_FLAG_END = 1  # END marker; ``length`` must be 0, read complete
 CHUNK_FLAG_SIGNAL = 2  # out-of-band signal byte (1 byte follows), defensively skip
 
 
@@ -446,9 +446,7 @@ class EnetConnection:
         """Read and parse a 12-byte status header from the main socket."""
         return parse_status_header(self.recv_main_exactly(STATUS_HEADER_SIZE))
 
-    def transact_main(
-        self, frame: bytes, operation: str = ""
-    ) -> Tuple[int, int, int]:
+    def transact_main(self, frame: bytes, operation: str = "") -> Tuple[int, int, int]:
         """Send a command frame and read the status header on the main socket.
 
         Raises :class:`NIEnet100IOError` if the status header has ``STA_ERR``
@@ -495,7 +493,7 @@ class EnetConnection:
     DEFAULT_BOARD_FLAGS = 0x1801
 
     #: Default Frame-E event-queue depth.
-    DEFAULT_EVENT_QUEUE_DEPTH = 0x0b
+    DEFAULT_EVENT_QUEUE_DEPTH = 0x0B
 
     def open_gpib_session(
         self,
@@ -536,7 +534,7 @@ class EnetConnection:
             cmd_id=0x07,
             b1=0x02,
             w1=0x0001,
-            w2=(primary_address << 8) | (secondary_address & 0xff),
+            w2=(primary_address << 8) | (secondary_address & 0xFF),
             w3=0,
             dw=(tmo_code << 24) | 0x0400,
         )
@@ -544,9 +542,7 @@ class EnetConnection:
 
         # Frame B: Property 'Mode' (PPC, idx 0x05).
         # Wire bytes: 50 05 [mode_byte] 00*9
-        self.transact_main(
-            _pack_property_set(0x05, mode_byte), "open Frame B PPC"
-        )
+        self.transact_main(_pack_property_set(0x05, mode_byte), "open Frame B PPC")
 
         # Frame C: SetConfig (non-SC variant) with board flags.
         # Wire bytes: 07 00 [htons(flags)] 00 00 00 00 [tmo] 00 00 00
@@ -562,9 +558,7 @@ class EnetConnection:
 
         # Frame D: Property 'Online' (PP2, idx 0x10) with value 1.
         # Wire bytes: 50 10 01 00*9
-        self.transact_main(
-            _pack_property_set(0x10, 0x01), "open Frame D online"
-        )
+        self.transact_main(_pack_property_set(0x10, 0x01), "open Frame D online")
 
         # Frame E: Property 'Event-Queue depth' (idx 0x15).
         # Wire bytes: 50 15 [depth] 00*9
@@ -580,9 +574,7 @@ class EnetConnection:
         # Frame G: Notify-Off sync ('N', idx 0x4e). Defensive reset against
         # any pending async notifies the box may have queued.
         # Wire bytes: 4e 01 00*10
-        self.transact_main(
-            pack_command(0x4e, 0x01), "open Frame G notify-off sync"
-        )
+        self.transact_main(pack_command(0x4E, 0x01), "open Frame G notify-off sync")
 
     def close_gpib_session(self) -> None:
         """Close the operation bracket opened by :meth:`open_gpib_session`.
@@ -600,12 +592,8 @@ class EnetConnection:
 
     def _transact_bracket(self, enter: bool) -> None:
         # Wire bytes: 58 [01|00] 01 00*9
-        frame = struct.pack(
-            "!BBB9x", 0x58, 0x01 if enter else 0x00, 0x01
-        )
-        self.transact_main(
-            frame, "bracket %s" % ("open" if enter else "close")
-        )
+        frame = struct.pack("!BBB9x", 0x58, 0x01 if enter else 0x00, 0x01)
+        self.transact_main(frame, "bracket %s" % ("open" if enter else "close"))
 
 
 def _pack_property_set(prop_idx: int, value_byte: int) -> bytes:
