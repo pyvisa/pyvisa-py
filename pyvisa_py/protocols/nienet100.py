@@ -853,23 +853,26 @@ def _ibloc(self: EnetConnection) -> None:
 def _ibrsp(self: EnetConnection) -> int:
     """Serial-poll the addressed device and return the status byte (STB).
 
-    Wire layout (request): ``19 00*11``. The response is the standard
-    12-byte status header followed by a single data chunk carrying the
-    STB. Per the wire spec the END marker may be omitted — we deliberately
-    do not try to consume it and accept that the next operation will see
-    any trailing bytes if the firmware does emit them. If that turns out
-    to bite us in practice we will revisit with a peek-based consumer.
+    Wire layout (request): ``19 00*11``. The response is **one** data
+    chunk whose length is 13: the first 12 bytes are the standard status
+    header (with ``cnt=1``), and the trailing byte is the STB. Other
+    verbs that the status header always comes alone do not apply here —
+    ibrsp is special in that the response payload is glued to the status
+    inside the same chunk.
     """
     self.send_main(pack_command(0x19))
-    sta, err, _ = self.read_status_main()
+    chunk = read_one_data_chunk(self.recv_main_exactly)
+    if len(chunk) < STATUS_HEADER_SIZE + 1:
+        raise NIEnet100ProtocolError(
+            "ibrsp chunk has %d bytes, expected at least %d"
+            % (len(chunk), STATUS_HEADER_SIZE + 1)
+        )
+    sta, err, cnt = parse_status_header(chunk[:STATUS_HEADER_SIZE])
     if sta & STA_ERR:
         raise NIEnet100IOError(sta, err, "ibrsp")
-    stb_bytes = read_one_data_chunk(self.recv_main_exactly)
-    if len(stb_bytes) != 1:
-        raise NIEnet100ProtocolError(
-            "ibrsp returned %d bytes, expected 1" % len(stb_bytes)
-        )
-    return stb_bytes[0]
+    if cnt != 1:
+        raise NIEnet100ProtocolError("ibrsp cnt=%d, expected 1" % cnt)
+    return chunk[STATUS_HEADER_SIZE]
 
 
 def _set_io_timeout(self: EnetConnection, tmo_code: int) -> None:
