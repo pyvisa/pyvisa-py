@@ -486,3 +486,131 @@ class EnetConnection:
         )
         if sta & STA_ERR:
             raise NIEnet100IOError(sta, err, "companion hello")
+
+    # --- GPIB-session open / close (Frames A-G of the spec) -----------
+
+    #: Default Frame-C board flags. Sets HS488 marker + an EOI/EOS bit and
+    #: leaves everything else off — the conservative baseline for a generic
+    #: instrument session.
+    DEFAULT_BOARD_FLAGS = 0x1801
+
+    #: Default Frame-E event-queue depth.
+    DEFAULT_EVENT_QUEUE_DEPTH = 0x0b
+
+    def open_gpib_session(
+        self,
+        primary_address: int,
+        secondary_address: int = 0,
+        tmo_code: int = TMO_10s,
+        board_flags: int = DEFAULT_BOARD_FLAGS,
+        event_queue_depth: int = DEFAULT_EVENT_QUEUE_DEPTH,
+        mode_byte: int = 0,
+    ) -> None:
+        """Run the seven-frame open sequence on the main socket.
+
+        After ``open()`` (which establishes main + companion sockets and
+        sends the companion hello), this method makes the bus ready for
+        Device-I/O against the given primary/secondary address. The bracket
+        opened by Frame F stays open until :meth:`close_gpib_session`.
+
+        Parameters
+        ----------
+        primary_address : int
+            Target GPIB primary address (0-30).
+        secondary_address : int
+            Target GPIB secondary address (0 means none).
+        tmo_code : int
+            NI-488.2 timeout code (see ``TIMETABLE``). Default ``TMO_10s``
+            matches NI's measurement-equipment default.
+        board_flags : int
+            Frame-C bitmask. Default ``0x1801`` is the standard
+            single-instrument baseline.
+        event_queue_depth : int
+            Frame-E event-queue depth. Default ``0x0b`` (= 11).
+        mode_byte : int
+            Frame-B mode byte. ``0`` is standard.
+        """
+        # Frame A: SetConfig with SC bit and target address.
+        # Wire bytes: 07 02 00 01 [PAD] [SAD] 00 00 [tmo] 00 04 00
+        frame_a = pack_command(
+            cmd_id=0x07,
+            b1=0x02,
+            w1=0x0001,
+            w2=(primary_address << 8) | (secondary_address & 0xff),
+            w3=0,
+            dw=(tmo_code << 24) | 0x0400,
+        )
+        self.transact_main(frame_a, "open Frame A SetConfig SC")
+
+        # Frame B: Property 'Mode' (PPC, idx 0x05).
+        # Wire bytes: 50 05 [mode_byte] 00*9
+        self.transact_main(
+            _pack_property_set(0x05, mode_byte), "open Frame B PPC"
+        )
+
+        # Frame C: SetConfig (non-SC variant) with board flags.
+        # Wire bytes: 07 00 [htons(flags)] 00 00 00 00 [tmo] 00 00 00
+        frame_c = pack_command(
+            cmd_id=0x07,
+            b1=0x00,
+            w1=board_flags,
+            w2=0,
+            w3=0,
+            dw=tmo_code << 24,
+        )
+        self.transact_main(frame_c, "open Frame C SetConfig non-SC")
+
+        # Frame D: Property 'Online' (PP2, idx 0x10) with value 1.
+        # Wire bytes: 50 10 01 00*9
+        self.transact_main(
+            _pack_property_set(0x10, 0x01), "open Frame D online"
+        )
+
+        # Frame E: Property 'Event-Queue depth' (idx 0x15).
+        # Wire bytes: 50 15 [depth] 00*9
+        self.transact_main(
+            _pack_property_set(0x15, event_queue_depth),
+            "open Frame E event-queue depth",
+        )
+
+        # Frame F: Operation-bracket open ('X', idx 0x58).
+        # Wire bytes: 58 01 01 00*9
+        self._transact_bracket(enter=True)
+
+        # Frame G: Notify-Off sync ('N', idx 0x4e). Defensive reset against
+        # any pending async notifies the box may have queued.
+        # Wire bytes: 4e 01 00*10
+        self.transact_main(
+            pack_command(0x4e, 0x01), "open Frame G notify-off sync"
+        )
+
+    def close_gpib_session(self) -> None:
+        """Close the operation bracket opened by :meth:`open_gpib_session`.
+
+        Sockets are not closed here — call :meth:`close` for that.
+        Safe to call if the bracket was never opened (errors are logged
+        and swallowed so socket cleanup always runs).
+        """
+        if self.main is None:
+            return
+        try:
+            self._transact_bracket(enter=False)
+        except (NIEnet100Error, OSError) as e:
+            LOGGER.debug("error closing GPIB bracket: %s", e)
+
+    def _transact_bracket(self, enter: bool) -> None:
+        # Wire bytes: 58 [01|00] 01 00*9
+        frame = struct.pack(
+            "!BBB9x", 0x58, 0x01 if enter else 0x00, 0x01
+        )
+        self.transact_main(
+            frame, "bracket %s" % ("open" if enter else "close")
+        )
+
+
+def _pack_property_set(prop_idx: int, value_byte: int) -> bytes:
+    """Build a 'P' property-set frame (0x50).
+
+    Wire layout: ``50 [prop_idx] [value_byte] 00*9``.
+    """
+    return struct.pack("!BBB9x", 0x50, prop_idx, value_byte)
