@@ -216,8 +216,14 @@ def read_chunks_until_end(read_exactly: Callable[[int], bytes]) -> bytes:
     """Consume a chunk stream until the END marker (flags=1).
 
     Tolerates out-of-band signal chunks (flags=2) by reading and discarding
-    their single payload byte. Raises :class:`NIEnet100ProtocolError` for
-    unknown flag values.
+    their single payload byte. Unknown flag values with ``length==0`` are
+    treated as end-of-stream terminators with a warning — hardware has
+    been observed to use flag 0x0004 on timeouts (and other terminal
+    conditions the wire spec does not enumerate). The caller's
+    subsequent status-header read carries the real outcome (e.g. STA_ERR
+    + iberr=EABO for a timeout). Unknown flags carrying a non-zero
+    length still raise :class:`NIEnet100ProtocolError` because we
+    cannot stay frame-aligned without knowing how to consume the data.
 
     Parameters
     ----------
@@ -247,9 +253,19 @@ def read_chunks_until_end(read_exactly: Callable[[int], bytes]) -> bytes:
             # which we log and skip. Never observed in practice.
             signal_byte = read_exactly(1)
             LOGGER.debug("NI-ENET/100 signal byte received: 0x%02x", signal_byte[0])
+        elif length == 0:
+            # Undocumented zero-length flag — treat as a terminal marker so
+            # the caller's status-header read can report the real outcome
+            # instead of us crashing on a flag we have not characterized.
+            LOGGER.warning(
+                "treating unknown chunk flag 0x%04x (length=0) as end-of-stream",
+                flags,
+            )
+            return bytes(payload)
         else:
             raise NIEnet100ProtocolError(
-                "unknown chunk flag 0x%04x (length=%d)" % (flags, length)
+                "unknown chunk flag 0x%04x with non-zero length %d "
+                "(cannot stay aligned, aborting)" % (flags, length)
             )
 
 
