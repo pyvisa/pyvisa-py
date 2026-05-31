@@ -107,10 +107,31 @@ class NIEnet100TCPIPIntfcSession(_NIEnet100IntfcSession):
 
     @staticmethod
     def list_resources() -> List[str]:
-        # TODO: implement Schiene-A UDP discovery on port 44515 to populate
-        # this list with reachable bridges. Returning an empty list keeps
-        # the resource type usable when the user supplies an explicit string.
-        return []
+        """Discover bridges on the local broadcast domain and emit resource
+        strings for each one found.
+
+        Each discovered bridge gets a distinct board number (0-indexed by
+        sort order of IP) so that ``open_resource`` calls on the returned
+        strings can all succeed against the same host. Cross-subnet
+        bridges do not surface here — for those the user must supply the
+        resource string explicitly with the box IP and an arbitrary board
+        number.
+
+        Returns an empty list (rather than raising) on any discovery
+        error — typically a bind conflict or a missing broadcast route.
+        """
+        # Local import keeps the top-level imports tidy and isolates the
+        # UDP code path from sessions that never call list_resources.
+        from .protocols import nienet100_discovery
+
+        try:
+            boxes = nienet100_discovery.discover(timeout=1.0)
+        except OSError as e:
+            LOGGER.debug("NI GPIB-ENET/100 discovery failed: %s", e)
+            return []
+        return [
+            "NIENET100-TCPIP%d::%s::INTFC" % (i, box.ip) for i, box in enumerate(boxes)
+        ]
 
     def __init__(
         self,
