@@ -19,10 +19,14 @@ lives in :func:`discover` (added in a later commit).
 
 """
 
+import logging
 import socket
 import struct
+import time
 from dataclasses import dataclass
-from typing import Optional
+from typing import Dict, List, Optional
+
+LOGGER = logging.getLogger("pyvisa_py.protocols.nienet100_discovery")
 
 #: Default UDP port for broadcast discovery on the local LAN.
 PORT_BROADCAST = 44515
@@ -189,3 +193,102 @@ def _cstring(buf: bytes) -> str:
     if end < 0:
         end = len(buf)
     return bytes(buf[:end]).decode("ascii", errors="replace")
+
+
+# --- UDP discovery loop -----------------------------------------------------
+
+
+def discover(
+    timeout: float = 1.0,
+    broadcast_addr: str = "255.255.255.255",
+    port: int = PORT_BROADCAST,
+    deduplicate: bool = True,
+) -> List[BoxInfo]:
+    """Send a discovery probe and collect bridge responses.
+
+    Opens a UDP socket bound to ``('', port)`` (with ``SO_REUSEADDR`` and
+    ``SO_BROADCAST`` set), sends one probe to ``(broadcast_addr, port)``,
+    and reads replies until ``timeout`` seconds elapse. The bridge sends
+    replies as broadcasts to port ``PORT_BROADCAST`` (per the wire spec),
+    so receiving them requires a socket bound to that port — ephemeral
+    binds will miss them.
+
+    Parameters
+    ----------
+    timeout : float
+        Total time budget for collecting replies. The bind, sendto, and
+        recvfrom calls all complete within this budget.
+    broadcast_addr : str
+        Where to send the probe. The default LAN-wide broadcast covers
+        the host's default broadcast domain. Pass a subnet broadcast
+        (e.g. ``"192.0.2.255"``) to limit the scan, or a unicast IP
+        combined with ``port=PORT_UNICAST`` for the cross-subnet variant
+        when the box IP is already known.
+    port : int
+        UDP port to send to and to bind for replies. Defaults to
+        ``PORT_BROADCAST`` (44515); use ``PORT_UNICAST`` (44516) for the
+        cross-subnet variant.
+    deduplicate : bool
+        Collapse duplicate replies (same MAC) into a single ``BoxInfo``.
+        Boxes commonly answer once per host network interface that hears
+        the probe; without dedup the same box appears more than once.
+
+    Returns
+    -------
+    List[BoxInfo]
+        Sorted by IP address. Empty if no replies arrived within
+        ``timeout``.
+    """
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+        try:
+            sock.bind(("", port))
+        except OSError as e:
+            # Port may be held by another process or blocked by firewall.
+            # Surface a meaningful error rather than a recvfrom hang.
+            raise OSError(
+                "could not bind UDP port %d for discovery: %s" % (port, e)
+            ) from e
+
+        sock.sendto(pack_discovery_request(), (broadcast_addr, port))
+
+        found: Dict[str, BoxInfo] = {}
+        deadline = time.monotonic() + timeout
+        while True:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                break
+            sock.settimeout(remaining)
+            try:
+                data, addr = sock.recvfrom(2048)
+            except socket.timeout:
+                break
+            except ConnectionResetError as e:
+                # Windows surfaces an ICMP "port unreachable" for a prior
+                # sendto as WSAECONNRESET on the next recvfrom. One such
+                # rejection does not mean discovery is done — keep listening
+                # until the timeout actually expires.
+                LOGGER.debug("recvfrom raised %s; continuing", e)
+                continue
+            info = parse_discovery_response(data)
+            if info is None:
+                # Foreign UDP traffic or our own probe — silently skip.
+                continue
+            key = info.mac if deduplicate else "%s|%d" % (info.mac, len(found))
+            found[key] = info
+            LOGGER.debug(
+                "discovery reply from %s: ip=%s mac=%s model=%r busy=%s",
+                addr,
+                info.ip,
+                info.mac,
+                info.model,
+                info.is_busy,
+            )
+        return sorted(
+            found.values(),
+            key=lambda b: tuple(int(part) for part in b.ip.split(".")),
+        )
+    finally:
+        sock.close()
