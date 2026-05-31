@@ -2,7 +2,7 @@
 """Session-level hardware tests for the NI GPIB-ENET/100 driver.
 
 Drives the bridge through the full pyvisa stack: a ``ResourceManager``
-opens the ``NIENET100-TCPIP::INTFC`` interface, then a
+opens the ``NI-ENET100-TCPIP::INTFC`` interface, then a
 ``GPIB<n>::<pad>::INSTR`` is dispatched via the wrap-dispatcher in
 ``pyvisa_py.nienet100`` to ``NIEnet100InstrSession``. This requires the
 ``InterfaceType.ni_enet100_tcpip`` and ``NIEnet100TCPIPIntfc`` additions
@@ -58,7 +58,7 @@ def intfc(rm: pyvisa.ResourceManager):
     Binding the INTFC to board 0 also registers it in the dispatch table
     so subsequent ``GPIB0::*::INSTR`` opens route through the bridge.
     """
-    resource = "NIENET100-TCPIP0::%s::INTFC" % HOST
+    resource = "NI-ENET100-TCPIP0::%s::INTFC" % HOST
     session = rm.open_resource(resource)
     try:
         yield session
@@ -93,8 +93,8 @@ def inst(rm: pyvisa.ResourceManager, intfc):
 def test_list_resources_includes_bridge(rm: pyvisa.ResourceManager):
     """Discovery via the resource manager should surface our bridge."""
     resources = rm.list_resources()
-    matches = [r for r in resources if HOST in r and "NIENET100" in r]
-    assert matches, "no NIENET100 resource for %r in rm.list_resources() = %r" % (
+    matches = [r for r in resources if HOST in r and "NI-ENET100" in r]
+    assert matches, "no NI-ENET100 resource for %r in rm.list_resources() = %r" % (
         HOST,
         resources,
     )
@@ -103,9 +103,13 @@ def test_list_resources_includes_bridge(rm: pyvisa.ResourceManager):
 @require_bridge
 def test_intfc_open_registers_board(intfc):
     """Opening the INTFC must register board 0 in the dispatch table so
-    GPIB0::*::INSTR resolves to the bridge."""
+    GPIB0::*::INSTR resolves to the bridge.
+
+    Board keys mirror ``rname.GPIBInstr.board`` (a string), so the lookup
+    that the GPIB dispatch hook does with ``parsed.board`` matches.
+    """
     boards = _ni._NIEnet100IntfcSession.boards
-    assert 0 in boards, "INTFC did not register board 0: boards=%r" % (
+    assert "0" in boards, "INTFC did not register board 0: boards=%r" % (
         list(boards.keys()),
     )
 

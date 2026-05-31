@@ -5,7 +5,7 @@ The bridge speaks a proprietary TCP protocol on ports 5000 / 5003 / 5005
 / 5015 (see :mod:`pyvisa_py.protocols.nienet100`). This module wires that
 protocol into pyvisa-py as two session types:
 
-- ``NIENET100-TCPIP<n>::<host>::INTFC`` — binds board number ``n`` to the
+- ``NI-ENET100-TCPIP<n>::<host>::INTFC`` — binds board number ``n`` to the
   given box and keeps a connection open as a connectivity sentinel.
 - ``GPIB<n>::<pad>[::<sad>]::INSTR`` — dispatched here when board ``n`` was
   previously registered as a NIENET100 board (the dispatch hook lives in
@@ -30,7 +30,7 @@ from .sessions import OpenError, Session, UnknownAttribute
 
 # Resolve the required pyvisa names early so a missing upstream PR produces
 # an ImportError that highlevel.py logs at debug level (mirrors how vicp
-# falls back when pyvicp is not installed). Users opening NIENET100-TCPIP
+# falls back when pyvicp is not installed). Users opening NI-ENET100-TCPIP
 # resources then see a clean "No class registered" error instead of a
 # cryptic AttributeError during session creation.
 try:
@@ -64,10 +64,12 @@ class _NIEnet100IntfcSession(Session):
     they each open their own — per the wire spec's recommendation.
     """
 
-    #: Maps board number -> INTFC session instance. Populated on open,
-    #: cleared on close. The GPIB dispatch hook reads this to find the
-    #: bridge for a given ``GPIB<n>::*::INSTR`` resource.
-    boards: ClassVar[Dict[int, "_NIEnet100IntfcSession"]] = {}
+    #: Maps board number (as parsed string) -> INTFC session instance.
+    #: Populated on open, cleared on close. The GPIB dispatch hook reads
+    #: this to find the bridge for a given ``GPIB<n>::*::INSTR`` resource.
+    #: Key is a string to mirror :class:`rname.GPIBInstr.board`, so dispatch
+    #: lookups with ``parsed.board`` match without conversion.
+    boards: ClassVar[Dict[str, "_NIEnet100IntfcSession"]] = {}
 
     #: The long-lived connection to the bridge. ``None`` before
     #: ``after_parsing`` runs successfully and after ``close``.
@@ -95,7 +97,7 @@ class _NIEnet100IntfcSession(Session):
 
 @Session.register(_IFACE_NIENET100_TCPIP, "INTFC")
 class NIEnet100TCPIPIntfcSession(_NIEnet100IntfcSession):
-    """Session for ``NIENET100-TCPIP<board>::<host>::INTFC`` resources."""
+    """Session for ``NI-ENET100-TCPIP<board>::<host>::INTFC`` resources."""
 
     # Override parsed to take into account the fact that this class is only
     # used for a specific kind of resource.
@@ -130,7 +132,7 @@ class NIEnet100TCPIPIntfcSession(_NIEnet100IntfcSession):
             LOGGER.debug("NI GPIB-ENET/100 discovery failed: %s", e)
             return []
         return [
-            "NIENET100-TCPIP%d::%s::INTFC" % (i, box.ip) for i, box in enumerate(boxes)
+            "NI-ENET100-TCPIP%d::%s::INTFC" % (i, box.ip) for i, box in enumerate(boxes)
         ]
 
     def __init__(
