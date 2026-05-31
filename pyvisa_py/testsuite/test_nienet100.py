@@ -291,9 +291,13 @@ def test_ibwrt_sends_header_and_payload_combined():
         t.join(timeout=2.0)
 
 
-def test_ibrd_reads_until_end_marker_and_consumes_final_status():
+def test_ibrd_with_data_consumes_prelim_data_end_and_final():
+    """Spec path: preliminary status, data chunks, END marker, final status."""
+    expected_frame = struct.pack(
+        "!BBHL4x", 0x16, 0x00, 0x0000, nienet100.DEFAULT_IBRD_TMO_MS
+    )
     script = [
-        ("recv", struct.pack("!BBHL4x", 0x16, 0x00, 0x0000, 0)),
+        ("recv", expected_frame),
         ("send", _status_ok()),  # preliminary status
         ("send", _chunk(0, b"WORLD\n")),
         ("send", _chunk(1, b"")),  # END
@@ -308,6 +312,52 @@ def test_ibrd_reads_until_end_marker_and_consumes_final_status():
     conn = _make_bound_connection(sock)
     try:
         assert conn.ibrd() == b"WORLD\n"
+    finally:
+        sock.close()
+        t.join(timeout=2.0)
+
+
+def test_ibrd_no_data_path_accepts_final_status_without_end_marker():
+    """No-data path: the bridge sends preliminary + final without an
+    intervening END marker. The parser must recognize the second
+    length-12 chunk as the final status by inspecting its body."""
+    expected_frame = struct.pack("!BBHL4x", 0x16, 0x00, 0x0000, 100)
+    script = [
+        ("recv", expected_frame),
+        ("send", _status_ok()),  # preliminary
+        ("send", _status_ok()),  # final directly, no END between
+    ]
+    sock, t = _run_scripted_peer(script)
+    conn = _make_bound_connection(sock)
+    try:
+        assert conn.ibrd(tmo_ms=100) == b""
+    finally:
+        sock.close()
+        t.join(timeout=2.0)
+
+
+def test_ibrd_no_data_path_propagates_error_status():
+    """No-data path with an error final status — STA_ERR must raise."""
+    expected_frame = struct.pack("!BBHL4x", 0x16, 0x00, 0x0000, 100)
+    error_status = _wrap_status(
+        struct.pack(
+            "!HH4xL",
+            nienet100.STA_ERR | nienet100.STA_CMPL,
+            nienet100.ERR_EABO,
+            0,
+        )
+    )
+    script = [
+        ("recv", expected_frame),
+        ("send", _status_ok()),  # preliminary
+        ("send", error_status),  # final with timeout
+    ]
+    sock, t = _run_scripted_peer(script)
+    conn = _make_bound_connection(sock)
+    try:
+        with pytest.raises(nienet100.NIEnet100IOError) as excinfo:
+            conn.ibrd(tmo_ms=100)
+        assert excinfo.value.err == nienet100.ERR_EABO
     finally:
         sock.close()
         t.join(timeout=2.0)
