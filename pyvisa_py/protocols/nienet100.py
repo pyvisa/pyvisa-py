@@ -15,8 +15,11 @@ All multi-byte fields are big-endian (network byte order).
 
 """
 
+import logging
 import struct
-from typing import Tuple
+from typing import Callable, Tuple
+
+LOGGER = logging.getLogger("pyvisa_py.protocols.nienet100")
 
 #: Main TCP port (synchronous request/response).
 PORT_MAIN = 5000
@@ -198,6 +201,75 @@ def parse_chunk_header(buf: bytes) -> Tuple[int, int]:
             % (CHUNK_HEADER_SIZE, len(buf))
         )
     return struct.unpack("!HH", buf)
+
+
+# --- Chunk reader -----------------------------------------------------------
+# Read responses are framed as: 12-B preliminary status header, then a stream
+# of payload chunks, then (typically) a 12-B final status header. The chunk
+# stream is stateful: chunks may be split across TCP segments and several
+# chunks may arrive in one segment. The caller drives recv via the
+# ``read_exactly`` callable so this layer is socket-agnostic and testable.
+
+
+def read_chunks_until_end(read_exactly: Callable[[int], bytes]) -> bytes:
+    """Consume a chunk stream until the END marker (flags=1).
+
+    Tolerates out-of-band signal chunks (flags=2) by reading and discarding
+    their single payload byte. Raises :class:`NIEnet100ProtocolError` for
+    unknown flag values.
+
+    Parameters
+    ----------
+    read_exactly : Callable[[int], bytes]
+        Reader returning exactly ``n`` bytes or raising on short read /
+        timeout. Pass a bound socket helper here.
+
+    Returns
+    -------
+    bytes
+        Concatenated payload of all data chunks (END chunk excluded).
+    """
+    payload = bytearray()
+    while True:
+        flags, length = parse_chunk_header(read_exactly(CHUNK_HEADER_SIZE))
+        if flags == CHUNK_FLAG_DATA:
+            if length:
+                payload.extend(read_exactly(length))
+        elif flags == CHUNK_FLAG_END:
+            if length != 0:
+                raise NIEnet100ProtocolError(
+                    "END chunk has non-zero length %d" % length
+                )
+            return bytes(payload)
+        elif flags == CHUNK_FLAG_SIGNAL:
+            # Defensive: per spec, a signal chunk carries exactly 1 OOB byte
+            # which we log and skip. Never observed in practice.
+            signal_byte = read_exactly(1)
+            LOGGER.debug("NI-ENET/100 signal byte received: 0x%02x", signal_byte[0])
+        else:
+            raise NIEnet100ProtocolError(
+                "unknown chunk flag 0x%04x (length=%d)" % (flags, length)
+            )
+
+
+def read_one_data_chunk(read_exactly: Callable[[int], bytes]) -> bytes:
+    """Read exactly one data chunk and return its payload.
+
+    Use this for verbs whose response carries a single fixed-size data chunk
+    and may omit the END marker (e.g. ``ibrsp`` returns a single STB byte).
+    Signal chunks (flags=2) are still tolerated.
+    """
+    while True:
+        flags, length = parse_chunk_header(read_exactly(CHUNK_HEADER_SIZE))
+        if flags == CHUNK_FLAG_DATA:
+            return read_exactly(length) if length else b""
+        elif flags == CHUNK_FLAG_SIGNAL:
+            signal_byte = read_exactly(1)
+            LOGGER.debug("NI-ENET/100 signal byte received: 0x%02x", signal_byte[0])
+        else:
+            raise NIEnet100ProtocolError(
+                "expected data chunk, got flags=0x%04x length=%d" % (flags, length)
+            )
 
 
 class NIEnet100Error(Exception):
