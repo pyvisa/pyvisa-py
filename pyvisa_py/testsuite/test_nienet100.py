@@ -106,9 +106,19 @@ def test_read_chunks_until_end_tolerates_signal_chunk():
     assert nienet100.read_chunks_until_end(_reader(blob)) == b"XY"
 
 
-def test_read_chunks_until_end_rejects_unknown_flag():
+def test_read_chunks_until_end_treats_unknown_zero_length_flag_as_terminator():
+    # Real hardware emits flag 0x0004 (length=0) on timeouts. Treating it
+    # as end-of-stream (rather than raising) lets the caller's subsequent
+    # status-header read carry the real error code.
+    blob = _chunk(0, b"PARTIAL") + b"\x00\x04\x00\x00"
+    assert nienet100.read_chunks_until_end(_reader(blob)) == b"PARTIAL"
+
+
+def test_read_chunks_until_end_rejects_unknown_flag_with_non_zero_length():
+    # Non-zero length on an unknown flag would desync the byte stream
+    # (we cannot tell how to consume the payload), so it still raises.
     with pytest.raises(nienet100.NIEnet100ProtocolError):
-        nienet100.read_chunks_until_end(_reader(b"\x00\x99\x00\x00"))
+        nienet100.read_chunks_until_end(_reader(b"\x00\x99\x00\x05" + b"XXXXX"))
 
 
 def test_read_chunks_until_end_rejects_end_with_payload():
