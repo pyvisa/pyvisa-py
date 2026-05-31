@@ -313,11 +313,15 @@ def test_ibrd_reads_until_end_marker_and_consumes_final_status():
         t.join(timeout=2.0)
 
 
-def test_ibrsp_returns_first_data_byte():
+def test_ibrsp_returns_stb_from_combined_chunk():
+    # The bridge packs the 12-byte status header and the 1-byte STB into
+    # one chunk with length=13: the status reports cnt=1 and the STB
+    # follows immediately after the cnt field.
+    status_body = struct.pack("!HH4xL", nienet100.STA_CMPL, 0, 1)
+    response = _chunk(0, status_body + b"\x42")
     script = [
         ("recv", nienet100.pack_command(0x19)),
-        ("send", _status_ok()),
-        ("send", _chunk(0, b"\x42")),
+        ("send", response),
     ]
     sock, t = _run_scripted_peer(script)
     conn = _make_bound_connection(sock)
