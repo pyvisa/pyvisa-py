@@ -164,12 +164,13 @@ class NIEnet100InstrSession(Session):
     """Session for ``GPIB<n>::<pad>[::<sad>]::INSTR`` routed through a
     GPIB-ENET/100 bridge.
 
-    This class is **not** decorated with ``@Session.register``. The regular
-    ``GPIBSession`` (linux-gpib / gpib-ctypes) owns the
-    ``(gpib, "INSTR")`` slot in the dispatch table. The dispatch hook in
-    :mod:`pyvisa_py.gpib` consults :attr:`_NIEnet100IntfcSession.boards`
-    and, if the resource's board number is registered there, instantiates
-    this class instead.
+    This class is **not** decorated with ``@Session.register`` directly.
+    The wrapping dispatcher at the bottom of this module owns the
+    ``(gpib, "INSTR")`` slot in the dispatch table — it consults
+    :attr:`_NIEnet100IntfcSession.boards` and instantiates this class
+    when the resource's board number is registered to a bridge, or
+    falls back to the previous dispatcher (linux-gpib / gpib-ctypes via
+    ``GPIBSessionDispatch``) otherwise.
 
     Each INSTR session owns its own :class:`EnetConnection` and its own
     bracket — INSTRs do not share TCP sockets with the INTFC or with one
@@ -391,3 +392,48 @@ def _map_iberr_to_status(iberr: int) -> StatusCode:
     if iberr == nienet100.ERR_ESAC:
         return StatusCode.error_nonsupported_operation
     return StatusCode.error_system_error
+
+
+# --- (gpib, INSTR) dispatch hook --------------------------------------------
+# Bridge dispatch lives here (not in gpib.py) so it works on systems where
+# gpib.py fails to import because neither linux-gpib nor gpib-ctypes is
+# installed — exactly the configuration most GPIB-ENET/100 users run.
+#
+# We save the previously registered dispatcher (GPIBSessionDispatch when
+# gpib.py loaded; ``None`` otherwise) and delegate to it when the resource's
+# board is not bound to a NIENET100 bridge. This keeps Prologix and
+# linux-gpib paths working unchanged.
+
+# Save and pop the existing registration (typically GPIBSessionDispatch from
+# gpib.py) so that @Session.register below does not log the "already
+# registered, overwriting" warning. Our overwrite is deliberate.
+_PREV_GPIB_INSTR_CLS = Session._session_classes.pop(
+    (constants.InterfaceType.gpib, "INSTR"), None
+)
+
+
+@Session.register(constants.InterfaceType.gpib, "INSTR")
+class _GPIBInstrDispatch(Session):
+    """Dispatch GPIB::INSTR resources, with NI GPIB-ENET/100 as a bridge."""
+
+    def __new__(  # type: ignore[misc]
+        cls,
+        resource_manager_session: VISARMSession,
+        resource_name: str,
+        parsed: Optional[rname.ResourceName] = None,
+        open_timeout: Optional[int] = None,
+    ) -> Session:
+        if parsed is None:
+            parsed = rname.parse_resource_name(resource_name)
+
+        if parsed.board in _NIEnet100IntfcSession.boards:
+            return NIEnet100InstrSession(
+                resource_manager_session, resource_name, parsed, open_timeout
+            )
+
+        if _PREV_GPIB_INSTR_CLS is not None:
+            return _PREV_GPIB_INSTR_CLS(
+                resource_manager_session, resource_name, parsed, open_timeout
+            )
+
+        raise OpenError(StatusCode.error_resource_not_found)

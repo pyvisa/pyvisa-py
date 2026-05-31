@@ -97,6 +97,13 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
     except Exception as e:
         LOGGER.debug("GPIBSession was not imported %s." % e)
 
+    try:
+        from . import nienet100
+
+        LOGGER.debug("NIEnet100TCPIPIntfcSession was correctly imported.")
+    except Exception as e:
+        LOGGER.debug("NIEnet100TCPIPIntfcSession was not imported %s." % e)
+
     @staticmethod
     def get_library_paths() -> Iterable[LibraryPath]:
         """List a dummy library path to allow to create the library."""
