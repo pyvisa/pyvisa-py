@@ -417,6 +417,13 @@ class EnetConnection:
         self.companion: Optional[socket.socket] = None
         self.wait: Optional[socket.socket] = None
         self.control: Optional[socket.socket] = None
+        # Tracks whether a Frame F bracket-open has been acked by the box
+        # without a matching Frame X close yet. Owned by _transact_bracket
+        # so failures between bracket-open and the session-layer marker
+        # (e.g., Frame G of open_gpib_session) still trigger a bracket
+        # close on the way out — otherwise the bridge leaks a session
+        # slot per such failure.
+        self._bracket_open: bool = False
 
     # --- lifecycle ------------------------------------------------------
 
@@ -474,13 +481,21 @@ class EnetConnection:
     def close(self) -> None:
         """Close every open socket. Idempotent.
 
-        If the wait socket was opened (and the async-register frame was
-        therefore sent), best-effort sends the 'O 4e' notify-off frame on
-        the control socket before tearing the sockets down. Without this
-        the box keeps the stale registration around for a short while.
-        Errors during cleanup are logged and swallowed so socket teardown
-        always runs.
+        If a Frame F bracket is currently open on the box, best-effort
+        sends the matching ``X 00 01`` bracket-close before tearing the
+        sockets down — otherwise the bridge leaks the session slot. This
+        runs unconditionally so error paths in higher layers cannot skip
+        it. If the wait socket was opened (and the async-register frame
+        was therefore sent), best-effort sends the 'O 4e' notify-off
+        frame on the control socket too. Errors during cleanup are
+        logged and swallowed so socket teardown always runs.
         """
+        if self._bracket_open and self.main is not None:
+            try:
+                self.close_gpib_session()
+            except Exception as e:
+                LOGGER.debug("bracket close during teardown failed: %s", e)
+
         if self.wait is not None and self.main is not None:
             try:
                 self.notify_off_async_device()
@@ -733,21 +748,27 @@ class EnetConnection:
     def close_gpib_session(self) -> None:
         """Close the operation bracket opened by :meth:`open_gpib_session`.
 
-        Sockets are not closed here — call :meth:`close` for that.
-        Safe to call if the bracket was never opened (errors are logged
-        and swallowed so socket cleanup always runs).
+        Sockets are not closed here — call :meth:`close` for that. No-op
+        when no bracket is currently open, so callers can invoke this on
+        any cleanup path without first probing state.
         """
-        if self.main is None:
+        if not self._bracket_open or self.main is None:
             return
         try:
             self._transact_bracket(enter=False)
         except (NIEnet100Error, OSError) as e:
             LOGGER.debug("error closing GPIB bracket: %s", e)
+            # Clear the flag even when the wire transact failed, so the
+            # subsequent close() does not re-attempt on a wedged socket.
+            self._bracket_open = False
 
     def _transact_bracket(self, enter: bool) -> None:
         # Wire bytes: 58 [01|00] 01 00*9
         frame = struct.pack("!BBB9x", 0x58, 0x01 if enter else 0x00, 0x01)
         self.transact_main(frame, "bracket %s" % ("open" if enter else "close"))
+        # Flip the flag only after the box acked the frame, so a failing
+        # open does not leave us thinking we owe a close, and vice-versa.
+        self._bracket_open = enter
 
 
 def _pack_property_set(prop_idx: int, value_byte: int) -> bytes:

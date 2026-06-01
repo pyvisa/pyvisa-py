@@ -212,12 +212,11 @@ class NIEnet100InstrSession(Session):
     parsed: rname.GPIBInstr
 
     #: The per-session bridge connection. ``None`` before ``after_parsing``
-    #: succeeds and after ``close``.
+    #: succeeds and after ``close``. Bracket lifecycle is tracked inside
+    #: the connection itself, so ``close()`` releases any open bracket
+    #: even when ``after_parsing`` fails mid-way (e.g., a wire error after
+    #: Frame F was acked).
     interface: Optional[nienet100.EnetConnection]
-
-    #: Set to True after open_gpib_session succeeds; gates close to avoid
-    #: sending a bracket-close on a connection that never opened a bracket.
-    _bracket_open: bool
 
     def __init__(
         self,
@@ -227,7 +226,6 @@ class NIEnet100InstrSession(Session):
         open_timeout: Optional[int] = None,
     ) -> None:
         self.interface = None
-        self._bracket_open = False
         super().__init__(resource_manager_session, resource_name, parsed, open_timeout)
 
     def after_parsing(self) -> None:
@@ -260,7 +258,6 @@ class NIEnet100InstrSession(Session):
                 if self.timeout
                 else nienet100.TMO_10s,
             )
-            self._bracket_open = True
         except Exception as e:
             LOGGER.exception(
                 "Failed to open GPIB-ENET/100 session to %s pad=%d sad=%d",
@@ -285,17 +282,14 @@ class NIEnet100InstrSession(Session):
 
     def _cleanup_interface(self) -> None:
         if self.interface is not None:
-            try:
-                if self._bracket_open:
-                    self.interface.close_gpib_session()
-            except Exception as e:
-                LOGGER.debug("error closing GPIB bracket on cleanup: %s", e)
+            # close() handles bracket cleanup internally based on the
+            # connection's own _bracket_open flag — no need to gate the
+            # call here.
             try:
                 self.interface.close()
             except Exception as e:
                 LOGGER.debug("error closing GPIB-ENET/100 connection: %s", e)
             self.interface = None
-            self._bracket_open = False
 
     def close(self) -> StatusCode:
         self._cleanup_interface()

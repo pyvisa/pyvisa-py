@@ -273,6 +273,7 @@ def _make_empty_connection() -> nienet100.EnetConnection:
     conn.host = "test-peer"
     conn._open_timeout = 1.0
     conn._timeout = 1.0
+    conn._bracket_open = False
     return conn
 
 
