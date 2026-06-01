@@ -24,7 +24,7 @@ import pyvisa
 from pyvisa import constants
 from pyvisa.errors import VisaIOError
 
-from . import HOST, IDN_VENDOR, PAD, SAD, require_bridge, require_instrument
+from . import HOST, IDN_VENDOR, PAD, SAD, TERM, require_bridge, require_instrument
 
 # Skip the entire module if the upstream pyvisa changes that NIENET100
 # depends on (InterfaceType.ni_enet100_tcpip + rname.NIEnet100TCPIPIntfc)
@@ -80,6 +80,8 @@ def inst(rm: pyvisa.ResourceManager, intfc):
         resource = "GPIB0::%d::%d::INSTR" % (PAD, SAD)
     session = rm.open_resource(resource)
     session.timeout = 3000
+    session.write_termination = TERM
+    session.read_termination = TERM
     try:
         yield session
     finally:
@@ -91,11 +93,21 @@ def inst(rm: pyvisa.ResourceManager, intfc):
 
 @require_bridge
 def test_list_resources_includes_bridge(rm: pyvisa.ResourceManager):
-    """Discovery via the resource manager should surface our bridge."""
-    resources = rm.list_resources()
-    matches = [r for r in resources if HOST in r and "NI-ENET100" in r]
-    assert matches, "no NI-ENET100 resource for %r in rm.list_resources() = %r" % (
+    """Discovery via the resource manager should surface our bridge.
+
+    The default pyvisa query is ``?*::INSTR``; pass ``?*::INTFC`` so our
+    bridge resource (an INTFC, not an INSTR) is not filtered out. Match
+    by resolved IP because discovery emits IPs while ``HOST`` may be a
+    hostname.
+    """
+    import socket as _socket
+
+    host_ip = _socket.gethostbyname(HOST)
+    resources = rm.list_resources("?*::INTFC")
+    matches = [r for r in resources if host_ip in r and "NI-ENET100" in r]
+    assert matches, "no NI-ENET100 resource for %r (%s) in rm.list_resources() = %r" % (
         HOST,
+        host_ip,
         resources,
     )
 

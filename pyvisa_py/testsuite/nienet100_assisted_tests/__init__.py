@@ -19,6 +19,12 @@ variables:
     A substring that must appear in the instrument's ``*IDN?`` response
     — gives the IDN round-trip test a meaningful assertion when set.
 
+* ``PYVISA_TEST_GPIB_TERM`` (optional)
+    Write/read termination as a Python escape sequence, e.g. ``\\n`` (the
+    default) or ``\\r\\n``. Many older GPIB instruments do not accept
+    ``\\r\\n`` (pyvisa's library default), so the assisted tests use
+    ``\\n`` unless this variable overrides it.
+
 :copyright: 2026 by PyVISA-py Authors, see AUTHORS for more details.
 :license: MIT, see LICENSE for more details.
 
@@ -42,6 +48,11 @@ SAD: Optional[int] = int(_sad_env) if _sad_env else None
 
 #: Optional substring that must appear in the ``*IDN?`` response.
 IDN_VENDOR: Optional[str] = os.environ.get("PYVISA_TEST_IDN_VENDOR") or None
+
+#: Write/read termination string for the assisted instrument tests.
+#: Defaults to ``\n`` rather than pyvisa's library default of ``\r\n``
+#: because many GPIB instruments reject the ``\r``.
+TERM: str = (os.environ.get("PYVISA_TEST_GPIB_TERM") or "\\n").encode().decode("unicode_escape")
 
 
 #: Skip a test when no bridge is configured.
