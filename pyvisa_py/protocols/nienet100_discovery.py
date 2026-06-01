@@ -9,8 +9,6 @@ factory-reset box that does not yet have a known IP. Default port is
 subnets when the box IP is known in advance. All frames are exactly
 184 bytes wrapped in an ``ED ... NI`` magic sandwich.
 
-Wire reference: ``work/GPIB-ENET-100_Protocol.md`` section 2.
-
 This module only handles frame encoding/decoding; the UDP socket loop
 lives in :func:`discover` (added in a later commit).
 

@@ -181,10 +181,9 @@ def test_timeout_surfaces_as_iberr_eabo(
     surfaces as NIEnet100IOError with iberr=EABO (6).
 
     Uses ibrd's per-call ``tmo_ms`` argument rather than the IbcTMO
-    property setter: per spec section 3.11 the bridge rejects several
-    property writes (PAD/SAD, and in practice IbcTMO too) once a
-    bracket is open, so the in-frame override is the only mid-session
-    way to test a short timeout.
+    property setter: the bridge rejects several property writes (PAD/SAD,
+    and in practice IbcTMO too) once a bracket is open, so the in-frame
+    override is the only mid-session way to test a short timeout.
     """
     started = time.monotonic()
     with pytest.raises(nienet100.NIEnet100IOError) as excinfo:
