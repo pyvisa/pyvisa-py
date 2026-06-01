@@ -61,7 +61,7 @@ class _NIEnet100IntfcSession(Session):
     for the session lifetime. The connection acts as a connectivity sentinel
     (the box rejects Device-I/O on stale sessions, so an open socket is a
     reliable health signal). INSTR sessions do **not** share this connection;
-    they each open their own — per the wire spec's recommendation.
+    they each open their own.
     """
 
     #: Maps board number (as parsed string) -> INTFC session instance.
