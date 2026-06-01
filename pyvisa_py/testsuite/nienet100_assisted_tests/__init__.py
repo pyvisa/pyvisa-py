@@ -52,7 +52,9 @@ IDN_VENDOR: Optional[str] = os.environ.get("PYVISA_TEST_IDN_VENDOR") or None
 #: Write/read termination string for the assisted instrument tests.
 #: Defaults to ``\n`` rather than pyvisa's library default of ``\r\n``
 #: because many GPIB instruments reject the ``\r``.
-TERM: str = (os.environ.get("PYVISA_TEST_GPIB_TERM") or "\\n").encode().decode("unicode_escape")
+TERM: str = (
+    (os.environ.get("PYVISA_TEST_GPIB_TERM") or "\\n").encode().decode("unicode_escape")
+)
 
 
 #: Skip a test when no bridge is configured.
