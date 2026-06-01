@@ -388,16 +388,22 @@ class NIEnet100InstrSession(Session):
     def _set_timeout(self, attribute: ResourceAttribute, value: int) -> StatusCode:
         status = super()._set_timeout(attribute, value)
         if self.interface is not None:
-            # Wire-level IbcTMO is a discrete code; socket-level timeout is
-            # a hard ceiling that should be slightly larger than the box
-            # timeout so the box always reports its own timeout first.
+            # The bridge rejects the IbcTMO property setter ('P 03') once a
+            # bracket is open, so the wire-level timeout is delivered via
+            # the per-call tmo_ms argument of ibrd (see read() below). The
+            # socket-level timeout is a hard ceiling above the wire timeout
+            # so the bridge always surfaces its own timeout first.
+            #
+            # The bridge has a built-in minimum delay (observed ~3 s
+            # against a real GPIB-ENET/100) before it reports a timeout to
+            # the host, regardless of the per-call tmo_ms value, so the
+            # socket ceiling needs generous headroom above the configured
+            # wire timeout. Without it, short pyvisa timeouts (e.g. 200 ms)
+            # trip the socket before the bridge ever responds.
             if self.timeout is None:
                 self.interface.set_socket_timeout(None)
-                self.interface.set_io_timeout(nienet100.TMO_NONE)
             else:
-                tmo_code = nienet100.seconds_to_tmo_code(self.timeout)
-                self.interface.set_io_timeout(tmo_code)
-                self.interface.set_socket_timeout(self.timeout + 1.0)
+                self.interface.set_socket_timeout(max(self.timeout + 5.0, 8.0))
         return status
 
     def _get_attribute(self, attribute: ResourceAttribute) -> Tuple[Any, StatusCode]:
