@@ -370,9 +370,12 @@ class NIEnet100InstrSession(Session):
         return stb, StatusCode.success
 
     def gpib_control_ren(self, mode: constants.RENLineOperation) -> StatusCode:
-        # ibloc covers VI_GPIB_REN_DEASSERT_GTL (Go-To-Local). Other REN
-        # operations require board-level verbs (ibsre/ibsic) that are not
-        # yet implemented in the wire layer — TODO once those land.
+        # ibloc covers VI_GPIB_REN_DEASSERT_GTL (Go-To-Local). The remaining
+        # six REN modes (assert/deassert REN, with optional address and/or
+        # LLO) need an ibsre verb that drives the REN line; that wire frame
+        # is not yet reverse-engineered, so they currently surface as
+        # error_nonsupported_operation (the documented pyvisa contract for
+        # backends that cannot honour a given REN mode).
         if mode != constants.VI_GPIB_REN_DEASSERT_GTL:
             return StatusCode.error_nonsupported_operation
         if self.interface is None:
