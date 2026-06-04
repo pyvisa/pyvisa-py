@@ -3,8 +3,8 @@
 
 Drives the bridge through the full pyvisa stack: a ``ResourceManager``
 opens the ``NI-ENET100-TCPIP::INTFC`` interface, then a
-``GPIB<n>::<pad>::INSTR`` is dispatched via the wrap-dispatcher in
-``pyvisa_py.nienet100`` to ``NIEnet100InstrSession``. This requires the
+``GPIB<n>::<pad>::INSTR`` is routed by the central dispatcher in
+``pyvisa_py.gpib_dispatch`` to ``NIEnet100InstrSession``. This requires the
 ``InterfaceType.ni_enet100_tcpip`` and ``NIEnet100TCPIPIntfc`` additions
 in upstream pyvisa — when those are missing, the whole module skips
 cleanly.
@@ -16,13 +16,14 @@ See the package ``__init__`` docstring for environment-variable setup.
 
 """
 
-from typing import Iterator
+from typing import Iterator, cast
 
 import pytest
 
 import pyvisa
 from pyvisa import constants
 from pyvisa.errors import VisaIOError
+from pyvisa.resources import MessageBasedResource
 
 from . import HOST, IDN_VENDOR, PAD, SAD, TERM, require_bridge, require_instrument
 
@@ -76,11 +77,14 @@ def inst(rm: pyvisa.ResourceManager, intfc):
     default; tests that need a different value override it directly.
 
     """
+    # Guaranteed non-None by require_instrument, but assert so the type
+    # checker can narrow the env-configured Optionals.
+    assert PAD is not None
     if SAD is None:
         resource = "GPIB0::%d::INSTR" % PAD
     else:
         resource = "GPIB0::%d::%d::INSTR" % (PAD, SAD)
-    session = rm.open_resource(resource)
+    session = cast(MessageBasedResource, rm.open_resource(resource))
     session.timeout = 3000
     session.write_termination = TERM
     session.read_termination = TERM
@@ -105,6 +109,7 @@ def test_list_resources_includes_bridge(rm: pyvisa.ResourceManager):
     """
     import socket as _socket
 
+    assert HOST is not None  # require_bridge guarantees this
     host_ip = _socket.gethostbyname(HOST)
     resources = rm.list_resources("?*::INTFC")
     matches = [r for r in resources if host_ip in r and "NI-ENET100" in r]

@@ -53,6 +53,7 @@ def _resolve_host_ip() -> str:
     ``HOST`` as-is when DNS resolution fails (e.g. NetBIOS-only names on
     a locked-down Windows box) so the test surfaces a meaningful diff
     rather than a gaierror."""
+    assert HOST is not None  # callers run only under require_bridge
     try:
         return socket.gethostbyname(HOST)
     except socket.gaierror:
@@ -118,6 +119,7 @@ def opened_session() -> Iterator[nienet100.EnetConnection]:
     failing test does not leave stale state on the bridge.
 
     """
+    assert HOST is not None and PAD is not None  # require_instrument guards
     conn = nienet100.EnetConnection(HOST, open_timeout=5.0, timeout=5.0)
     conn.open()
     try:
