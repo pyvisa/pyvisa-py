@@ -19,10 +19,11 @@ library, so it can own the slot even when ``gpib.py`` fails to import.
 
 """
 
-from typing import Callable, List, Optional, Tuple, Type
+from typing import Callable, List, Optional, Tuple, Type, cast
 
 from pyvisa import constants, rname
 from pyvisa.constants import StatusCode
+from pyvisa.rname import GPIBInstr
 from pyvisa.typing import VISARMSession
 
 from .common import LOGGER
@@ -30,8 +31,10 @@ from .sessions import OpenError, Session, UnavailableSession
 
 #: A resolver inspects a parsed resource name and returns the session class
 #: that should handle it, or ``None`` if the resource is not served by this
-#: backend (e.g. the board number is not registered to it).
-GPIBInstrResolver = Callable[[rname.ResourceName], Optional[Type[Session]]]
+#: backend (e.g. the board number is not registered to it). Resources reach
+#: this dispatcher only via the ``(gpib, "INSTR")`` slot, so the parsed name
+#: is always a :class:`~pyvisa.rname.GPIBInstr`.
+GPIBInstrResolver = Callable[[GPIBInstr], Optional[Type[Session]]]
 
 #: Registered backends as ``(priority, label, resolver)``. Lower priority
 #: values are consulted first; :func:`register_backend` keeps the list
@@ -82,9 +85,11 @@ class GPIBInstrDispatch(Session):
     ) -> Session:
         if parsed is None:
             parsed = rname.parse_resource_name(resource_name)
+        # Registered only for (gpib, INSTR), so the parsed name is a GPIBInstr.
+        gpib_parsed = cast(GPIBInstr, parsed)
 
         for _priority, _label, resolve in _GPIB_INSTR_BACKENDS:
-            newcls = resolve(parsed)
+            newcls = resolve(gpib_parsed)
             if newcls is not None:
                 return newcls(
                     resource_manager_session, resource_name, parsed, open_timeout
@@ -136,7 +141,7 @@ def _board_resolver(boards: dict, session_cls: Type[Session]) -> GPIBInstrResolv
 
     """
 
-    def resolve(parsed: rname.ResourceName) -> Optional[Type[Session]]:
+    def resolve(parsed: GPIBInstr) -> Optional[Type[Session]]:
         return session_cls if parsed.board in boards else None
 
     return resolve
