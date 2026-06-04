@@ -102,9 +102,7 @@ def test_constructor_args_forwarded_unchanged(clean_registry):
 
     class Fake:
         def __init__(self, rm, name, parsed, open_timeout):
-            captured.update(
-                rm=rm, name=name, parsed=parsed, open_timeout=open_timeout
-            )
+            captured.update(rm=rm, name=name, parsed=parsed, open_timeout=open_timeout)
 
     gpib_dispatch.register_backend(lambda p: Fake, priority=0)
 
@@ -194,9 +192,7 @@ def test_register_builtin_backends_is_idempotent_and_ordered(clean_registry):
     assert labels[-1] == "gpib"
     # Pure-Python backends are always available and out-rank native; the
     # bridge out-ranks Prologix.
-    assert labels.index("ni-enet100") < labels.index("prologix") < labels.index(
-        "gpib"
-    )
+    assert labels.index("ni-enet100") < labels.index("prologix") < labels.index("gpib")
     assert dict(zip(labels, priorities))["ni-enet100"] == gpib_dispatch._PRIORITY_BRIDGE
 
 
@@ -222,7 +218,9 @@ def test_bridge_out_ranks_prologix_for_shared_board(clean_registry):
         label="prologix",
     )
 
-    obj = gpib_dispatch.GPIBInstrDispatch(object(), "GPIB0::1::INSTR", parsed=_Parsed("0"))
+    obj = gpib_dispatch.GPIBInstrDispatch(
+        object(), "GPIB0::1::INSTR", parsed=_Parsed("0")
+    )
     assert isinstance(obj, Bridge)
 
 
