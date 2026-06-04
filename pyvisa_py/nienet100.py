@@ -218,6 +218,10 @@ class NIEnet100InstrSession(Session):
         open_timeout: Optional[int] = None,
     ) -> None:
         self.interface = None
+        #: Holds the tail of a wire message for which the caller's max-count was
+        #: too small to consume. The next read() drains this before going
+        #: back to the wire, so no bytes are lost between calls.
+        self._read_buffer = bytearray()
         super().__init__(resource_manager_session, resource_name, parsed, open_timeout)
 
     def after_parsing(self) -> None:
@@ -282,6 +286,9 @@ class NIEnet100InstrSession(Session):
             except Exception as e:
                 LOGGER.debug("error closing GPIB-ENET/100 connection: %s", e)
             self.interface = None
+        # Discard any buffered-but-unread response so it cannot leak into a
+        # subsequent session that reuses this object.
+        self._read_buffer.clear()
 
     def close(self) -> StatusCode:
         self._cleanup_interface()
@@ -301,34 +308,48 @@ class NIEnet100InstrSession(Session):
     def read(self, count: int) -> Tuple[bytes, StatusCode]:
         if self.interface is None:
             return b"", StatusCode.error_connection_lost
-        # Propagate the pyvisa session timeout to the wire-level ibrd as
-        # tmo_ms. self.timeout is in seconds; None means infinite (no
-        # ceiling) — fall back to the wire layer's default in that case.
-        if self.timeout is None:
-            tmo_ms = nienet100.DEFAULT_IBRD_TMO_MS
-        else:
-            tmo_ms = max(int(self.timeout * 1000), 1)
-        try:
-            data = self.interface.ibrd(tmo_ms=tmo_ms)
-        except nienet100.NIEnet100IOError as e:
-            return b"", _map_iberr_to_status(e.err)
 
-        # The wire-level ibrd always reads the full message (until EOI/EOS);
-        # truncate here if the caller's max-count is smaller. Extra bytes
-        # are dropped — ibrd has no resume semantics, so a caller that
-        # supplied too small a count loses the tail.
-        if len(data) > count:
-            return bytes(data[:count]), StatusCode.success_max_count_read
+        # The wire-level ibrd always reads a whole message (until EOI/EOS).
+        # We cache it here and hand it out in <= count-byte slices, keeping
+        # any remainder for the next call — this is what lets a caller read
+        # a response one byte at a time without losing the tail.
+        if not self._read_buffer:
+            # Propagate the pyvisa session timeout to the wire-level ibrd as
+            # tmo_ms. self.timeout is in seconds; None means infinite (no
+            # ceiling) — fall back to the wire layer's default in that case.
+            if self.timeout is None:
+                tmo_ms = nienet100.DEFAULT_IBRD_TMO_MS
+            else:
+                tmo_ms = max(int(self.timeout * 1000), 1)
+            try:
+                self._read_buffer.extend(self.interface.ibrd(tmo_ms=tmo_ms))
+            except nienet100.NIEnet100IOError as e:
+                return b"", _map_iberr_to_status(e.err)
+
+        # More remains buffered than requested: hand back exactly `count`
+        # bytes and keep the rest. Per VISA this is success_max_count_read.
+        if count < len(self._read_buffer):
+            chunk = bytes(self._read_buffer[:count])
+            del self._read_buffer[:count]
+            return chunk, StatusCode.success_max_count_read
+
+        # The caller's count covers the rest of the message; drain the
+        # buffer and report end-of-message (termination char or success).
+        chunk = bytes(self._read_buffer)
+        self._read_buffer.clear()
 
         term_char, _ = self.get_attribute(ResourceAttribute.termchar)
         term_en, _ = self.get_attribute(ResourceAttribute.termchar_enabled)
-        if term_en and term_char is not None and data and data[-1] == term_char:
-            return bytes(data), StatusCode.success_termination_character_read
-        return bytes(data), StatusCode.success
+        if term_en and term_char is not None and chunk and chunk[-1] == term_char:
+            return chunk, StatusCode.success_termination_character_read
+        return chunk, StatusCode.success
 
     def clear(self) -> StatusCode:
         if self.interface is None:
             return StatusCode.error_connection_lost
+        # Drop any buffered-but-unread response: after a device clear the old
+        # tail is stale and must not leak into the next read().
+        self._read_buffer.clear()
         try:
             self.interface.ibclr()
         except nienet100.NIEnet100IOError as e:
