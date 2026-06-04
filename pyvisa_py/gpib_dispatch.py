@@ -217,8 +217,6 @@ def register_builtin_backends() -> None:
         native_cls: Type[Session] = _make_native_unavailable(e)
     else:
         native_cls = GPIBSession
-    register_backend(
-        lambda parsed: native_cls, priority=_PRIORITY_NATIVE, label="gpib"
-    )
+    register_backend(lambda parsed: native_cls, priority=_PRIORITY_NATIVE, label="gpib")
 
     _builtins_registered = True
