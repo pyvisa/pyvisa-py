@@ -946,7 +946,7 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
         except KeyError:
             return (
                 in_event_type,
-                0,
+                VISAEventContext(0),
                 self.handle_return_value(session, StatusCode.error_invalid_object),
             )
 
@@ -955,10 +955,10 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
         if ctx is None:
             return (
                 in_event_type,
-                0,
+                VISAEventContext(0),
                 self.handle_return_value(session, StatusCode.error_timeout),
             )
-        return ctx.event_type, ctx.context_id, StatusCode.success
+        return ctx.event_type, VISAEventContext(ctx.context_id), StatusCode.success
 
     def install_handler(
         self,
