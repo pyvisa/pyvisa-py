@@ -27,11 +27,14 @@ def clean_registry():
 
     """
     saved = list(gpib_dispatch._GPIB_INSTR_BACKENDS)
+    saved_flag = gpib_dispatch._builtins_registered
     gpib_dispatch._GPIB_INSTR_BACKENDS.clear()
+    gpib_dispatch._builtins_registered = False
     try:
         yield gpib_dispatch._GPIB_INSTR_BACKENDS
     finally:
         gpib_dispatch._GPIB_INSTR_BACKENDS[:] = saved
+        gpib_dispatch._builtins_registered = saved_flag
 
 
 class _Recorder:
@@ -130,3 +133,63 @@ def test_resource_name_parsed_when_not_supplied(clean_registry):
     # The dispatcher parsed the string into a resource object for us.
     assert seen["parsed"] is not None
     assert str(seen["parsed"].board) == "0"
+
+
+class _Parsed:
+    """Minimal stand-in for a parsed GPIB resource carrying only ``board``."""
+
+    def __init__(self, board):
+        self.board = board
+
+
+def test_board_resolver_claims_only_registered_boards():
+    class Sentinel:
+        pass
+
+    boards = {"1": object()}
+    resolve = gpib_dispatch._board_resolver(boards, Sentinel)
+
+    assert resolve(_Parsed("1")) is Sentinel
+    assert resolve(_Parsed("2")) is None
+
+
+def test_board_resolver_sees_boards_registered_after_wiring():
+    class Sentinel:
+        pass
+
+    boards = {}
+    resolve = gpib_dispatch._board_resolver(boards, Sentinel)
+
+    # Board not present yet ...
+    assert resolve(_Parsed("0")) is None
+    # ... an INTFC session registers it later, by reference.
+    boards["0"] = object()
+    assert resolve(_Parsed("0")) is Sentinel
+
+
+def test_native_unavailable_raises_actionable_error_on_open():
+    cls = gpib_dispatch._make_native_unavailable(ImportError("no gpib lib"))
+
+    with pytest.raises(ValueError) as info:
+        cls(object(), "GPIB0::1::INSTR", _Parsed("0"), None)
+    assert "gpib-ctypes" in str(info.value)
+
+
+def test_register_builtin_backends_is_idempotent_and_ordered(clean_registry):
+    gpib_dispatch.register_builtin_backends()
+    after_first = list(clean_registry)
+    gpib_dispatch.register_builtin_backends()
+    after_second = list(clean_registry)
+
+    # Idempotent: a second call adds nothing.
+    assert after_first == after_second
+
+    priorities = [priority for priority, _label, _resolve in after_first]
+    labels = [label for _priority, label, _resolve in after_first]
+
+    # Native is the catch-all and must be wired last (highest priority value).
+    assert priorities == sorted(priorities)
+    assert priorities[-1] == gpib_dispatch._PRIORITY_NATIVE
+    assert labels[-1] == "gpib"
+    # Prologix is always available (pure-Python) and out-ranks native.
+    assert "prologix" in labels
