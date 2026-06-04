@@ -99,6 +99,7 @@ class GPIBInstrDispatch(Session):
 # Priorities: lower values are consulted first. A backend bound to specific
 # boards (Prologix, NI-ENET/100 bridge) must out-rank the native driver,
 # which is the catch-all fallback and therefore comes last.
+_PRIORITY_BRIDGE = 10
 _PRIORITY_PROLOGIX = 20
 _PRIORITY_NATIVE = 100
 
@@ -153,6 +154,22 @@ def register_builtin_backends() -> None:
     global _builtins_registered
     if _builtins_registered:
         return
+
+    # NI GPIB-ENET/100 bridge: claims boards bound to a bridge INTFC. Highest
+    # precedence so a board registered to a bridge is never shadowed.
+    try:
+        from . import nienet100
+    except Exception as e:
+        LOGGER.debug("NI-ENET/100 GPIB::INSTR backend not registered: %s", e)
+    else:
+        register_backend(
+            _board_resolver(
+                nienet100._NIEnet100IntfcSession.boards,
+                nienet100.NIEnet100InstrSession,
+            ),
+            priority=_PRIORITY_BRIDGE,
+            label="ni-enet100",
+        )
 
     # Prologix controller: claims boards bound to a Prologix interface.
     try:
