@@ -199,6 +199,7 @@ def _run_scripted_peer(script: List[ScriptStep]):
 
     On ``recv`` steps the thread asserts the exact bytes the client sent;
     on ``send`` steps it pushes bytes to the client.
+
     """
     a, b = socket.socketpair()
 
@@ -237,6 +238,7 @@ def _wrap_status(body: bytes) -> bytes:
     Every status header the bridge emits is delivered as a data chunk
     (flags=0, length=12); the scripted peer must therefore prepend the
     chunk header for the bridge driver to read aligned.
+
     """
     return struct.pack("!HH", 0, 12) + body
 

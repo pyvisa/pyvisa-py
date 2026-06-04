@@ -177,6 +177,7 @@ def _make_fake_socket(recv_script):
     Each script item is either ``bytes`` (returned as ``(data, ("peer", 0))``)
     or an Exception (raised). After the script is exhausted, recvfrom raises
     socket.timeout to terminate the discover loop.
+
     """
     fake = mock.MagicMock(spec=socket.socket)
 

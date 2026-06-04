@@ -130,6 +130,7 @@ def seconds_to_tmo_code(timeout: float) -> int:
 
     Values larger than ``TIMETABLE[-1]`` are clamped to ``TMO_1000s``.
     ``None`` or ``0`` map to ``TMO_NONE``.
+
     """
     if not timeout:
         return TMO_NONE
@@ -167,6 +168,7 @@ def pack_command(
 
     All fields default to 0. Unused fields **must** stay zero — the box
     accepts non-zeroed buffers only inconsistently.
+
     """
     return struct.pack(_COMMAND_FRAME_FMT, cmd_id, b1, w1, w2, w3, dw)
 
@@ -185,6 +187,7 @@ def parse_status_header(buf: bytes) -> Tuple[int, int, int]:
 
     ``err`` is only meaningful when ``sta & STA_ERR`` is set; otherwise it
     may carry sentinel values such as 0xFFFF that the caller must ignore.
+
     """
     if len(buf) != STATUS_HEADER_SIZE:
         raise ValueError(
@@ -238,6 +241,7 @@ def read_chunks_until_end(read_exactly: Callable[[int], bytes]) -> bytes:
     -------
     bytes
         Concatenated payload of all data chunks (END chunk excluded).
+
     """
     payload = bytearray()
     while True:
@@ -278,6 +282,7 @@ def read_one_data_chunk(read_exactly: Callable[[int], bytes]) -> bytes:
     Use this for verbs whose response carries a single fixed-size data chunk
     and may omit the END marker (e.g. ``ibrsp`` returns a single STB byte).
     Signal chunks (flags=2) are still tolerated.
+
     """
     while True:
         flags, length = parse_chunk_header(read_exactly(CHUNK_HEADER_SIZE))
@@ -300,6 +305,7 @@ def read_status_chunk(read_exactly: Callable[[int], bytes]) -> Tuple[int, int, i
     "raw" 12-byte status read on the wire. Callers must use this helper
     rather than reading 12 bytes directly, or successive operations will
     accumulate a 4-byte misalignment per status read.
+
     """
     body = read_one_data_chunk(read_exactly)
     if len(body) != STATUS_HEADER_SIZE:
@@ -327,6 +333,7 @@ class NIEnet100IOError(NIEnet100Error):
         Raw ``ibsta`` bitmask from the status header.
     err : int
         Raw ``iberr`` code from the status header.
+
     """
 
     def __init__(self, sta: int, err: int, operation: str = ""):
@@ -355,6 +362,7 @@ def _u32_from_ip(ip: str) -> int:
     The result is meant to be re-emitted via ``struct.pack('!L', ...)``,
     which puts the high byte first on the wire — matching the box's
     convention (e.g. 192.0.2.5 -> ``c0 00 02 05``).
+
     """
     return int.from_bytes(socket.inet_aton(ip), "big")
 
@@ -396,6 +404,7 @@ class EnetConnection:
     control : Optional[socket.socket]
         The control socket for 'O' verbs; ``None`` until
         :meth:`ensure_control_socket`.
+
     """
 
     #: Companion-hello flag word for device-mode sessions (single resource).
@@ -454,6 +463,7 @@ class EnetConnection:
         Requires the main socket to be open (the async-register frame
         carries the main socket's ``getsockname()`` so the box can match
         SRQs back to the session).
+
         """
         if self.wait is not None:
             return
@@ -473,6 +483,7 @@ class EnetConnection:
         """Open port 5005. No setup frames — first 'O' verb carries its own.
 
         Idempotent.
+
         """
         if self.control is not None:
             return
@@ -489,6 +500,7 @@ class EnetConnection:
         was therefore sent), best-effort sends the 'O 4e' notify-off
         frame on the control socket too. Errors during cleanup are
         logged and swallowed so socket teardown always runs.
+
         """
         if self._bracket_open and self.main is not None:
             try:
@@ -518,6 +530,7 @@ class EnetConnection:
 
         Use ``None`` for blocking without timeout. The value is cached so
         sockets opened later (wait/control) pick up the same setting.
+
         """
         self._timeout = timeout
         for sock in (self.main, self.companion, self.wait, self.control):
@@ -557,6 +570,7 @@ class EnetConnection:
         for diagnosing wire-protocol surprises against real hardware. Set
         ``--log-cli-level=DEBUG`` on pytest to see the dumps, or attach a
         handler to ``pyvisa_py.protocols.nienet100`` in your own code.
+
         """
         if self.main is None:
             raise NIEnet100Error("main socket is not open")
@@ -570,6 +584,7 @@ class EnetConnection:
 
         At DEBUG log level the bytes sent are hex-dumped — see
         :meth:`recv_main_exactly` for details.
+
         """
         if self.main is None:
             raise NIEnet100Error("main socket is not open")
@@ -586,6 +601,7 @@ class EnetConnection:
 
         Raises :class:`NIEnet100IOError` if the status header has ``STA_ERR``
         set. Returns ``(sta, err, cnt)`` on success.
+
         """
         self.send_main(frame)
         sta, err, cnt = self.read_status_main()
@@ -601,6 +617,7 @@ class EnetConnection:
         Sub-op layout: ``55 02 [htons(flags)] 00 00 [htons(port)] [ip:4]``.
         ``port``/``ip`` are ``getsockname()`` of the companion socket — the
         box does not validate the values, so NAT'd addresses are fine.
+
         """
         if self.companion is None:
             raise NIEnet100Error("companion socket is not open")
@@ -626,6 +643,7 @@ class EnetConnection:
         ``port``/``ip`` come from the **main** socket's ``getsockname()``
         — the box uses that address to identify the session whose async
         events should surface on ``wait_sock``.
+
         """
         assert self.main is not None  # caller guarantees this
         main_ip, main_port = self.main.getsockname()
@@ -648,6 +666,7 @@ class EnetConnection:
         Same property frame as Frame D of the open sequence; the wait
         socket needs its own confirmation that the bracket is online
         before the box will accept ibwait polls.
+
         """
         wait_sock.sendall(_pack_property_set(0x10, 0x01))
         sta, err, _cnt = read_status_chunk(lambda n: self._recv_exactly(wait_sock, n))
@@ -696,6 +715,7 @@ class EnetConnection:
             Frame-E event-queue depth. Default ``0x0b`` (= 11).
         mode_byte : int
             Frame-B mode byte. ``0`` is standard.
+
         """
         # Frame A: SetConfig with SC bit and target address.
         # Wire bytes: 07 02 00 01 [PAD] [SAD] 00 00 [tmo] 00 04 00
@@ -751,6 +771,7 @@ class EnetConnection:
         Sockets are not closed here — call :meth:`close` for that. No-op
         when no bracket is currently open, so callers can invoke this on
         any cleanup path without first probing state.
+
         """
         if not self._bracket_open or self.main is None:
             return
@@ -775,6 +796,7 @@ def _pack_property_set(prop_idx: int, value_byte: int) -> bytes:
     """Build a 'P' property-set frame (0x50).
 
     Wire layout: ``50 [prop_idx] [value_byte] 00*9``.
+
     """
     return struct.pack("!BBB9x", 0x50, prop_idx, value_byte)
 
@@ -787,6 +809,7 @@ def _pack_o_verb(sub_op: int, leading_u16: int, ip_u32: int, port: int) -> bytes
     Used by ibsic, notify-off-async-board, notify-off-async-device, and
     ibwait re-arm. Note that the layout differs from 'U' verbs (which put
     port before ip); the inconsistency is part of the wire protocol.
+
     """
     return struct.pack("!BBHLH2x", 0x4F, sub_op, leading_u16, ip_u32, port)
 
@@ -808,6 +831,7 @@ def _ibwrt(self: EnetConnection, data: bytes) -> int:
     unpadded length.
 
     Returns the number of bytes the box reports as transferred.
+
     """
     byte_count = len(data)
     # Frame: 62 00 00 00 [htonl(byte_count):4] 00 00 00 00
@@ -854,6 +878,7 @@ def _ibrd(self: EnetConnection, tmo_ms: int = DEFAULT_IBRD_TMO_MS) -> bytes:
       by inspecting the body of each candidate-data chunk: a 12-byte
       chunk whose body parses as a status header with CMPL/ERR/END/TIMO
       bits set is the final status, not data.
+
     """
     # Frame: 16 00 00 00 [htonl(tmo_ms):4] 00 00 00 00
     frame = struct.pack("!BBHL4x", 0x16, 0x00, 0x0000, tmo_ms)
@@ -917,6 +942,7 @@ def _ibclr(self: EnetConnection) -> None:
     """Clear the addressed device.
 
     Wire layout: ``04 00*11``.
+
     """
     self.transact_main(pack_command(0x04), "ibclr")
 
@@ -925,6 +951,7 @@ def _ibtrg(self: EnetConnection) -> None:
     """Assert the device trigger on the addressed device.
 
     Wire layout: ``20 00*11``.
+
     """
     self.transact_main(pack_command(0x20), "ibtrg")
 
@@ -933,6 +960,7 @@ def _ibloc(self: EnetConnection) -> None:
     """Send go-to-local to the addressed device.
 
     Wire layout: ``10 00*11``.
+
     """
     self.transact_main(pack_command(0x10), "ibloc")
 
@@ -946,6 +974,7 @@ def _ibrsp(self: EnetConnection) -> int:
     verbs that the status header always comes alone do not apply here —
     ibrsp is special in that the response payload is glued to the status
     inside the same chunk.
+
     """
     self.send_main(pack_command(0x19))
     chunk = read_one_data_chunk(self.recv_main_exactly)
@@ -967,6 +996,7 @@ def _set_io_timeout(self: EnetConnection, tmo_code: int) -> None:
 
     ``tmo_code`` is a discrete NI-488.2 timeout index, not milliseconds —
     use :func:`seconds_to_tmo_code` to convert.
+
     """
     self.transact_main(_pack_property_set(0x03, tmo_code), "set IbcTMO")
 
@@ -978,6 +1008,7 @@ def _transact_main_status(
 
     Sibling of :meth:`EnetConnection.transact_main` for verbs that have
     already sent their frame (and any payload) via :meth:`send_main`.
+
     """
     sta, err, cnt = self.read_status_main()
     if sta & STA_ERR:
@@ -993,6 +1024,7 @@ def _ibsic(self: EnetConnection) -> None:
     session is asking. Wire layout::
 
         4f 49 00 00 [ip_main:4] [htons(port_main):2] 00 00
+
     """
     self.ensure_control_socket()
     assert self.control is not None
@@ -1022,6 +1054,7 @@ def _notify_off_async_device(self: EnetConnection) -> None:
 
     Best-effort cleanup; callers typically ignore errors and close the
     sockets anyway.
+
     """
     self.ensure_control_socket()
     assert self.control is not None
@@ -1063,6 +1096,7 @@ def _ibwait(self: EnetConnection, mask: int) -> int:
 
     Wire layout: ``54 00 [htons(mask):2] 00*8``. The wait socket is
     opened lazily via :meth:`ensure_wait_socket` on first call.
+
     """
     self.ensure_wait_socket()
     assert self.wait is not None  # ensure_wait_socket guarantees this
