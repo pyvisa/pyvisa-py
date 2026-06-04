@@ -57,6 +57,7 @@ def intfc(rm: pyvisa.ResourceManager):
 
     Binding the INTFC to board 0 also registers it in the dispatch table
     so subsequent ``GPIB0::*::INSTR`` opens route through the bridge.
+
     """
     resource = "NI-ENET100-TCPIP0::%s::INTFC" % HOST
     session = rm.open_resource(resource)
@@ -73,6 +74,7 @@ def inst(rm: pyvisa.ResourceManager, intfc):
     Depends on ``intfc`` so the bridge binding is in place before the
     GPIB dispatch hook fires. The session timeout is set to 3 s by
     default; tests that need a different value override it directly.
+
     """
     if SAD is None:
         resource = "GPIB0::%d::INSTR" % PAD
@@ -99,6 +101,7 @@ def test_list_resources_includes_bridge(rm: pyvisa.ResourceManager):
     bridge resource (an INTFC, not an INSTR) is not filtered out. Match
     by resolved IP because discovery emits IPs while ``HOST`` may be a
     hostname.
+
     """
     import socket as _socket
 
@@ -119,6 +122,7 @@ def test_intfc_open_registers_board(intfc):
 
     Board keys mirror ``rname.GPIBInstr.board`` (a string), so the lookup
     that the GPIB dispatch hook does with ``parsed.board`` matches.
+
     """
     boards = _ni._NIEnet100IntfcSession.boards
     assert "0" in boards, "INTFC did not register board 0: boards=%r" % (

@@ -82,6 +82,7 @@ class BoxInfo:
 
     All strings have been decoded from the null-terminated ASCII byte
     blobs the box ships. Empty fields surface as the empty string.
+
     """
 
     #: Box IP in dotted-quad form (e.g. ``"192.0.2.5"``).
@@ -128,6 +129,7 @@ def pack_discovery_request(nonce: int = 0) -> bytes:
     version, and (optionally) the caller-supplied nonce are set. The nonce
     is echoed in the box's reply and lets callers correlate replies to
     probes when several probes are in flight.
+
     """
     buf = bytearray(FRAME_SIZE)
     buf[0:2] = MAGIC_HEAD
@@ -145,6 +147,7 @@ def parse_discovery_response(buf: bytes) -> Optional[BoxInfo]:
     bad magic, or non-response op-code. Returning ``None`` (rather than
     raising) is intentional: the broadcast listener will receive arbitrary
     foreign UDP datagrams that should be silently discarded.
+
     """
     if len(buf) != FRAME_SIZE:
         return None
@@ -186,6 +189,7 @@ def _cstring(buf: bytes) -> str:
     Bytes past the first NUL are ignored. Non-ASCII bytes are replaced
     with U+FFFD; the box should only ship ASCII but a robust parser does
     not crash on rubbish.
+
     """
     end = buf.find(b"\x00")
     if end < 0:
@@ -236,6 +240,7 @@ def discover(
     List[BoxInfo]
         Sorted by IP address. Empty if no replies arrived within
         ``timeout``.
+
     """
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     try:

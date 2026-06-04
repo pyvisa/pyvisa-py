@@ -116,6 +116,7 @@ def opened_session() -> Iterator[nienet100.EnetConnection]:
 
     Cleans up sockets unconditionally even if the test body raises so a
     failing test does not leave stale state on the bridge.
+
     """
     conn = nienet100.EnetConnection(HOST, open_timeout=5.0, timeout=5.0)
     conn.open()
@@ -184,6 +185,7 @@ def test_timeout_surfaces_as_iberr_eabo(
     property setter: the bridge rejects several property writes (PAD/SAD,
     and in practice IbcTMO too) once a bracket is open, so the in-frame
     override is the only mid-session way to test a short timeout.
+
     """
     started = time.monotonic()
     with pytest.raises(nienet100.NIEnet100IOError) as excinfo:
@@ -208,6 +210,7 @@ def test_ibwait_round_trip(opened_session: nienet100.EnetConnection):
     is a valid "no event matched the mask, poll again" response, and
     synthesizing a deterministic event would require instrument-side
     SRQ configuration that is out of scope for a generic smoke test.
+
     """
     sta = opened_session.ibwait(nienet100.STA_RQS | nienet100.STA_TIMO)
     assert isinstance(sta, int) and 0 <= sta <= 0xFFFF, (
