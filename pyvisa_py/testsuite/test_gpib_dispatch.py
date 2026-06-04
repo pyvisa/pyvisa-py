@@ -13,8 +13,9 @@ sentinel classes.
 
 import pytest
 
+from pyvisa.constants import InterfaceType
 from pyvisa_py import gpib_dispatch
-from pyvisa_py.sessions import OpenError
+from pyvisa_py.sessions import OpenError, Session
 
 
 @pytest.fixture
@@ -223,3 +224,18 @@ def test_bridge_out_ranks_prologix_for_shared_board(clean_registry):
 
     obj = gpib_dispatch.GPIBInstrDispatch(object(), "GPIB0::1::INSTR", parsed=_Parsed("0"))
     assert isinstance(obj, Bridge)
+
+
+def test_central_dispatcher_owns_gpib_instr_slot():
+    # Importing gpib_dispatch registers it as the single owner of the slot.
+    assert (
+        Session.get_session_class(InterfaceType.gpib, "INSTR")
+        is gpib_dispatch.GPIBInstrDispatch
+    )
+
+
+def test_list_resources_is_callable_and_returns_list():
+    # Returns native listeners when a GPIB library is present, otherwise an
+    # empty list — never raises, regardless of platform.
+    result = gpib_dispatch.GPIBInstrDispatch.list_resources()
+    assert isinstance(result, list)

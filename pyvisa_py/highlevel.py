@@ -104,6 +104,19 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
     except Exception as e:
         LOGGER.debug("NIEnet100TCPIPIntfcSession was not imported %s." % e)
 
+    # Own the (gpib, INSTR) slot from a dependency-free module so dispatch
+    # works even when gpib.py fails to import, and wire the available GPIB
+    # backends (NI GPIB-ENET/100 / Prologix / native) into it. Imported
+    # last, but the central dispatcher makes the result independent of
+    # backend import order.
+    try:
+        from . import gpib_dispatch
+
+        gpib_dispatch.register_builtin_backends()
+        LOGGER.debug("GPIB::INSTR dispatcher was correctly registered.")
+    except Exception as e:
+        LOGGER.debug("GPIB::INSTR dispatcher was not registered %s." % e)
+
     @staticmethod
     def get_library_paths() -> Iterable[LibraryPath]:
         """List a dummy library path to allow to create the library."""

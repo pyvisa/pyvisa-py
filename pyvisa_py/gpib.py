@@ -13,11 +13,10 @@ from typing import Any, Iterator, List, Tuple, Type, Union
 
 from pyvisa import attributes, constants
 from pyvisa.constants import ResourceAttribute, StatusCode
-from pyvisa.rname import GPIBInstr, GPIBIntfc, parse_resource_name
+from pyvisa.rname import GPIBInstr, GPIBIntfc
 
-from . import prologix
 from .common import LOGGER
-from .sessions import Session, UnavailableSession, UnknownAttribute, VISARMSession
+from .sessions import Session, UnavailableSession, UnknownAttribute
 
 
 # NOTE dummy implementation that is overwritten when a GPIB library is found
@@ -26,47 +25,10 @@ def _find_listeners() -> Iterator[Tuple[int, int, int]]:
     yield from ()
 
 
-@Session.register(constants.InterfaceType.gpib, "INSTR")
-class GPIBSessionDispatch(Session):
-    """Dispatch to the proper class based on prologix._PrologixIntfcSession.boards.
-
-    Uses the __new__ method to intercept the creation of the instance of a
-    GPIB session.  If parsed.board is found in
-    prologix._PrologixIntfcSession.boards, create an instance of
-    prologix.PrologixInstrSession, otherwise create an instance of GPIBSession.
-
-    """
-
-    def __new__(  # type: ignore[misc]
-        cls,
-        resource_manager_session: VISARMSession,
-        resource_name: str,
-        parsed=None,
-        open_timeout: int | None = None,
-    ) -> Session:
-        newcls: Type
-
-        if parsed is None:
-            parsed = parse_resource_name(resource_name)
-
-        if parsed.board in prologix._PrologixIntfcSession.boards:
-            newcls = prologix.PrologixInstrSession
-        else:
-            newcls = GPIBSession
-
-        return newcls(resource_manager_session, resource_name, parsed, open_timeout)
-
-    @staticmethod
-    def list_resources() -> List[str]:
-        return [
-            "GPIB%d::%d::INSTR" % (board, pad)
-            if sad == 0
-            else "GPIB%d::%d::%d::INSTR" % (board, pad, sad - 0x60)
-            for board, pad, sad in _find_listeners()
-        ]
-
-    # FIXME when PROLOGIX gain the ability to list resources, we should
-    # include PROLOGIX results.
+# Dispatch of ``GPIB::INSTR`` resources (native vs Prologix vs NI-ENET/100
+# bridge) is owned by :mod:`pyvisa_py.gpib_dispatch`, which registers the
+# native driver as a backend resolver. This module therefore no longer
+# registers a ``(gpib, "INSTR")`` class itself.
 
 
 def make_unavailable(msg: str) -> Type:
