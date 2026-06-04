@@ -18,7 +18,7 @@ All multi-byte fields are big-endian (network byte order).
 import logging
 import socket
 import struct
-from typing import Callable, Optional, Tuple
+from typing import TYPE_CHECKING, Callable, Optional, Tuple
 
 LOGGER = logging.getLogger("pyvisa_py.protocols.nienet100")
 
@@ -406,6 +406,35 @@ class EnetConnection:
         :meth:`ensure_control_socket`.
 
     """
+
+    if TYPE_CHECKING:
+        # GPIB verbs are implemented as module-level functions and bound onto
+        # the class at the end of this file. Declare their signatures here so
+        # type checkers see the public ``conn.ibXXX`` API; the runtime
+        # implementations come from the assignments below.
+        def ibwrt(self, data: bytes) -> int: ...
+
+        def ibrd(self, tmo_ms: int = ...) -> bytes: ...
+
+        def ibclr(self) -> None: ...
+
+        def ibtrg(self) -> None: ...
+
+        def ibloc(self) -> None: ...
+
+        def ibrsp(self) -> int: ...
+
+        def ibwait(self, mask: int) -> int: ...
+
+        def ibsic(self) -> None: ...
+
+        def notify_off_async_device(self) -> None: ...
+
+        def set_io_timeout(self, tmo_code: int) -> None: ...
+
+        def transact_main_status(
+            self, operation: str = ...
+        ) -> Tuple[int, int, int]: ...
 
     #: Companion-hello flag word for device-mode sessions (single resource).
     COMPANION_FLAGS_DEVICE = 2
@@ -1111,14 +1140,16 @@ def _ibwait(self: EnetConnection, mask: int) -> int:
 # Attach verbs to EnetConnection. Keeping them as module-level functions
 # makes the wire-bytes-per-verb mapping straightforward to read in this
 # file; binding them here gives users the familiar `conn.ibwrt(...)` API.
-EnetConnection.ibwrt = _ibwrt
-EnetConnection.ibrd = _ibrd
-EnetConnection.ibclr = _ibclr
-EnetConnection.ibtrg = _ibtrg
-EnetConnection.ibloc = _ibloc
-EnetConnection.ibrsp = _ibrsp
-EnetConnection.ibwait = _ibwait
-EnetConnection.ibsic = _ibsic
-EnetConnection.notify_off_async_device = _notify_off_async_device
-EnetConnection.set_io_timeout = _set_io_timeout
-EnetConnection.transact_main_status = _transact_main_status
+# The signatures are declared under TYPE_CHECKING in the class body, so the
+# assignments below need to silence mypy's method-reassignment guard.
+EnetConnection.ibwrt = _ibwrt  # type: ignore[method-assign]
+EnetConnection.ibrd = _ibrd  # type: ignore[method-assign]
+EnetConnection.ibclr = _ibclr  # type: ignore[method-assign]
+EnetConnection.ibtrg = _ibtrg  # type: ignore[method-assign]
+EnetConnection.ibloc = _ibloc  # type: ignore[method-assign]
+EnetConnection.ibrsp = _ibrsp  # type: ignore[method-assign]
+EnetConnection.ibwait = _ibwait  # type: ignore[method-assign]
+EnetConnection.ibsic = _ibsic  # type: ignore[method-assign]
+EnetConnection.notify_off_async_device = _notify_off_async_device  # type: ignore[method-assign]
+EnetConnection.set_io_timeout = _set_io_timeout  # type: ignore[method-assign]
+EnetConnection.transact_main_status = _transact_main_status  # type: ignore[method-assign]
