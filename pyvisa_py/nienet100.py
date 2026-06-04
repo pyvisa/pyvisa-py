@@ -77,7 +77,9 @@ class _NIEnet100IntfcSession(Session):
 
     def close(self) -> StatusCode:
         # Always deregister; if open partially failed there may be no entry.
-        self.boards.pop(getattr(self.parsed, "board", None), None)
+        board = getattr(self.parsed, "board", None)
+        if board is not None:
+            self.boards.pop(board, None)
         if self.interface is not None:
             try:
                 self.interface.close()
@@ -239,7 +241,10 @@ class NIEnet100InstrSession(Session):
         sad_raw = self.parsed.secondary_address
         sad = int(sad_raw) + 0x60 if sad_raw is not None else 0
 
-        host = intfc.parsed.host_address
+        # intfc.parsed is a NIEnet100TCPIPIntfc at runtime, but pyvisa does
+        # not yet export that rname type (see the name-defined ignore on the
+        # INTFC class), so mypy only sees the ResourceName base here.
+        host = intfc.parsed.host_address  # type: ignore[attr-defined]
         try:
             self.interface = nienet100.EnetConnection(
                 host,
