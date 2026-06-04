@@ -6,16 +6,13 @@ mutually exclusive backends — native linux-gpib / gpib-ctypes, a Prologix
 controller, or an NI GPIB-ENET/100 bridge. The session registry holds a
 single class per ``(InterfaceType.gpib, "INSTR")`` slot.
 
-This module owns the slot once and resolves the concrete session class at
-open time by consulting an ordered list of backend resolvers. Backends
-register themselves via :func:`register_backend` when they import
-successfully; a backend that fails to import is simply absent from the
-list, so the remaining backends keep working regardless of import order.
-
-The dispatcher is intentionally **not** registered in this module yet —
-that happens once the existing backends have been migrated onto
-:func:`register_backend`, so adding this module changes no behaviour on
-its own.
+This module owns the ``(gpib, "INSTR")`` slot once and resolves the
+concrete session class at open time by consulting an ordered list of
+backend resolvers. :func:`register_builtin_backends` imports each in-tree
+backend defensively and registers a resolver for it; a backend whose
+import fails is simply absent, so the remaining backends keep working
+regardless of import order. The module has no hard dependency on any GPIB
+library, so it can own the slot even when ``gpib.py`` fails to import.
 
 :copyright: 2026 by PyVISA-py Authors, see AUTHORS for more details.
 :license: MIT, see LICENSE for more details.
@@ -24,7 +21,7 @@ its own.
 
 from typing import Callable, List, Optional, Tuple, Type
 
-from pyvisa import rname
+from pyvisa import constants, rname
 from pyvisa.constants import StatusCode
 from pyvisa.typing import VISARMSession
 
@@ -66,6 +63,7 @@ def register_backend(
     _GPIB_INSTR_BACKENDS.sort(key=lambda item: item[0])
 
 
+@Session.register(constants.InterfaceType.gpib, "INSTR")
 class GPIBInstrDispatch(Session):
     """Resolve a ``GPIB::INSTR`` resource to the right backend session.
 
@@ -93,6 +91,27 @@ class GPIBInstrDispatch(Session):
                 )
 
         raise OpenError(StatusCode.error_resource_not_found)
+
+    @staticmethod
+    def list_resources() -> List[str]:
+        """List native GPIB::INSTR resources found on local boards.
+
+        Only the native linux-gpib / gpib-ctypes listeners are enumerated:
+        Prologix has no listing support, and NI GPIB-ENET/100 instruments
+        are discovered at the INTFC level. Returns an empty list when no
+        native GPIB library is installed.
+
+        """
+        try:
+            from .gpib import _find_listeners
+        except Exception:
+            return []
+        return [
+            "GPIB%d::%d::INSTR" % (board, pad)
+            if sad == 0
+            else "GPIB%d::%d::%d::INSTR" % (board, pad, sad - 0x60)
+            for board, pad, sad in _find_listeners()
+        ]
 
 
 # --- Built-in backend wiring ------------------------------------------------

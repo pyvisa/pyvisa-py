@@ -7,11 +7,11 @@ protocol into pyvisa-py as two session types:
 
 - ``NI-ENET100-TCPIP<n>::<host>::INTFC`` — binds board number ``n`` to the
   given box and keeps a connection open as a connectivity sentinel.
-- ``GPIB<n>::<pad>[::<sad>]::INSTR`` — dispatched here when board ``n`` was
-  previously registered as a NIENET100 board (the dispatch hook lives in
-  :mod:`pyvisa_py.gpib`). Each INSTR session owns its own TCP connection
-  to the box; the spec recommends per-resource TCP sessions over sharing
-  one connection with multi-PAD bracket switching.
+- ``GPIB<n>::<pad>[::<sad>]::INSTR`` — routed to this module when board
+  ``n`` was registered as a NIENET100 board (the dispatch hook lives in
+  :mod:`pyvisa_py.gpib_dispatch`). Each INSTR session owns its own TCP
+  connection to the box; the spec recommends per-resource TCP sessions over
+  sharing one connection with multi-PAD bracket switching.
 
 :copyright: 2026 by PyVISA-py Authors, see AUTHORS for more details.
 :license: MIT, see LICENSE for more details.
@@ -46,7 +46,7 @@ class _NIEnet100IntfcSession(Session):
     """Common base for NI GPIB-ENET/100 INTFC sessions.
 
     Holds the class-level ``boards`` registry that the GPIB dispatch hook
-    in :mod:`pyvisa_py.gpib` consults to route ``GPIB<n>::*::INSTR``
+    in :mod:`pyvisa_py.gpib_dispatch` consults to route ``GPIB<n>::*::INSTR``
     resources through the appropriate bridge.
 
     The INTFC owns its own :class:`~pyvisa_py.protocols.nienet100.EnetConnection`
@@ -180,18 +180,18 @@ class NIEnet100InstrSession(Session):
     GPIB-ENET/100 bridge.
 
     This class is **not** decorated with ``@Session.register`` directly.
-    The wrapping dispatcher at the bottom of this module owns the
-    ``(gpib, "INSTR")`` slot in the dispatch table — it consults
-    :attr:`_NIEnet100IntfcSession.boards` and instantiates this class
-    when the resource's board number is registered to a bridge, or
-    falls back to the previous dispatcher (linux-gpib / gpib-ctypes via
-    ``GPIBSessionDispatch``) otherwise.
+    The central dispatcher in :mod:`pyvisa_py.gpib_dispatch` owns the
+    ``(gpib, "INSTR")`` slot and instantiates this class when the
+    resource's board number is registered to a NI GPIB-ENET/100 (see
+    :attr:`_NIEnet100IntfcSession.boards`); otherwise another backend
+    resolver (Prologix or native linux-gpib / gpib-ctypes) handles it.
 
     Each INSTR session owns its own :class:`EnetConnection` and its own
     bracket — INSTRs do not share TCP sockets with the INTFC or with one
     another. This mirrors the wire spec's recommended pattern and lets
     multiple instruments on the same bridge operate without a shared
     cross-resource lock.
+
     """
 
     # We don't decorate this class with Session.register() because we don't
@@ -440,46 +440,8 @@ def _map_iberr_to_status(iberr: int) -> StatusCode:
     return StatusCode.error_system_error
 
 
-# --- (gpib, INSTR) dispatch hook --------------------------------------------
-# Bridge dispatch lives here (not in gpib.py) so it works on systems where
-# gpib.py fails to import because neither linux-gpib nor gpib-ctypes is
-# installed — exactly the configuration most GPIB-ENET/100 users run.
-#
-# We save the previously registered dispatcher (GPIBSessionDispatch when
-# gpib.py loaded; ``None`` otherwise) and delegate to it when the resource's
-# board is not bound to a NIENET100 bridge. This keeps Prologix and
-# linux-gpib paths working unchanged.
-
-# Save and pop the existing registration (typically GPIBSessionDispatch from
-# gpib.py) so that @Session.register below does not log the "already
-# registered, overwriting" warning. Our overwrite is deliberate.
-_PREV_GPIB_INSTR_CLS = Session._session_classes.pop(
-    (constants.InterfaceType.gpib, "INSTR"), None
-)
-
-
-@Session.register(constants.InterfaceType.gpib, "INSTR")
-class _GPIBInstrDispatch(Session):
-    """Dispatch GPIB::INSTR resources, with NI GPIB-ENET/100 as a bridge."""
-
-    def __new__(  # type: ignore[misc]
-        cls,
-        resource_manager_session: VISARMSession,
-        resource_name: str,
-        parsed: Optional[rname.ResourceName] = None,
-        open_timeout: Optional[int] = None,
-    ) -> Session:
-        if parsed is None:
-            parsed = rname.parse_resource_name(resource_name)
-
-        if parsed.board in _NIEnet100IntfcSession.boards:
-            return NIEnet100InstrSession(
-                resource_manager_session, resource_name, parsed, open_timeout
-            )
-
-        if _PREV_GPIB_INSTR_CLS is not None:
-            return _PREV_GPIB_INSTR_CLS(
-                resource_manager_session, resource_name, parsed, open_timeout
-            )
-
-        raise OpenError(StatusCode.error_resource_not_found)
+# Dispatch of ``GPIB::INSTR`` resources to this bridge is owned by
+# :mod:`pyvisa_py.gpib_dispatch`, which registers a backend resolver that
+# routes a board to :class:`NIEnet100InstrSession` when that board is bound
+# to a bridge INTFC (see :attr:`_NIEnet100IntfcSession.boards`). This module
+# therefore no longer touches the ``(gpib, "INSTR")`` registry slot.
