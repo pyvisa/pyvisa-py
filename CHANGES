@@ -19,10 +19,10 @@ PyVISA-py Changelog
   `viEnableEvent`, `viDisableEvent`, `viDiscardEvents`, `viWaitOnEvent`,
   `viInstallHandler`, and `viUninstallHandler`. SRQ (service request) events
   are now supported via both queue-based (`wait_on_event`) and handler-based
-  (`install_handler`) delivery. A daemon thread runs an ONC RPC UDP interrupt
+  (`install_handler`) delivery. A daemon thread runs an ONC RPC TCP interrupt
   server to receive VXI-11 `DEVICE_INTR_SRQ` callbacks. This also fixes the
   `create_intr_chan` XDR packer in `protocols/vxi11.py`.
-  Other transports (GPIB, USBTMC, HiSLIP, Serial) remain unsupported for now.
+  Other transports (GPIB, USBTMC, HiSLIP, Serial) remain unsupported for now. PR #577 
 
 0.8.1 (04-09-2025)
 ------------------
