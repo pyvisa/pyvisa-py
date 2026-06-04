@@ -28,7 +28,8 @@ from pyvisa import rname
 from pyvisa.constants import StatusCode
 from pyvisa.typing import VISARMSession
 
-from .sessions import OpenError, Session
+from .common import LOGGER
+from .sessions import OpenError, Session, UnavailableSession
 
 #: A resolver inspects a parsed resource name and returns the session class
 #: that should handle it, or ``None`` if the resource is not served by this
@@ -92,3 +93,91 @@ class GPIBInstrDispatch(Session):
                 )
 
         raise OpenError(StatusCode.error_resource_not_found)
+
+
+# --- Built-in backend wiring ------------------------------------------------
+# Priorities: lower values are consulted first. A backend bound to specific
+# boards (Prologix, NI-ENET/100 bridge) must out-rank the native driver,
+# which is the catch-all fallback and therefore comes last.
+_PRIORITY_PROLOGIX = 20
+_PRIORITY_NATIVE = 100
+
+#: Guards :func:`register_builtin_backends` so repeated calls (e.g. one per
+#: ResourceManager) do not append duplicate resolvers.
+_builtins_registered = False
+
+
+def _board_resolver(boards: dict, session_cls: Type[Session]) -> GPIBInstrResolver:
+    """Build a resolver that claims a resource only for registered boards.
+
+    The ``boards`` mapping is captured by reference and queried at dispatch
+    time, so boards registered after wiring (the normal case — INTFC
+    sessions populate it on open) are still seen.
+
+    """
+
+    def resolve(parsed: rname.ResourceName) -> Optional[Type[Session]]:
+        return session_cls if parsed.board in boards else None
+
+    return resolve
+
+
+def _make_native_unavailable(exc: Exception) -> Type[Session]:
+    """Return an unavailable session explaining the missing GPIB library.
+
+    ``gpib.py`` raises on import when neither linux-gpib nor gpib-ctypes is
+    present. Routing unmatched boards here preserves the previous
+    behaviour: a clear, actionable error at open time instead of a generic
+    "resource not found".
+
+    """
+
+    class _NativeGPIBUnavailable(UnavailableSession):
+        session_issue = (
+            "Please install linux-gpib (Linux) or gpib-ctypes (Windows, Linux) "
+            "to use native GPIB::INSTR resources.\n%s" % exc
+        )
+
+    return _NativeGPIBUnavailable
+
+
+def register_builtin_backends() -> None:
+    """Wire pyvisa-py's in-tree GPIB::INSTR backends into the dispatcher.
+
+    Each backend is imported defensively: a backend whose import fails is
+    simply skipped (native gpib is additionally represented by an
+    unavailable session so its install hint survives). The call is
+    idempotent.
+
+    """
+    global _builtins_registered
+    if _builtins_registered:
+        return
+
+    # Prologix controller: claims boards bound to a Prologix interface.
+    try:
+        from . import prologix
+    except Exception as e:  # pragma: no cover - prologix import is robust
+        LOGGER.debug("Prologix GPIB::INSTR backend not registered: %s", e)
+    else:
+        register_backend(
+            _board_resolver(
+                prologix._PrologixIntfcSession.boards, prologix.PrologixInstrSession
+            ),
+            priority=_PRIORITY_PROLOGIX,
+            label="prologix",
+        )
+
+    # Native linux-gpib / gpib-ctypes: catch-all for any board not claimed
+    # above.
+    try:
+        from .gpib import GPIBSession
+    except Exception as e:
+        native_cls: Type[Session] = _make_native_unavailable(e)
+    else:
+        native_cls = GPIBSession
+    register_backend(
+        lambda parsed: native_cls, priority=_PRIORITY_NATIVE, label="gpib"
+    )
+
+    _builtins_registered = True
