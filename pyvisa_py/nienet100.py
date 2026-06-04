@@ -38,15 +38,7 @@ try:
 except AttributeError as e:
     raise ImportError(
         "pyvisa-py NI GPIB-ENET/100 support requires pyvisa with "
-        "InterfaceType.ni_enet100_tcpip; please update pyvisa."
-    ) from e
-
-try:
-    _RNAME_NIENET100_TCPIP_INTFC = rname.NIEnet100TCPIPIntfc
-except AttributeError as e:
-    raise ImportError(
-        "pyvisa-py NI GPIB-ENET/100 support requires pyvisa with "
-        "rname.NIEnet100TCPIPIntfc; please update pyvisa."
+        "some definitions specific to nienet100; please update pyvisa."
     ) from e
 
 
