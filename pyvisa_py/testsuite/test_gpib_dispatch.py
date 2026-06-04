@@ -191,5 +191,35 @@ def test_register_builtin_backends_is_idempotent_and_ordered(clean_registry):
     assert priorities == sorted(priorities)
     assert priorities[-1] == gpib_dispatch._PRIORITY_NATIVE
     assert labels[-1] == "gpib"
-    # Prologix is always available (pure-Python) and out-ranks native.
-    assert "prologix" in labels
+    # Pure-Python backends are always available and out-rank native; the
+    # bridge out-ranks Prologix.
+    assert labels.index("ni-enet100") < labels.index("prologix") < labels.index(
+        "gpib"
+    )
+    assert dict(zip(labels, priorities))["ni-enet100"] == gpib_dispatch._PRIORITY_BRIDGE
+
+
+def test_bridge_out_ranks_prologix_for_shared_board(clean_registry):
+    # A board registered to *both* a bridge and Prologix must resolve to the
+    # bridge, because the bridge resolver is wired with higher precedence.
+    class Bridge(_Recorder):
+        pass
+
+    class Prlgx(_Recorder):
+        pass
+
+    bridge_boards = {"0": object()}
+    prologix_boards = {"0": object()}
+    gpib_dispatch.register_backend(
+        gpib_dispatch._board_resolver(bridge_boards, Bridge),
+        priority=gpib_dispatch._PRIORITY_BRIDGE,
+        label="ni-enet100",
+    )
+    gpib_dispatch.register_backend(
+        gpib_dispatch._board_resolver(prologix_boards, Prlgx),
+        priority=gpib_dispatch._PRIORITY_PROLOGIX,
+        label="prologix",
+    )
+
+    obj = gpib_dispatch.GPIBInstrDispatch(object(), "GPIB0::1::INSTR", parsed=_Parsed("0"))
+    assert isinstance(obj, Bridge)
