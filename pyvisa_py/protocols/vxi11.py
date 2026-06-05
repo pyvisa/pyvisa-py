@@ -11,8 +11,16 @@ This file is an offspring of the Lantz project.
 """
 
 import enum
+import queue
 import socket
+import struct
+import threading
 
+from pyvisa import constants
+from pyvisa.constants import StatusCode
+
+from ..common import LOGGER
+from ..events import EventContext
 from . import rpc
 
 # fmt: off
@@ -42,10 +50,17 @@ DESTROY_LINK      = 23
 CREATE_INTR_CHAN  = 25
 DESTROY_INTR_CHAN = 26
 
+# Status byte bit masks
+STB_RQS_BIT = 0x40  # Request Service bit in serial poll status byte
+
 # Device intr
 DEVICE_INTR_PROG = 0x0607B1
 DEVICE_INTR_VERS = 1
 DEVICE_INTR_SRQ  = 30
+
+# Device address family for create_intr_chan (NOT IPPROTO_TCP/IPPROTO_UDP)
+DEVICE_TCP = 0
+DEVICE_UDP = 1
 
 
 # Error states
@@ -354,7 +369,7 @@ class CoreClient(rpc.TCPClient):
         return self.make_call(
             CREATE_INTR_CHAN,
             params,
-            self.packer.pack_device_docmd_parms,
+            self.packer.pack_device_remote_func_parms,
             self.unpacker.unpack_device_error,
         )
 
@@ -362,3 +377,133 @@ class CoreClient(rpc.TCPClient):
         return self.make_call(
             DESTROY_INTR_CHAN, None, None, self.unpacker.unpack_device_error
         )
+
+
+class SrqInterruptTCPServer(rpc.TCPServer):
+    """TCP RPC server that receives VXI-11 DEVICE_INTR_SRQ (proc 30) interrupts."""
+
+    def __init__(self, host, prog, vers, port, session):
+        super().__init__(host, prog, vers, port)
+        self.session = session
+        self._srq_queue = queue.Queue()
+        self._srq_worker_thread = threading.Thread(target=self._srq_worker, daemon=True)
+        self._srq_worker_thread.start()
+
+    def _srq_worker(self):
+        while True:
+            try:
+                item = self._srq_queue.get(timeout=1.0)
+            except queue.Empty:
+                continue
+            if item is None:
+                break
+            self._fire_srq()
+
+    def stop(self):
+        self._srq_queue.put(None)
+        self._srq_worker_thread.join(timeout=2.0)
+
+    def connect(self):
+        super().connect()
+        self.sock.listen(1)
+
+    def loop(self):
+        """Accept connections from the instrument and handle SRQ until stopped."""
+        self.sock.settimeout(1.0)
+        stop_flag = self.session._event_state.stop_flag
+        while not stop_flag.is_set():
+            try:
+                conn, _addr = self.sock.accept()
+            except socket.timeout:
+                continue
+            except OSError:
+                break
+            try:
+                self._handle_connection(conn)
+            finally:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
+
+    def _handle_connection(self, conn):
+        """Read RPC calls from the instrument, send replies, and fire events.
+
+        The VXI-11 interrupt channel is a persistent TCP connection. The
+        instrument may send multiple DEVICE_INTR_SRQ calls over the same
+        connection, so we keep reading until the connection is closed or
+        the session stop flag is set.
+        """
+        stop_flag = self.session._event_state.stop_flag
+        try:
+            conn.settimeout(1.0)
+            while not stop_flag.is_set():
+                try:
+                    # Read record marker (4 bytes)
+                    marker = self._recv_all(conn, 4)
+                    if marker is None:
+                        return  # Connection closed by peer
+                except socket.timeout:
+                    continue
+
+                frag = struct.unpack(">I", marker)[0]
+                last_frag = frag >> 31
+                frag_len = frag & 0x7FFFFFFF
+
+                # Read the fragment payload
+                call = self._recv_all(conn, frag_len)
+                if call is None:
+                    return
+
+                # If there are more fragments, consume and append them
+                while not last_frag:
+                    marker = self._recv_all(conn, 4)
+                    if marker is None:
+                        return
+                    frag = struct.unpack(">I", marker)[0]
+                    last_frag = frag >> 31
+                    frag_len = frag & 0x7FFFFFFF
+                    leftover = self._recv_all(conn, frag_len)
+                    if leftover is None:
+                        return
+                    call += leftover
+
+                reply = self.handle(call)
+                if reply is not None:
+                    reply_frag = struct.pack(">I", 0x80000000 | len(reply)) + reply
+                    conn.sendall(reply_frag)
+        except Exception:
+            LOGGER.exception("Error handling TCP SRQ connection")
+
+    def _recv_all(self, sock, n):
+        data = b""
+        while len(data) < n:
+            chunk = sock.recv(n - len(data))
+            if not chunk:
+                return None
+            data += chunk
+        return data
+
+    def handle_30(self):
+        """Handle DEVICE_INTR_SRQ (procedure 30)."""
+        handle = self.unpacker.unpack_opaque()
+        self.turn_around()
+        if handle != b"srq":
+            LOGGER.warning("Ignoring VXI-11 SRQ with unexpected handle: %r", handle)
+            return
+        self._srq_queue.put(True)
+
+    def _fire_srq(self):
+        try:
+            # Defensive: session may have been closed while we were spawned
+            if self.session.interface is None or self.session.link == 0:
+                return
+            stb, status = self.session.read_stb()
+            if status == StatusCode.success and (stb & STB_RQS_BIT):
+                ctx = EventContext(
+                    event_type=constants.EventType.service_request,
+                    status_byte=stb,
+                )
+                self.session._fire_event(constants.EventType.service_request, ctx)
+        except Exception:
+            LOGGER.exception("Error handling VXI-11 SRQ interrupt")

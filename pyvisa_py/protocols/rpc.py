@@ -968,7 +968,7 @@ class Server(object):
     def turn_around(self):
         try:
             self.unpacker.done()
-        except RuntimeError:
+        except (RuntimeError, xdrlib.Error):
             raise RPCGarbageArgs
         self.packer.pack_uint(AcceptStatus.success)
 

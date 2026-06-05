@@ -24,9 +24,10 @@ from typing import (
 
 from pyvisa import attributes, constants, rname
 from pyvisa.constants import ResourceAttribute, StatusCode
-from pyvisa.typing import VISAJobID, VISARMSession
+from pyvisa.typing import VISAJobID, VISARMSession, VISASession
 
 from .common import LOGGER, BytesBuffer, int_to_byte
+from .events import EventContext, EventState
 
 #: Type var used when typing register.
 T = TypeVar("T", bound=Type["Session"])
@@ -141,8 +142,14 @@ class Session(metaclass=abc.ABCMeta):
     #: Session type as (Interface Type, Resource Class)
     session_type: Tuple[constants.InterfaceType, str]
 
+    #: Event types supported by this session class.
+    _supported_event_types: ClassVar[set[constants.EventType]] = set()
+
     #: Timeout in milliseconds to use when opening the resource.
     open_timeout: Optional[int]
+
+    #: VISA session handle assigned by the library after registration.
+    _session_handle: VISASession
 
     #: Value of the timeout in seconds used for general operation
     timeout: Optional[float]
@@ -328,6 +335,9 @@ class Session(metaclass=abc.ABCMeta):
 
         self.after_parsing()
 
+        self._event_state = EventState()
+        self._session_handle = VISASession(0)
+
     def after_parsing(self) -> None:
         """Override this method to provide custom initialization code, to be
         called after the resource name is properly parsed
@@ -363,6 +373,43 @@ class Session(metaclass=abc.ABCMeta):
         `    self.attrs[constants.VI_ATTR_<NAME>] = (self._get_attribute,
                                                      self._set_attribute)`
 
+        """
+        pass
+
+    def _fire_event(self, event_type: constants.EventType, ctx: EventContext) -> None:
+        """Dispatch an event occurrence to the queue and/or handlers.
+
+        This method is called by transport-specific monitor threads when an
+        SRQ (or other asynchronous signal) is detected.
+        """
+        queue_enabled, handler_enabled = self._event_state.get_delivery_mechanisms(
+            event_type
+        )
+        if queue_enabled:
+            self._event_state.queue.put(ctx)
+        if handler_enabled:
+            session_handle = self._session_handle
+            self._event_state.registry.fire(event_type, session_handle, ctx.context_id)
+
+    def _start_event_monitor(self) -> StatusCode:
+        """Start a background thread to watch for event assertions.
+
+        Transports that support asynchronous events (VXI-11, GPIB, USBTMC)
+        should override this method.  The base implementation is a no-op.
+
+        Returns
+        -------
+        StatusCode
+            Return value of the library call.
+        """
+        return StatusCode.success
+
+    def _stop_event_monitor(self) -> None:
+        """Stop the event monitor thread.
+
+        Transports should override this to signal their monitor thread
+        (via ``self._event_state.stop_flag.set()``) and join it.
+        The base implementation is a no-op.
         """
         pass
 

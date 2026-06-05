@@ -30,20 +30,16 @@ class TestTCPIPInstr(TCPIPInstrBaseTest):
     # XXX Skip test clear to see if it has some bad side effect
     test_clear = pytest.mark.skip(copy_func(TCPIPInstrBaseTest.test_clear))
 
-    test_wrapping_handler = pytest.mark.xfail(
-        copy_func(TCPIPInstrBaseTest.test_wrapping_handler)
+    test_wrapping_handler = copy_func(TCPIPInstrBaseTest.test_wrapping_handler)
+
+    test_managing_visa_handler = copy_func(
+        TCPIPInstrBaseTest.test_managing_visa_handler
     )
 
-    test_managing_visa_handler = pytest.mark.xfail(
-        copy_func(TCPIPInstrBaseTest.test_managing_visa_handler)
-    )
+    test_wait_on_event = copy_func(TCPIPInstrBaseTest.test_wait_on_event)
 
-    test_wait_on_event = pytest.mark.xfail(
-        copy_func(TCPIPInstrBaseTest.test_wait_on_event)
-    )
-
-    test_wait_on_event_timeout = pytest.mark.xfail(
-        copy_func(TCPIPInstrBaseTest.test_wait_on_event_timeout)
+    test_wait_on_event_timeout = copy_func(
+        TCPIPInstrBaseTest.test_wait_on_event_timeout
     )
 
     test_getting_unknown_buffer = pytest.mark.xfail(
