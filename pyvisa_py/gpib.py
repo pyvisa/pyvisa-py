@@ -9,7 +9,8 @@
 
 import ctypes  # Used for missing bindings not ideal
 from bisect import bisect
-from typing import Any, Iterator, List, Tuple, Type, Union
+from collections.abc import Iterator
+from typing import Any
 
 from pyvisa import attributes, constants
 from pyvisa.constants import ResourceAttribute, StatusCode
@@ -21,7 +22,7 @@ from .sessions import Session, UnavailableSession, UnknownAttribute
 
 # NOTE dummy implementation that is overwritten when a GPIB library is found
 # Allow to provide session listing even when no GPIB library is available.
-def _find_listeners() -> Iterator[Tuple[int, int, int]]:
+def _find_listeners() -> Iterator[tuple[int, int, int]]:
     yield from ()
 
 
@@ -31,7 +32,7 @@ def _find_listeners() -> Iterator[Tuple[int, int, int]]:
 # registers a ``(gpib, "INSTR")`` class itself.
 
 
-def make_unavailable(msg: str) -> Type:
+def make_unavailable(msg: str) -> type[Any]:
     """Creates a fake session class that raises a ValueError if instantiated.
 
     We can't use Session.register_unavailable() because we need to be able to
@@ -44,7 +45,7 @@ def make_unavailable(msg: str) -> Type:
 
     Returns
     -------
-    Type[Session]
+    type[Session]
         Fake session.
 
     """
@@ -116,7 +117,7 @@ def _patch_Gpib() -> None:
 _patch_Gpib()
 
 
-def _find_boards() -> Iterator[Tuple[int, int]]:
+def _find_boards() -> Iterator[tuple[int, int]]:
     """Find GPIB board addresses."""
     for board in range(16):
         try:
@@ -125,7 +126,7 @@ def _find_boards() -> Iterator[Tuple[int, int]]:
             LOGGER.debug("GPIB board %i error in _find_boards(): %s", board, repr(e))
 
 
-def _find_listeners() -> Iterator[Tuple[int, int, int]]:  # type: ignore[no-redef]
+def _find_listeners() -> Iterator[tuple[int, int, int]]:  # type: ignore[no-redef]
     """Find GPIB listeners."""
     for board, boardpad in _find_boards():
         for i in range(31):
@@ -294,7 +295,7 @@ class _GPIBCommon(Session):
 
     # Override parsed to take into account the fact that this class is only used
     # for a specific kind of resource
-    parsed: Union[GPIBIntfc, GPIBInstr]
+    parsed: GPIBIntfc | GPIBInstr
 
     #: Bus wide controller.
     controller: Gpib
@@ -345,7 +346,7 @@ class _GPIBCommon(Session):
 
     def _get_timeout(
         self, attribute: constants.ResourceAttribute
-    ) -> Tuple[int, StatusCode]:
+    ) -> tuple[int, StatusCode]:
         if self.interface:
             # 0x3 is the hexadecimal reference to the IbaTMO (timeout) configuration
             # option in linux-gpib.
@@ -403,7 +404,7 @@ class _GPIBCommon(Session):
         self.controller.close()
         return StatusCode.success
 
-    def read(self, count: int) -> Tuple[bytes, StatusCode]:
+    def read(self, count: int) -> tuple[bytes, StatusCode]:
         """Reads data from device or interface synchronously.
 
         Corresponds to viRead function of the VISA library.
@@ -431,7 +432,7 @@ class _GPIBCommon(Session):
 
         return self._read(reader, count, checker, False, None, False, gpib.GpibError)
 
-    def write(self, data: bytes) -> Tuple[int, StatusCode]:
+    def write(self, data: bytes) -> tuple[int, StatusCode]:
         """Writes data to device or interface synchronously.
 
         Corresponds to viWrite function of the VISA library.
@@ -527,7 +528,7 @@ class _GPIBCommon(Session):
 
         return constants.StatusCode.success
 
-    def _get_attribute(self, attribute: ResourceAttribute) -> Tuple[Any, StatusCode]:
+    def _get_attribute(self, attribute: ResourceAttribute) -> tuple[Any, StatusCode]:
         """Get the value for a given VISA attribute for this session.
 
         Use to implement custom logic for attributes.
@@ -687,7 +688,7 @@ class GPIBSession(_GPIBCommon):  # type: ignore[no-redef]
     parsed: GPIBInstr
 
     @staticmethod
-    def list_resources() -> List[str]:
+    def list_resources() -> list[str]:
         return [
             "GPIB%d::%d::INSTR" % (board, pad)
             if sad == 0
@@ -739,7 +740,7 @@ class GPIBSession(_GPIBCommon):  # type: ignore[no-redef]
         except gpib.GpibError as e:
             return convert_gpib_error(e, self.interface.ibsta(), "assert trigger")
 
-    def read_stb(self) -> Tuple[int, StatusCode]:
+    def read_stb(self) -> tuple[int, StatusCode]:
         """Read the device status byte."""
         try:
             return self.interface.serial_poll(), StatusCode.success
@@ -748,7 +749,7 @@ class GPIBSession(_GPIBCommon):  # type: ignore[no-redef]
 
     def _get_attribute(
         self, attribute: constants.ResourceAttribute
-    ) -> Tuple[Any, StatusCode]:
+    ) -> tuple[Any, StatusCode]:
         """Get the value for a given VISA attribute for this session.
 
         Use to implement custom logic for attributes. GPIB::INSTR have the
@@ -848,10 +849,10 @@ class GPIBInterface(_GPIBCommon):
     parsed: GPIBIntfc
 
     @staticmethod
-    def list_resources() -> List[str]:
+    def list_resources() -> list[str]:
         return ["GPIB%d::INTFC" % board for board, pad in _find_boards()]
 
-    def gpib_command(self, command_bytes: bytes) -> Tuple[int, StatusCode]:
+    def gpib_command(self, command_bytes: bytes) -> tuple[int, StatusCode]:
         """Write GPIB command byte on the bus.
 
         Corresponds to viGpibCommand function of the VISA library.
@@ -954,7 +955,7 @@ class GPIBInterface(_GPIBCommon):
         status = gpib_lib.ibpct(did)
         return convert_gpib_status(status)
 
-    def _get_attribute(self, attribute: ResourceAttribute) -> Tuple[Any, StatusCode]:
+    def _get_attribute(self, attribute: ResourceAttribute) -> tuple[Any, StatusCode]:
         """Get the value for a given VISA attribute for this session.
 
         Use to implement custom logic for attributes. GPIB::INTFC have the

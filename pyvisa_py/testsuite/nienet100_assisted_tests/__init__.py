@@ -31,23 +31,22 @@ variables:
 """
 
 import os
-from typing import Optional
 
 import pytest
 
 #: Bridge IP/hostname, or ``None`` when not configured.
-HOST: Optional[str] = os.environ.get("PYVISA_TEST_NIENET100_HOST") or None
+HOST: str | None = os.environ.get("PYVISA_TEST_NIENET100_HOST") or None
 
 #: Instrument primary address as int, or ``None`` when not configured.
 _pad_env = os.environ.get("PYVISA_TEST_GPIB_PAD")
-PAD: Optional[int] = int(_pad_env) if _pad_env else None
+PAD: int | None = int(_pad_env) if _pad_env else None
 
 #: Instrument secondary address as int, or ``None`` when not configured.
 _sad_env = os.environ.get("PYVISA_TEST_GPIB_SAD")
-SAD: Optional[int] = int(_sad_env) if _sad_env else None
+SAD: int | None = int(_sad_env) if _sad_env else None
 
 #: Optional substring that must appear in the ``*IDN?`` response.
-IDN_VENDOR: Optional[str] = os.environ.get("PYVISA_TEST_IDN_VENDOR") or None
+IDN_VENDOR: str | None = os.environ.get("PYVISA_TEST_IDN_VENDOR") or None
 
 #: Write/read termination string for the assisted instrument tests.
 #: Defaults to ``\n`` rather than pyvisa's library default of ``\r\n``

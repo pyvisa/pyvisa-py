@@ -16,7 +16,6 @@ import io
 import socket
 import struct
 import threading
-from typing import List, Tuple
 
 import pytest
 
@@ -191,10 +190,10 @@ def test_iberr_exception_carries_fields():
 # Only runs on platforms with socket.socketpair (Unix; Windows 3.5+).
 
 
-ScriptStep = Tuple[str, bytes]  # ("send", payload) or ("recv", payload)
+ScriptStep = tuple[str, bytes]  # ("send", payload) or ("recv", payload)
 
 
-def _run_scripted_peer(script: List[ScriptStep]):
+def _run_scripted_peer(script: list[ScriptStep]):
     """Return (client_sock, thread). The thread plays ``script`` on the peer.
 
     On ``recv`` steps the thread asserts the exact bytes the client sent;
@@ -501,7 +500,7 @@ def test_ensure_wait_socket_requires_main_socket():
 
 def test_ensure_control_socket_is_lazy_and_idempotent():
     fake_sock = object()
-    calls: List[int] = []
+    calls: list[int] = []
 
     def fake_connect(port: int):
         calls.append(port)

@@ -16,7 +16,8 @@ See the package ``__init__`` docstring for environment-variable setup.
 
 """
 
-from typing import Iterator, cast
+from collections.abc import Iterator
+from typing import cast
 
 import pytest
 
