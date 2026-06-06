@@ -18,7 +18,7 @@ See the package ``__init__`` docstring for environment-variable setup.
 import os
 import socket
 import time
-from typing import Iterator
+from collections.abc import Iterator
 
 import pytest
 

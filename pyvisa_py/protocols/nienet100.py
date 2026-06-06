@@ -18,7 +18,8 @@ All multi-byte fields are big-endian (network byte order).
 import logging
 import socket
 import struct
-from typing import TYPE_CHECKING, Callable, Optional, Tuple
+from collections.abc import Callable
+from typing import TYPE_CHECKING
 
 LOGGER = logging.getLogger("pyvisa_py.protocols.nienet100")
 
@@ -103,7 +104,7 @@ TMO_300s = 16
 TMO_1000s = 17
 
 #: Discrete timeout values in seconds, indexed by TMO code. ``None`` = disabled.
-TIMETABLE: Tuple = (
+TIMETABLE: tuple = (
     None,  # TMO_NONE
     10e-6,
     30e-6,
@@ -182,7 +183,7 @@ def pack_command(
 _STATUS_HEADER_FMT = "!HH4xL"
 
 
-def parse_status_header(buf: bytes) -> Tuple[int, int, int]:
+def parse_status_header(buf: bytes) -> tuple[int, int, int]:
     """Decode a 12-byte status header into ``(sta, err, cnt)``.
 
     ``err`` is only meaningful when ``sta & STA_ERR`` is set; otherwise it
@@ -197,7 +198,7 @@ def parse_status_header(buf: bytes) -> Tuple[int, int, int]:
     return struct.unpack(_STATUS_HEADER_FMT, buf)
 
 
-def parse_chunk_header(buf: bytes) -> Tuple[int, int]:
+def parse_chunk_header(buf: bytes) -> tuple[int, int]:
     """Decode a 4-byte chunk header into ``(flags, length)``."""
     if len(buf) != CHUNK_HEADER_SIZE:
         raise ValueError(
@@ -297,7 +298,7 @@ def read_one_data_chunk(read_exactly: Callable[[int], bytes]) -> bytes:
             )
 
 
-def read_status_chunk(read_exactly: Callable[[int], bytes]) -> Tuple[int, int, int]:
+def read_status_chunk(read_exactly: Callable[[int], bytes]) -> tuple[int, int, int]:
     """Read a chunk-wrapped 12-byte status header and parse it.
 
     The bridge wraps every status header in the standard chunk framing
@@ -387,7 +388,7 @@ class EnetConnection:
         Box IP or hostname.
     open_timeout : float
         Per-socket connect timeout in seconds.
-    timeout : Optional[float]
+    timeout : float | None
         Per-operation socket timeout in seconds applied after connect.
         ``None`` means blocking without timeout.
 
@@ -399,9 +400,9 @@ class EnetConnection:
         The synchronous main socket.
     companion : socket.socket
         The hello-only companion socket; kept open for the session lifetime.
-    wait : Optional[socket.socket]
+    wait : socket.socket | None
         The ibwait polling socket; ``None`` until :meth:`ensure_wait_socket`.
-    control : Optional[socket.socket]
+    control : socket.socket | None
         The control socket for 'O' verbs; ``None`` until
         :meth:`ensure_control_socket`.
 
@@ -434,7 +435,7 @@ class EnetConnection:
 
         def transact_main_status(
             self, operation: str = ...
-        ) -> Tuple[int, int, int]: ...
+        ) -> tuple[int, int, int]: ...
 
     #: Companion-hello flag word for device-mode sessions (single resource).
     COMPANION_FLAGS_DEVICE = 2
@@ -446,15 +447,15 @@ class EnetConnection:
         self,
         host: str,
         open_timeout: float = 10.0,
-        timeout: Optional[float] = 10.0,
+        timeout: float | None = 10.0,
     ) -> None:
         self.host = host
         self._open_timeout = open_timeout
         self._timeout = timeout
-        self.main: Optional[socket.socket] = None
-        self.companion: Optional[socket.socket] = None
-        self.wait: Optional[socket.socket] = None
-        self.control: Optional[socket.socket] = None
+        self.main: socket.socket | None = None
+        self.companion: socket.socket | None = None
+        self.wait: socket.socket | None = None
+        self.control: socket.socket | None = None
         # Tracks whether a Frame F bracket-open has been acked by the box
         # without a matching Frame X close yet. Owned by _transact_bracket
         # so failures between bracket-open and the session-layer marker
@@ -554,7 +555,7 @@ class EnetConnection:
                     LOGGER.debug("error closing %s socket: %s", attr, e)
                 setattr(self, attr, None)
 
-    def set_socket_timeout(self, timeout: Optional[float]) -> None:
+    def set_socket_timeout(self, timeout: float | None) -> None:
         """Apply ``timeout`` (in seconds) to all currently open sockets.
 
         Use ``None`` for blocking without timeout. The value is cached so
@@ -621,11 +622,11 @@ class EnetConnection:
             LOGGER.debug("→ main: %s", data.hex())
         self.main.sendall(data)
 
-    def read_status_main(self) -> Tuple[int, int, int]:
+    def read_status_main(self) -> tuple[int, int, int]:
         """Read a chunk-wrapped status header from the main socket and parse it."""
         return read_status_chunk(self.recv_main_exactly)
 
-    def transact_main(self, frame: bytes, operation: str = "") -> Tuple[int, int, int]:
+    def transact_main(self, frame: bytes, operation: str = "") -> tuple[int, int, int]:
         """Send a command frame and read the status header on the main socket.
 
         Raises :class:`NIEnet100IOError` if the status header has ``STA_ERR``
@@ -1032,7 +1033,7 @@ def _set_io_timeout(self: EnetConnection, tmo_code: int) -> None:
 
 def _transact_main_status(
     self: EnetConnection, operation: str = ""
-) -> Tuple[int, int, int]:
+) -> tuple[int, int, int]:
     """Read a status header on the main socket and raise on error.
 
     Sibling of :meth:`EnetConnection.transact_main` for verbs that have

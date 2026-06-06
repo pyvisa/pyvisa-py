@@ -18,7 +18,7 @@ protocol into pyvisa-py as two session types:
 
 """
 
-from typing import Any, ClassVar, Dict, List, Optional, Tuple
+from typing import Any, ClassVar
 
 from pyvisa import attributes, constants, rname
 from pyvisa.constants import ResourceAttribute, StatusCode
@@ -61,13 +61,13 @@ class _NIEnet100IntfcSession(Session):
     #: this to find the bridge for a given ``GPIB<n>::*::INSTR`` resource.
     #: Key is a string to mirror :class:`rname.GPIBInstr.board`, so dispatch
     #: lookups with ``parsed.board`` match without conversion.
-    boards: ClassVar[Dict[str, "_NIEnet100IntfcSession"]] = {}
+    boards: ClassVar[dict[str, "_NIEnet100IntfcSession"]] = {}
 
     #: The long-lived connection to the bridge. ``None`` before
     #: ``after_parsing`` runs successfully and after ``close``.
-    interface: Optional[nienet100.EnetConnection]
+    interface: nienet100.EnetConnection | None
 
-    def _get_attribute(self, attribute: ResourceAttribute) -> Tuple[Any, StatusCode]:
+    def _get_attribute(self, attribute: ResourceAttribute) -> tuple[Any, StatusCode]:
         raise UnknownAttribute(attribute)
 
     def _set_attribute(
@@ -102,7 +102,7 @@ class NIEnet100TCPIPIntfcSession(_NIEnet100IntfcSession):
         return "via pure-Python NI GPIB-ENET/100 protocol"
 
     @staticmethod
-    def list_resources() -> List[str]:
+    def list_resources() -> list[str]:
         """Discover bridges on the local broadcast domain and emit resource
         strings for each one found.
 
@@ -133,8 +133,8 @@ class NIEnet100TCPIPIntfcSession(_NIEnet100IntfcSession):
         self,
         resource_manager_session: VISARMSession,
         resource_name: str,
-        parsed: Optional[rname.ResourceName] = None,
-        open_timeout: Optional[int] = None,
+        parsed: rname.ResourceName | None = None,
+        open_timeout: int | None = None,
     ) -> None:
         self.interface = None
         super().__init__(resource_manager_session, resource_name, parsed, open_timeout)
@@ -210,14 +210,14 @@ class NIEnet100InstrSession(Session):
     #: the connection itself, so ``close()`` releases any open bracket
     #: even when ``after_parsing`` fails mid-way (e.g., a wire error after
     #: Frame F was acked).
-    interface: Optional[nienet100.EnetConnection]
+    interface: nienet100.EnetConnection | None
 
     def __init__(
         self,
         resource_manager_session: VISARMSession,
         resource_name: str,
-        parsed: Optional[rname.ResourceName] = None,
-        open_timeout: Optional[int] = None,
+        parsed: rname.ResourceName | None = None,
+        open_timeout: int | None = None,
     ) -> None:
         self.interface = None
         #: Holds the tail of a wire message for which the caller's max-count was
@@ -301,7 +301,7 @@ class NIEnet100InstrSession(Session):
 
     # --- I/O ------------------------------------------------------------
 
-    def write(self, data: bytes) -> Tuple[int, StatusCode]:
+    def write(self, data: bytes) -> tuple[int, StatusCode]:
         if self.interface is None:
             return 0, StatusCode.error_connection_lost
         try:
@@ -310,7 +310,7 @@ class NIEnet100InstrSession(Session):
             return 0, _map_iberr_to_status(e.err)
         return written, StatusCode.success
 
-    def read(self, count: int) -> Tuple[bytes, StatusCode]:
+    def read(self, count: int) -> tuple[bytes, StatusCode]:
         if self.interface is None:
             return b"", StatusCode.error_connection_lost
 
@@ -372,7 +372,7 @@ class NIEnet100InstrSession(Session):
             return _map_iberr_to_status(e.err)
         return StatusCode.success
 
-    def read_stb(self) -> Tuple[int, StatusCode]:
+    def read_stb(self) -> tuple[int, StatusCode]:
         if self.interface is None:
             return 0, StatusCode.error_connection_lost
         try:
@@ -421,7 +421,7 @@ class NIEnet100InstrSession(Session):
                 self.interface.set_socket_timeout(max(self.timeout + 5.0, 8.0))
         return status
 
-    def _get_attribute(self, attribute: ResourceAttribute) -> Tuple[Any, StatusCode]:
+    def _get_attribute(self, attribute: ResourceAttribute) -> tuple[Any, StatusCode]:
         raise UnknownAttribute(attribute)
 
     def _set_attribute(

@@ -22,7 +22,6 @@ import socket
 import struct
 import time
 from dataclasses import dataclass
-from typing import Dict, List, Optional
 
 LOGGER = logging.getLogger("pyvisa_py.protocols.nienet100_discovery")
 
@@ -140,7 +139,7 @@ def pack_discovery_request(nonce: int = 0) -> bytes:
     return bytes(buf)
 
 
-def parse_discovery_response(buf: bytes) -> Optional[BoxInfo]:
+def parse_discovery_response(buf: bytes) -> BoxInfo | None:
     """Parse a 184-byte discovery reply into a :class:`BoxInfo`.
 
     Returns ``None`` for any frame that fails validation — wrong length,
@@ -205,7 +204,7 @@ def discover(
     broadcast_addr: str = "255.255.255.255",
     port: int = PORT_BROADCAST,
     deduplicate: bool = True,
-) -> List[BoxInfo]:
+) -> list[BoxInfo]:
     """Send a discovery probe and collect bridge responses.
 
     Opens a UDP socket bound to ``('', port)`` (with ``SO_REUSEADDR`` and
@@ -237,7 +236,7 @@ def discover(
 
     Returns
     -------
-    List[BoxInfo]
+    list[BoxInfo]
         Sorted by IP address. Empty if no replies arrived within
         ``timeout``.
 
@@ -257,7 +256,7 @@ def discover(
 
         sock.sendto(pack_discovery_request(), (broadcast_addr, port))
 
-        found: Dict[str, BoxInfo] = {}
+        found: dict[str, BoxInfo] = {}
         deadline = time.monotonic() + timeout
         while True:
             remaining = deadline - time.monotonic()

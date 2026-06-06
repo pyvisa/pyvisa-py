@@ -19,7 +19,8 @@ library, so it can own the slot even when ``gpib.py`` fails to import.
 
 """
 
-from typing import Callable, List, Optional, Tuple, Type, cast
+from collections.abc import Callable
+from typing import cast
 
 from pyvisa import constants, rname
 from pyvisa.constants import StatusCode
@@ -34,14 +35,14 @@ from .sessions import OpenError, Session, UnavailableSession
 #: backend (e.g. the board number is not registered to it). Resources reach
 #: this dispatcher only via the ``(gpib, "INSTR")`` slot, so the parsed name
 #: is always a :class:`~pyvisa.rname.GPIBInstr`.
-GPIBInstrResolver = Callable[[GPIBInstr], Optional[Type[Session]]]
+GPIBInstrResolver = Callable[[GPIBInstr], type[Session] | None]
 
 #: Registered backends as ``(priority, label, resolver)``. Lower priority
 #: values are consulted first; :func:`register_backend` keeps the list
 #: sorted. The sort is stable, so insertion order breaks ties — import
 #: order therefore only affects equal-priority backends, never the
 #: correctness of the fallback chain.
-_GPIB_INSTR_BACKENDS: List[Tuple[int, str, GPIBInstrResolver]] = []
+_GPIB_INSTR_BACKENDS: list[tuple[int, str, GPIBInstrResolver]] = []
 
 
 def register_backend(
@@ -80,8 +81,8 @@ class GPIBInstrDispatch(Session):
         cls,
         resource_manager_session: VISARMSession,
         resource_name: str,
-        parsed: Optional[rname.ResourceName] = None,
-        open_timeout: Optional[int] = None,
+        parsed: rname.ResourceName | None = None,
+        open_timeout: int | None = None,
     ) -> Session:
         if parsed is None:
             parsed = rname.parse_resource_name(resource_name)
@@ -98,7 +99,7 @@ class GPIBInstrDispatch(Session):
         raise OpenError(StatusCode.error_resource_not_found)
 
     @staticmethod
-    def list_resources() -> List[str]:
+    def list_resources() -> list[str]:
         """List native GPIB::INSTR resources found on local boards.
 
         Only the native linux-gpib / gpib-ctypes listeners are enumerated:
@@ -132,7 +133,7 @@ _PRIORITY_NATIVE = 100
 _builtins_registered = False
 
 
-def _board_resolver(boards: dict, session_cls: Type[Session]) -> GPIBInstrResolver:
+def _board_resolver(boards: dict, session_cls: type[Session]) -> GPIBInstrResolver:
     """Build a resolver that claims a resource only for registered boards.
 
     The ``boards`` mapping is captured by reference and queried at dispatch
@@ -141,13 +142,13 @@ def _board_resolver(boards: dict, session_cls: Type[Session]) -> GPIBInstrResolv
 
     """
 
-    def resolve(parsed: GPIBInstr) -> Optional[Type[Session]]:
+    def resolve(parsed: GPIBInstr) -> type[Session] | None:
         return session_cls if parsed.board in boards else None
 
     return resolve
 
 
-def _make_native_unavailable(exc: Exception) -> Type[Session]:
+def _make_native_unavailable(exc: Exception) -> type[Session]:
     """Return an unavailable session explaining the missing GPIB library.
 
     ``gpib.py`` raises on import when neither linux-gpib nor gpib-ctypes is
@@ -214,7 +215,7 @@ def register_builtin_backends() -> None:
     try:
         from .gpib import GPIBSession
     except Exception as e:
-        native_cls: Type[Session] = _make_native_unavailable(e)
+        native_cls: type[Session] = _make_native_unavailable(e)
     else:
         native_cls = GPIBSession
     register_backend(lambda parsed: native_cls, priority=_PRIORITY_NATIVE, label="gpib")
