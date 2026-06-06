@@ -58,6 +58,7 @@ class _NIEnet100IntfcSession(Session):
     (the box rejects Device-I/O on stale sessions, so an open socket is a
     reliable health signal). INSTR sessions do **not** share this connection;
     they each open their own.
+
     """
 
     #: Maps board number (as parsed string) -> INTFC session instance.
@@ -119,6 +120,7 @@ class NIEnet100TCPIPIntfcSession(_NIEnet100IntfcSession):
 
         Returns an empty list (rather than raising) on any discovery
         error — typically a bind conflict or a missing broadcast route.
+
         """
         # Local import keeps the top-level imports tidy and isolates the
         # UDP code path from sessions that never call list_resources.

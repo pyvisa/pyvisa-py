@@ -52,7 +52,9 @@ def _resolve_host_ip() -> str:
     discovery results, which always carry the bridge's IP. Falls back to
     ``HOST`` as-is when DNS resolution fails (e.g. NetBIOS-only names on
     a locked-down Windows box) so the test surfaces a meaningful diff
-    rather than a gaierror."""
+    rather than a gaierror.
+
+    """
     assert HOST is not None  # callers run only under require_bridge
     try:
         return socket.gethostbyname(HOST)
@@ -80,7 +82,9 @@ def test_discovery_finds_configured_bridge():
 @require_cross_subnet
 def test_unicast_discovery_against_configured_bridge():
     """Unicast probe to the known IP on the cross-subnet port should return
-    that box. Skipped by default — see ``require_cross_subnet`` for why."""
+    that box. Skipped by default — see ``require_cross_subnet`` for why.
+
+    """
     expected_ip = _resolve_host_ip()
     boxes = nienet100_discovery.discover(
         timeout=2.0,
@@ -143,7 +147,9 @@ def opened_session() -> Iterator[nienet100.EnetConnection]:
 @require_instrument
 def test_idn_query_round_trip(opened_session: nienet100.EnetConnection):
     """*IDN? must return non-empty bytes; if a vendor substring was
-    configured, it must appear in the response."""
+    configured, it must appear in the response.
+
+    """
     written = opened_session.ibwrt(b"*IDN?\n")
     assert written == 6
     response = opened_session.ibrd()
@@ -172,7 +178,9 @@ def test_read_stb_round_trip(opened_session: nienet100.EnetConnection):
 @require_instrument
 def test_trigger_round_trip(opened_session: nienet100.EnetConnection):
     """ibtrg must complete without error. The bus instrument may or may
-    not actually trigger anything — we only assert the verb is accepted."""
+    not actually trigger anything — we only assert the verb is accepted.
+
+    """
     opened_session.ibtrg()
 
 
