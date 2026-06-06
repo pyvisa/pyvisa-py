@@ -85,6 +85,7 @@ def test_unicast_discovery_against_configured_bridge():
     that box. Skipped by default — see ``require_cross_subnet`` for why.
 
     """
+    assert HOST is not None  # require_bridge guarantees this
     expected_ip = _resolve_host_ip()
     boxes = nienet100_discovery.discover(
         timeout=2.0,
@@ -102,6 +103,7 @@ def test_unicast_discovery_against_configured_bridge():
 @require_bridge
 def test_open_and_close_main_companion():
     """Main + companion sockets and companion hello must round-trip."""
+    assert HOST is not None  # require_bridge guarantees this
     conn = nienet100.EnetConnection(HOST, open_timeout=5.0, timeout=5.0)
     conn.open()
     try:
