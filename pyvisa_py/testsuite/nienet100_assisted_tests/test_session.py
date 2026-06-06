@@ -219,7 +219,9 @@ def test_assert_trigger_via_pyvisa(inst):
 @require_instrument
 def test_timeout_raises_visa_error_timeout(inst):
     """A read with no preceding write hits the box timeout and surfaces
-    as VisaIOError with StatusCode.error_timeout."""
+    as VisaIOError with StatusCode.error_timeout.
+
+    """
     inst.timeout = 200  # 200 ms — short enough that the test is brisk
     with pytest.raises(VisaIOError) as excinfo:
         inst.read()
@@ -232,7 +234,9 @@ def test_timeout_raises_visa_error_timeout(inst):
 def test_repeated_query_keeps_session_healthy(inst):
     """Three back-to-back queries must all succeed — guards against
     accidental state leakage between operations (e.g. unread bytes left
-    in the chunk stream or a bracket that closed mid-test)."""
+    in the chunk stream or a bracket that closed mid-test).
+
+    """
     for _ in range(3):
         response = inst.query("*IDN?")
         assert response
