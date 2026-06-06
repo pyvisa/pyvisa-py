@@ -278,6 +278,22 @@ def _make_empty_connection() -> nienet100.EnetConnection:
     return conn
 
 
+def _bound_inet_socket() -> socket.socket:
+    """Return an AF_INET socket bound to an ephemeral loopback port.
+
+    The 'O'/'U' verbs embed the main socket's ``getsockname()`` address in
+    the wire frame, so tests that exercise them need a main socket whose
+    ``getsockname()`` returns a real ``(ip, port)`` tuple. ``socket.
+    socketpair()`` yields AF_UNIX sockets on Unix whose ``getsockname()``
+    is the empty string, so it cannot stand in for the main socket here.
+    The socket is only queried for its address (never read/written), so a
+    bind without connect is enough.
+    """
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.bind(("127.0.0.1", 0))
+    return sock
+
+
 def test_ibwrt_sends_header_and_payload_combined():
     payload = b"HELLO"
     expected = (
@@ -461,7 +477,7 @@ def _expected_online_reconfirm() -> bytes:
 
 def test_ensure_wait_socket_sends_async_register_and_online_reconfirm():
     # The main socket must be a real socket so getsockname() works.
-    main_a, main_b = socket.socketpair()
+    main_a = _bound_inet_socket()
     try:
         main_ip, main_port = main_a.getsockname()
         script = [
@@ -489,7 +505,6 @@ def test_ensure_wait_socket_sends_async_register_and_online_reconfirm():
             t.join(timeout=2.0)
     finally:
         main_a.close()
-        main_b.close()
 
 
 def test_ensure_wait_socket_requires_main_socket():
@@ -580,7 +595,7 @@ def _expected_o_verb(
 
 
 def test_ibsic_sends_o49_with_main_address():
-    main_a, main_b = socket.socketpair()
+    main_a = _bound_inet_socket()
     try:
         main_ip, main_port = main_a.getsockname()
         expected = _expected_o_verb(0x49, 0, main_ip, main_port)
@@ -597,11 +612,10 @@ def test_ibsic_sends_o49_with_main_address():
             t.join(timeout=2.0)
     finally:
         main_a.close()
-        main_b.close()
 
 
 def test_notify_off_async_device_sends_o4e_with_main_address():
-    main_a, main_b = socket.socketpair()
+    main_a = _bound_inet_socket()
     try:
         main_ip, main_port = main_a.getsockname()
         expected = _expected_o_verb(0x4E, 1, main_ip, main_port)
@@ -618,11 +632,10 @@ def test_notify_off_async_device_sends_o4e_with_main_address():
             t.join(timeout=2.0)
     finally:
         main_a.close()
-        main_b.close()
 
 
 def test_close_runs_notify_off_when_wait_socket_was_opened():
-    main_a, main_b = socket.socketpair()
+    main_a = _bound_inet_socket()
     try:
         main_ip, main_port = main_a.getsockname()
         expected_notify = _expected_o_verb(0x4E, 1, main_ip, main_port)
@@ -643,7 +656,7 @@ def test_close_runs_notify_off_when_wait_socket_was_opened():
         finally:
             t.join(timeout=2.0)
     finally:
-        main_b.close()
+        main_a.close()
 
 
 def test_close_skips_notify_off_when_wait_socket_was_not_opened():
@@ -662,7 +675,7 @@ def test_close_skips_notify_off_when_wait_socket_was_not_opened():
 def test_close_swallows_notify_off_errors():
     # Control socket is closed before notify-off would be sent; the close
     # path should log and proceed without raising.
-    main_a, main_b = socket.socketpair()
+    main_a = _bound_inet_socket()
     try:
         fake_wait = socket.socket()
         fake_control = socket.socket()
@@ -674,4 +687,4 @@ def test_close_swallows_notify_off_errors():
         conn.close()  # must not raise
         assert conn.wait is None and conn.control is None
     finally:
-        main_b.close()
+        main_a.close()
