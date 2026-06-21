@@ -1009,10 +1009,10 @@ def _ibrsp(self: EnetConnection) -> int:
 
     Wire layout (request): ``19 00*11``. The response is **one** data
     chunk whose length is 13: the first 12 bytes are the standard status
-    header (with ``cnt=1``), and the trailing byte is the STB. Other
-    verbs that the status header always comes alone do not apply here —
-    ibrsp is special in that the response payload is glued to the status
-    inside the same chunk.
+    header and the trailing byte is the STB. The STB is always that trailing
+    byte; the header's ``cnt`` field is not reliably 1 — a serial poll taken
+    right after an SRQ wait reports ``cnt=0`` with a perfectly valid STB —
+    so the STB is read by position, not gated on ``cnt``.
 
     """
     self.send_main(pack_command(0x19))
@@ -1022,11 +1022,9 @@ def _ibrsp(self: EnetConnection) -> int:
             "ibrsp chunk has %d bytes, expected at least %d"
             % (len(chunk), STATUS_HEADER_SIZE + 1)
         )
-    sta, err, cnt = parse_status_header(chunk[:STATUS_HEADER_SIZE])
+    sta, err, _cnt = parse_status_header(chunk[:STATUS_HEADER_SIZE])
     if sta & STA_ERR:
         raise NIEnet100IOError(sta, err, "ibrsp")
-    if cnt != 1:
-        raise NIEnet100ProtocolError("ibrsp cnt=%d, expected 1" % cnt)
     return chunk[STATUS_HEADER_SIZE]
 
 

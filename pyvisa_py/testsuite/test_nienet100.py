@@ -381,11 +381,13 @@ def test_ibrd_no_data_path_propagates_error_status():
         t.join(timeout=2.0)
 
 
-def test_ibrsp_returns_stb_from_combined_chunk():
-    # The bridge packs the 12-byte status header and the 1-byte STB into
-    # one chunk with length=13: the status reports cnt=1 and the STB
-    # follows immediately after the cnt field.
-    status_body = struct.pack("!HH4xL", nienet100.STA_CMPL, 0, 1)
+@pytest.mark.parametrize("cnt", [1, 0])
+def test_ibrsp_returns_stb_from_combined_chunk(cnt: int):
+    # The bridge packs the 12-byte status header and the 1-byte STB into one
+    # chunk with length=13; the STB is always the trailing byte. cnt is not
+    # reliably 1 (a serial poll right after an SRQ wait reports cnt=0 with a
+    # valid STB), so the STB must be read by position regardless of cnt.
+    status_body = struct.pack("!HH4xL", nienet100.STA_CMPL, 0, cnt)
     response = _chunk(0, status_body + b"\x42")
     script = [
         ("recv", nienet100.pack_command(0x19)),
