@@ -152,6 +152,52 @@ def test_idn_query_via_pyvisa(inst):
 
 
 @require_instrument
+def test_idn_query_small_chunks_stress_read_buffer(inst):
+    """Read the *IDN? response one byte per backend read to exercise the
+    session's intermediate read buffer.
+
+    Setting ``chunk_size = 1`` forces pyvisa to call the session ``read``
+    with ``count == 1`` repeatedly, so the whole-message response cached by
+    ``ibrd`` is handed out in single-byte slices (the
+    ``success_max_count_read`` path in ``NIEnet100InstrSession.read``). The
+    reassembled string must match a normal one-shot query.
+
+    """
+    full = inst.query("*IDN?")
+    inst.chunk_size = 1
+    chunked = inst.query("*IDN?")
+    assert chunked == full, "byte-wise read %r != one-shot read %r" % (
+        chunked,
+        full,
+    )
+
+
+@require_instrument
+def test_new_write_discards_unread_response(inst):
+    """A new write must drop bytes left unread from a previous response.
+
+    Read only a few bytes of one *IDN? reply, leaving the remainder in the
+    session's intermediate buffer, then issue a fresh *IDN? query. The new
+    write has to discard the buffered tail so the second response comes back
+    clean and matches a normal one-shot query — otherwise the stale tail
+    (which ends in the termination char) would be returned as the answer and
+    the real reply would desync onto the next read.
+
+    """
+    expected = inst.query("*IDN?")
+
+    inst.write("*IDN?")
+    partial = inst.read_bytes(3)
+    assert len(partial) == 3, "expected a 3-byte partial read, got %r" % (partial,)
+
+    again = inst.query("*IDN?")
+    assert again == expected, "stale buffered tail leaked: %r != %r" % (
+        again,
+        expected,
+    )
+
+
+@require_instrument
 def test_clear_via_pyvisa(inst):
     """Resource.clear() must complete without raising."""
     inst.clear()
