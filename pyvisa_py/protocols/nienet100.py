@@ -6,7 +6,9 @@ GPIB-ENET/100 Ethernet-to-GPIB bridge. It is **not** compatible with the
 older GPIB-ENET (10 MBit/s, libnienet target), which uses a similar frame
 layout but different verb opcodes and a single-step open.
 
-Wire reference: ``work/GPIB-ENET-100_Protocol.md``.
+The wire format was reverse-engineered; the frame layout, verb opcodes and
+status fields are documented inline alongside the constants and packers in
+this module.
 
 All multi-byte fields are big-endian (network byte order).
 
