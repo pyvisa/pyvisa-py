@@ -28,13 +28,11 @@ LOGGER = logging.getLogger("pyvisa_py.protocols.nienet100")
 #: Main TCP port (synchronous request/response).
 PORT_MAIN = 5000
 
-#: Wait socket TCP port (synchronous ibwait polling and async register).
-PORT_WAIT = 5003
-
-#: Control socket TCP port (notify-off async, ibsic, ibwait re-arm).
+#: Control socket TCP port (used by the 'O' verbs, e.g. ibsic).
 PORT_CONTROL = 5005
 
-#: Companion socket TCP port (hello-only, mandatory for FW >= A8).
+#: Companion socket TCP port (hello-only, mandatory for FW >= A8). Also the
+#: asynchronous/SRQ event channel that ibwait polls.
 PORT_COMPANION = 5015
 
 #: Fixed length of every command frame sent to the box.
@@ -351,12 +349,12 @@ class NIEnet100IOError(NIEnet100Error):
 
 
 # --- Connection -------------------------------------------------------------
-# The box uses up to four parallel TCP sockets per session. The main socket
-# (5000) carries all synchronous Device-I/O. The companion socket (5015) is
-# mandatory on every firmware shipped in the last ~20 years and only carries
-# a single hello frame; it must stay open for the session lifetime. Wait
-# (5003) and control (5005) are lazy and only needed for ibwait / async
-# notify-off; they are not opened by this base class.
+# The box uses parallel TCP sockets per session. The main socket (5000)
+# carries all synchronous Device-I/O. The companion socket (5015) is
+# mandatory on every firmware shipped in the last ~20 years; it carries the
+# hello frame, must stay open for the session lifetime, and doubles as the
+# async/SRQ event channel that ibwait polls. The control socket (5005) is
+# lazy and only needed for the 'O' verbs (e.g. ibsic).
 
 
 def _u32_from_ip(ip: str) -> int:
@@ -374,11 +372,10 @@ class EnetConnection:
     """Synchronous TCP transport to a single GPIB-ENET/100 box.
 
     Opens the main socket (port 5000) and the companion socket (port 5015)
-    on instantiation and sends the mandatory companion hello frame. Wait
-    (port 5003) and control (port 5005) sockets are opened lazily by
-    :meth:`ensure_wait_socket` / :meth:`ensure_control_socket` — they are
-    only needed for ibwait-based SRQ polling and the few 'O' verbs
-    (notify-off async, ibsic, ibwait re-arm).
+    on instantiation and sends the mandatory companion hello frame. The
+    companion socket doubles as the asynchronous/SRQ event channel: ibwait
+    polls it (see :meth:`ibwait`). The control socket (port 5005) is opened
+    lazily by :meth:`ensure_control_socket` for the 'O' verbs (e.g. ibsic).
 
     The class is **not** thread-safe. Concurrent calls into a single
     instance (e.g. one thread issuing ibwrt while another polls ibwait)
@@ -401,9 +398,8 @@ class EnetConnection:
     main : socket.socket
         The synchronous main socket.
     companion : socket.socket
-        The hello-only companion socket; kept open for the session lifetime.
-    wait : socket.socket | None
-        The ibwait polling socket; ``None`` until :meth:`ensure_wait_socket`.
+        The companion socket; kept open for the session lifetime and used as
+        the async/SRQ event channel that :meth:`ibwait` polls.
     control : socket.socket | None
         The control socket for 'O' verbs; ``None`` until
         :meth:`ensure_control_socket`.
@@ -431,8 +427,6 @@ class EnetConnection:
 
         def ibsic(self) -> None: ...
 
-        def notify_off_async_device(self) -> None: ...
-
         def set_io_timeout(self, tmo_code: int) -> None: ...
 
         def transact_main_status(
@@ -441,9 +435,6 @@ class EnetConnection:
 
     #: Companion-hello flag word for device-mode sessions (single resource).
     COMPANION_FLAGS_DEVICE = 2
-
-    #: Async-register flag word for device-mode SRQ routing.
-    ASYNC_REGISTER_FLAGS_DEVICE = 2
 
     def __init__(
         self,
@@ -456,7 +447,6 @@ class EnetConnection:
         self._timeout = timeout
         self.main: socket.socket | None = None
         self.companion: socket.socket | None = None
-        self.wait: socket.socket | None = None
         self.control: socket.socket | None = None
         # Tracks whether a Frame F bracket-open has been acked by the box
         # without a matching Frame X close yet. Owned by _transact_bracket
@@ -483,34 +473,6 @@ class EnetConnection:
             self.close()
             raise
 
-    def ensure_wait_socket(self) -> None:
-        """Open port 5003 and register the main session for async events.
-
-        Sends the ``'U 01'`` device-mode async-register frame (which tells
-        the box that SRQ events for the session identified by the main
-        socket's address should surface via ibwait on this socket) and the
-        ``'P 10 01'`` online re-confirm. Idempotent: a no-op if the wait
-        socket is already open.
-
-        Requires the main socket to be open (the async-register frame
-        carries the main socket's ``getsockname()`` so the box can match
-        SRQs back to the session).
-
-        """
-        if self.wait is not None:
-            return
-        if self.main is None:
-            raise NIEnet100Error("cannot open wait socket: main socket is not open")
-
-        sock = self._connect(PORT_WAIT)
-        try:
-            self._send_async_register_device(sock)
-            self._send_online_reconfirm(sock)
-        except Exception:
-            sock.close()
-            raise
-        self.wait = sock
-
     def ensure_control_socket(self) -> None:
         """Open port 5005. No setup frames — first 'O' verb carries its own.
 
@@ -528,10 +490,8 @@ class EnetConnection:
         sends the matching ``X 00 01`` bracket-close before tearing the
         sockets down — otherwise the bridge leaks the session slot. This
         runs unconditionally so error paths in higher layers cannot skip
-        it. If the wait socket was opened (and the async-register frame
-        was therefore sent), best-effort sends the 'O 4e' notify-off
-        frame on the control socket too. Errors during cleanup are
-        logged and swallowed so socket teardown always runs.
+        it. Errors during cleanup are logged and swallowed so socket
+        teardown always runs.
 
         """
         if self._bracket_open and self.main is not None:
@@ -540,15 +500,9 @@ class EnetConnection:
             except Exception as e:
                 LOGGER.debug("bracket close during teardown failed: %s", e)
 
-        if self.wait is not None and self.main is not None:
-            try:
-                self.notify_off_async_device()
-            except (NIEnet100Error, OSError) as e:
-                LOGGER.debug("notify-off cleanup failed: %s", e)
-
         # Close in reverse open-order so the box sees the auxiliary sockets
         # disappear before main. The box does not require a goodbye frame.
-        for attr in ("control", "wait", "companion", "main"):
+        for attr in ("control", "companion", "main"):
             sock = getattr(self, attr, None)
             if sock is not None:
                 try:
@@ -560,12 +514,12 @@ class EnetConnection:
     def set_socket_timeout(self, timeout: float | None) -> None:
         """Apply ``timeout`` (in seconds) to all currently open sockets.
 
-        Use ``None`` for blocking without timeout. The value is cached so
-        sockets opened later (wait/control) pick up the same setting.
+        Use ``None`` for blocking without timeout. The value is cached so a
+        control socket opened later picks up the same setting.
 
         """
         self._timeout = timeout
-        for sock in (self.main, self.companion, self.wait, self.control):
+        for sock in (self.main, self.companion, self.control):
             if sock is not None:
                 sock.settimeout(timeout)
 
@@ -674,43 +628,6 @@ class EnetConnection:
         if sta & STA_ERR:
             raise NIEnet100IOError(sta, err, "companion hello")
 
-    def _send_async_register_device(self, wait_sock: socket.socket) -> None:
-        """Send the 'U 01' device-mode async-register on a wait socket.
-
-        Sub-op layout: ``55 01 [htons(flags)] 00 00 [htons(port)] [ip:4]``.
-        ``port``/``ip`` come from the **main** socket's ``getsockname()``
-        — the box uses that address to identify the session whose async
-        events should surface on ``wait_sock``.
-
-        """
-        assert self.main is not None  # caller guarantees this
-        main_ip, main_port = self.main.getsockname()
-        frame = pack_command(
-            cmd_id=0x55,  # 'U'
-            b1=0x01,
-            w1=self.ASYNC_REGISTER_FLAGS_DEVICE,
-            w2=0,
-            w3=main_port,
-            dw=_u32_from_ip(main_ip),
-        )
-        wait_sock.sendall(frame)
-        sta, err, _cnt = read_status_chunk(lambda n: self._recv_exactly(wait_sock, n))
-        if sta & STA_ERR:
-            raise NIEnet100IOError(sta, err, "async register device")
-
-    def _send_online_reconfirm(self, wait_sock: socket.socket) -> None:
-        """Send the 'P 10 01' online re-confirm on a wait socket.
-
-        Same property frame as Frame D of the open sequence; the wait
-        socket needs its own confirmation that the bracket is online
-        before the box will accept ibwait polls.
-
-        """
-        wait_sock.sendall(_pack_property_set(0x10, 0x01))
-        sta, err, _cnt = read_status_chunk(lambda n: self._recv_exactly(wait_sock, n))
-        if sta & STA_ERR:
-            raise NIEnet100IOError(sta, err, "wait online re-confirm")
-
     # --- GPIB-session open / close (Frames A-G of the spec) -----------
 
     #: Default Frame-C board flags. Sets HS488 marker + an EOI/EOS bit and
@@ -798,10 +715,11 @@ class EnetConnection:
         # Wire bytes: 58 01 01 00*9
         self._transact_bracket(enter=True)
 
-        # Frame G: Notify-Off sync ('N', idx 0x4e). Defensive reset against
-        # any pending async notifies the box may have queued.
+        # Frame G: arm the async/SRQ notify channel ('N 01', idx 0x4e) on the
+        # main socket. This is what lets a later ibwait poll on the companion
+        # socket return SRQ events for this session.
         # Wire bytes: 4e 01 00*10
-        self.transact_main(pack_command(0x4E, 0x01), "open Frame G notify-off sync")
+        self.transact_main(pack_command(0x4E, 0x01), "open Frame G async-notify arm")
 
     def close_gpib_session(self) -> None:
         """Close the operation bracket opened by :meth:`open_gpib_session`.
@@ -844,8 +762,7 @@ def _pack_o_verb(sub_op: int, leading_u16: int, ip_u32: int, port: int) -> bytes
 
     Wire layout: ``4f [sub_op] [htons(leading_u16):2] [ip:4] [htons(port):2] 00 00``.
 
-    Used by ibsic, notify-off-async-board, notify-off-async-device, and
-    ibwait re-arm. Note that the layout differs from 'U' verbs (which put
+    Used by ibsic. Note that the layout differs from 'U' verbs (which put
     port before ip); the inconsistency is part of the wire protocol.
 
     """
@@ -854,10 +771,9 @@ def _pack_o_verb(sub_op: int, leading_u16: int, ip_u32: int, port: int) -> bytes
 
 # --- Device-level verbs -----------------------------------------------------
 # These methods are added to EnetConnection via assignment below. They cover
-# the minimal pyvisa-Resource API surface: write, read, clear, trigger,
-# serial poll, local-lockout release, and the I/O timeout setter. Async
-# verbs (ibwait, ibnotify) and board-level verbs (ibsic, ibcmd) live in
-# later commits since they require the wait/control sockets.
+# the pyvisa-Resource API surface: write, read, clear, trigger, serial poll,
+# local-lockout release, the I/O timeout setter, ibwait (SRQ poll on the
+# companion socket), and the board-level ibsic on the control socket.
 
 
 def _ibwrt(self: EnetConnection, data: bytes) -> int:
@@ -1081,36 +997,6 @@ def _ibsic(self: EnetConnection) -> None:
         raise NIEnet100IOError(sta, err, "ibsic")
 
 
-def _notify_off_async_device(self: EnetConnection) -> None:
-    """Deregister the device-mode async event channel.
-
-    Sends ``'O 4e'`` on the control socket. Pairs with the async-register
-    fired by :meth:`ensure_wait_socket`. Wire layout::
-
-        4f 4e 00 01 [ip_main:4] [htons(port_main):2] 00 00
-
-    Best-effort cleanup; callers typically ignore errors and close the
-    sockets anyway.
-
-    """
-    self.ensure_control_socket()
-    assert self.control is not None
-    if self.main is None:
-        raise NIEnet100Error("cannot notify-off: main socket is not open")
-    main_ip, main_port = self.main.getsockname()
-    frame = _pack_o_verb(
-        sub_op=0x4E,
-        leading_u16=1,
-        ip_u32=_u32_from_ip(main_ip),
-        port=main_port,
-    )
-    self.control.sendall(frame)
-    control = self.control
-    sta, err, _cnt = read_status_chunk(lambda n: self._recv_exactly(control, n))
-    if sta & STA_ERR:
-        raise NIEnet100IOError(sta, err, "notify-off async device")
-
-
 def _ibwait(self: EnetConnection, mask: int) -> int:
     """Issue one ibwait round-trip on the companion socket and return ``sta``.
 
@@ -1165,6 +1051,5 @@ EnetConnection.ibloc = _ibloc  # type: ignore[method-assign]
 EnetConnection.ibrsp = _ibrsp  # type: ignore[method-assign]
 EnetConnection.ibwait = _ibwait  # type: ignore[method-assign]
 EnetConnection.ibsic = _ibsic  # type: ignore[method-assign]
-EnetConnection.notify_off_async_device = _notify_off_async_device  # type: ignore[method-assign]
 EnetConnection.set_io_timeout = _set_io_timeout  # type: ignore[method-assign]
 EnetConnection.transact_main_status = _transact_main_status  # type: ignore[method-assign]
