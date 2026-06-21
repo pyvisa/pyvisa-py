@@ -308,6 +308,10 @@ class NIEnet100InstrSession(Session):
     def write(self, data: bytes) -> tuple[int, StatusCode]:
         if self.interface is None:
             return 0, StatusCode.error_connection_lost
+        # A new write starts a fresh exchange: drop any buffered-but-unread
+        # bytes left over from a partial read of a previous response so the
+        # stale tail cannot be prepended to the reply for this command.
+        self._read_buffer.clear()
         try:
             written = self.interface.ibwrt(data)
         except nienet100.NIEnet100IOError as e:
