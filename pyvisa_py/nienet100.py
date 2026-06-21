@@ -33,6 +33,10 @@ from .sessions import OpenError, Session, UnknownAttribute
 # falls back when pyvicp is not installed). Users opening NI-ENET100-TCPIP
 # resources then see a clean "No class registered" error instead of a
 # cryptic AttributeError during session creation.
+#
+# TODO(pre-release): drop this runtime guard once pyvisa-py pins a minimum
+# pyvisa version that ships the ni_enet100_tcpip definitions; the version
+# requirement then makes the check redundant.
 try:
     _IFACE_NIENET100_TCPIP = constants.InterfaceType.ni_enet100_tcpip
 except AttributeError as e:
