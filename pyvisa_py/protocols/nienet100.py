@@ -647,20 +647,26 @@ class EnetConnection:
         """Send the 'U 02' hello on the companion socket and read the status.
 
         Sub-op layout: ``55 02 [htons(flags)] 00 00 [htons(port)] [ip:4]``.
-        ``port``/``ip`` are ``getsockname()`` of the companion socket — the
-        box does not validate the values, so NAT'd addresses are fine.
+        ``port``/``ip`` are the **main** socket's ``getsockname()`` — the box
+        uses them to link this companion (the async/SRQ event channel) back to
+        the main session, so an ibwait poll on the companion is answered. The
+        genuine NI software reports the main socket's address here too;
+        reporting the companion's own port (as earlier revisions did) leaves
+        the event channel unlinked and ibwait never returns.
 
         """
         if self.companion is None:
             raise NIEnet100Error("companion socket is not open")
-        local_ip, local_port = self.companion.getsockname()
+        if self.main is None:
+            raise NIEnet100Error("main socket is not open")
+        main_ip, main_port = self.main.getsockname()
         frame = pack_command(
             cmd_id=0x55,  # 'U'
             b1=0x02,
             w1=self.COMPANION_FLAGS_DEVICE,
             w2=0,
-            w3=local_port,
-            dw=_u32_from_ip(local_ip),
+            w3=main_port,
+            dw=_u32_from_ip(main_ip),
         )
         self.companion.sendall(frame)
         companion = self.companion
