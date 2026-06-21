@@ -533,27 +533,28 @@ def test_ensure_control_socket_is_lazy_and_idempotent():
 
 
 def test_ibwait_sends_mask_and_returns_sta():
+    # ibwait polls with 0x22 on the companion socket (the event channel).
     mask = nienet100.STA_RQS | nienet100.STA_TIMO
-    expected_frame = nienet100.pack_command(cmd_id=0x54, b1=0x00, w1=mask)
+    expected_frame = nienet100.pack_command(cmd_id=0x22, b1=0x00, w1=mask)
     response_sta = nienet100.STA_RQS | nienet100.STA_CMPL
     script = [
         ("recv", expected_frame),
         ("send", _wrap_status(struct.pack("!HH4xL", response_sta, 0xFFFF, 0))),
     ]
-    wait_sock, t = _run_scripted_peer(script)
+    companion_sock, t = _run_scripted_peer(script)
     try:
         conn = _make_bound_connection(socket.socket())  # main present, unused here
-        conn.wait = wait_sock
+        conn.companion = companion_sock
         sta = conn.ibwait(mask)
         assert sta == response_sta
     finally:
-        wait_sock.close()
+        companion_sock.close()
         t.join(timeout=2.0)
 
 
 def test_ibwait_raises_on_error_status():
     script = [
-        ("recv", nienet100.pack_command(cmd_id=0x54, b1=0x00, w1=nienet100.STA_RQS)),
+        ("recv", nienet100.pack_command(cmd_id=0x22, b1=0x00, w1=nienet100.STA_RQS)),
         (
             "send",
             _wrap_status(
@@ -566,15 +567,15 @@ def test_ibwait_raises_on_error_status():
             ),
         ),
     ]
-    wait_sock, t = _run_scripted_peer(script)
+    companion_sock, t = _run_scripted_peer(script)
     try:
         conn = _make_bound_connection(socket.socket())
-        conn.wait = wait_sock
+        conn.companion = companion_sock
         with pytest.raises(nienet100.NIEnet100IOError) as excinfo:
             conn.ibwait(nienet100.STA_RQS)
         assert excinfo.value.err == nienet100.ERR_EARG
     finally:
-        wait_sock.close()
+        companion_sock.close()
         t.join(timeout=2.0)
 
 
