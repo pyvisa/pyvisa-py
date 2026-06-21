@@ -295,10 +295,10 @@ def _bound_inet_socket() -> socket.socket:
 
 
 def test_ibwrt_sends_header_and_payload_combined():
+    # Odd-length payload must be sent UNPADDED (count=5, 5 payload bytes) —
+    # padding makes the box reject the frame. Mirrors the NI capture.
     payload = b"HELLO"
-    expected = (
-        struct.pack("!BBHL4x", 0x62, 0x00, 0x0000, len(payload)) + payload + b"\x00"
-    )
+    expected = struct.pack("!BBHL4x", 0x62, 0x00, 0x0000, len(payload)) + payload
     script = [("recv", expected), ("send", _status_ok(cnt=5))]
     sock, t = _run_scripted_peer(script)
     conn = _make_bound_connection(sock)

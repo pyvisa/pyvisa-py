@@ -858,9 +858,11 @@ def _ibwrt(self: EnetConnection, data: bytes) -> int:
     """Write ``data`` to the addressed device.
 
     Wire layout: ``62 00 00 00 [htonl(byte_count):4] 00 00 00 00`` followed
-    immediately by the raw payload in the same ``sendall``. Odd-length
-    payloads are zero-padded on the wire; ``byte_count`` is the original
-    unpadded length.
+    immediately by the raw payload in the same ``sendall``. The payload is
+    sent unpadded, exactly ``byte_count`` bytes — the genuine NI software
+    sends odd-length payloads with no padding (e.g. ``*SRE 16`` = 7 bytes,
+    count=7), and padding an odd payload makes the box reject the frame
+    (it replies with a malformed 22-byte chunk).
 
     Returns the number of bytes the box reports as transferred.
 
@@ -868,8 +870,7 @@ def _ibwrt(self: EnetConnection, data: bytes) -> int:
     byte_count = len(data)
     # Frame: 62 00 00 00 [htonl(byte_count):4] 00 00 00 00
     header = struct.pack("!BBHL4x", 0x62, 0x00, 0x0000, byte_count)
-    payload = data + (b"\x00" if byte_count % 2 else b"")
-    self.send_main(header + payload)
+    self.send_main(header + data)
     _sta, _err, cnt = self.transact_main_status("ibwrt")
     return cnt
 
