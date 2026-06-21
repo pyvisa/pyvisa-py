@@ -1114,34 +1114,41 @@ def _notify_off_async_device(self: EnetConnection) -> None:
 
 
 def _ibwait(self: EnetConnection, mask: int) -> int:
-    """Issue one ibwait round-trip on the wait socket and return ``sta``.
+    """Issue one ibwait round-trip on the companion socket and return ``sta``.
 
-    Sends a single ``0x54`` poll frame carrying ``mask`` (a 16-bit ibsta
+    Sends a single ``0x22`` poll frame carrying ``mask`` (a 16-bit ibsta
     bitmask of the events the caller is interested in — typically
-    ``STA_RQS`` for SRQ, optionally OR'd with ``STA_TIMO`` so the box's
-    own IbcTMO surfaces as a timeout event). The box responds
-    synchronously with a 12-byte status header that the caller inspects
-    against ``mask``:
+    ``STA_RQS`` for SRQ, OR'd with ``STA_TIMO`` so the box's own IbcTMO
+    surfaces as a timeout event). The box **blocks** and replies with a
+    12-byte status header whose ``sta`` is the result:
 
         sta = conn.ibwait(STA_RQS | STA_TIMO)
         if sta & STA_RQS:
-            stb = conn.ibrsp()   # quittiert RQS
+            stb = conn.ibrsp()   # acknowledge RQS
         elif sta & STA_TIMO:
             ...   # no SRQ within IbcTMO
 
-    Polling-loop semantics are not built in here — see the wire spec
-    section 3.9.5 for the standard pattern. A poll interval of 0.2-0.5 s
-    is plenty for single-threaded adapters.
+    The poll goes on the companion socket (the box's event channel, linked
+    to this session by the companion hello). The async arm was already sent
+    as Frame G ('N 01') of :meth:`open_gpib_session`, so no extra setup is
+    needed here.
 
-    Wire layout: ``54 00 [htons(mask):2] 00*8``. The wait socket is
-    opened lazily via :meth:`ensure_wait_socket` on first call.
+    Wire layout: ``22 00 [htons(mask):2] 00*8``.
+
+    .. note::
+
+        With no matching event the box only answers after its IbcTMO, so the
+        companion socket timeout must exceed the session timeout — abandoning
+        a still-pending poll wedges the bridge. Callers should size the
+        socket timeout above the wire timeout (see
+        :meth:`set_socket_timeout`).
 
     """
-    self.ensure_wait_socket()
-    assert self.wait is not None  # ensure_wait_socket guarantees this
-    self.wait.sendall(pack_command(cmd_id=0x54, b1=0x00, w1=mask))
-    wait = self.wait
-    sta, err, _cnt = read_status_chunk(lambda n: self._recv_exactly(wait, n))
+    if self.companion is None:
+        raise NIEnet100Error("companion socket is not open")
+    self.companion.sendall(pack_command(cmd_id=0x22, b1=0x00, w1=mask))
+    companion = self.companion
+    sta, err, _cnt = read_status_chunk(lambda n: self._recv_exactly(companion, n))
     if sta & STA_ERR:
         raise NIEnet100IOError(sta, err, "ibwait")
     return sta
