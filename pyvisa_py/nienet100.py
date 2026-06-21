@@ -447,10 +447,3 @@ def _map_iberr_to_status(iberr: int) -> StatusCode:
     if iberr == nienet100.ERR_ESAC:
         return StatusCode.error_nonsupported_operation
     return StatusCode.error_system_error
-
-
-# Dispatch of ``GPIB::INSTR`` resources to this bridge is owned by
-# :mod:`pyvisa_py.gpib_dispatch`, which registers a backend resolver that
-# routes a board to :class:`NIEnet100InstrSession` when that board is bound
-# to a bridge INTFC (see :attr:`_NIEnet100IntfcSession.boards`). This module
-# therefore no longer touches the ``(gpib, "INSTR")`` registry slot.
