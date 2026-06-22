@@ -213,18 +213,29 @@ def test_timeout_surfaces_as_iberr_eabo(
 
 @require_instrument
 def test_ibwait_round_trip(opened_session: nienet100.EnetConnection):
-    """Smoke test for the ibwait verb: just verify the wire round-trip
-    completes without raising. The first call lazy-opens the wait
-    socket and fires the async-register + online-reconfirm sequence,
-    so any mismatch in that setup surfaces here.
+    """ibwait must report an asserted Service Request (RQS).
 
-    No strict assertion on the returned sta: per the wire spec, sta=0
-    is a valid "no event matched the mask, poll again" response, and
-    synthesizing a deterministic event would require instrument-side
-    SRQ configuration that is out of scope for a generic smoke test.
+    Arms a deterministic SRQ via the IEEE 488.2 status model: ``*SRE 16``
+    enables SRQ-on-MAV and ``*IDN?`` queues a response, so MAV — and thus
+    RQS — is set. ibwait (a 0x22 poll on the companion event channel) then
+    returns immediately with STA_RQS, and a serial poll reads a status byte
+    that carries the RQS bit. The queued response is drained afterwards so
+    it cannot leak into a later test.
 
     """
-    sta = opened_session.ibwait(nienet100.STA_RQS | nienet100.STA_TIMO)
-    assert isinstance(sta, int) and 0 <= sta <= 0xFFFF, (
-        "ibwait returned unexpected sta type/value: %r" % sta
-    )
+    conn = opened_session
+    conn.ibwrt(b"*CLS")
+    conn.ibwrt(b"*SRE 16")  # enable SRQ on MAV (message available)
+    conn.ibwrt(b"*IDN?")  # queue a response -> MAV -> SRQ asserts
+
+    sta = conn.ibwait(nienet100.STA_RQS | nienet100.STA_TIMO)
+    assert sta & nienet100.STA_RQS, "ibwait did not report RQS: sta=0x%04x" % sta
+
+    stb = conn.ibrsp()
+    assert stb & 0x40, "serial-poll STB lacks the RQS bit: 0x%02x" % stb
+
+    # Drain the queued *IDN? response so it cannot leak into a later test.
+    try:
+        conn.ibrd()
+    except nienet100.NIEnet100IOError:
+        pass
