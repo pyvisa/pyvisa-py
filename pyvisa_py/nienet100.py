@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 """Sessions for NI GPIB-ENET/100 Ethernet-to-GPIB bridges.
 
-The bridge speaks a proprietary TCP protocol on ports 5000 (main),
-5005 (control) and 5015 (companion) — see :mod:`pyvisa_py.protocols.nienet100`.
+The bridge speaks a proprietary TCP protocol on ports 5000 (main) and
+5015 (companion) — see :mod:`pyvisa_py.protocols.nienet100`.
 This module wires that protocol into pyvisa-py as two session types:
 
 - ``NI-ENET100-TCPIP<n>::<host>::INTFC`` — binds board number ``n`` to the
