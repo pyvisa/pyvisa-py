@@ -136,6 +136,24 @@ def test_intfc_open_registers_board(intfc):
     )
 
 
+@require_bridge
+def test_send_ifc_via_pyvisa(intfc):
+    """viGpibSendIFC pulses Interface Clear on the board session.
+
+    pyvisa's NIEnet100TCPIPIntfc is a bare Resource with no ``send_ifc``
+    convenience, so go through the library function directly. A clean IFC
+    returns ``StatusCode.success`` (the bridge becomes CIC with ATN); the
+    board-open the INTFC session performs is the state the box needs to
+    accept IFC. Repeated to confirm it does not wedge.
+
+    """
+    for _ in range(3):
+        status = intfc.visalib.gpib_send_ifc(intfc.session)
+        assert status == constants.StatusCode.success, "gpib_send_ifc returned %r" % (
+            status,
+        )
+
+
 # --- instrument tests (need PYVISA_TEST_GPIB_PAD) -------------------------
 
 

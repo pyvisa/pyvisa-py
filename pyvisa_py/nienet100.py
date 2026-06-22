@@ -80,6 +80,25 @@ class _NIEnet100IntfcSession(Session):
     ) -> StatusCode:
         raise UnknownAttribute(attribute)
 
+    def gpib_send_ifc(self) -> StatusCode:
+        """Pulse the GPIB IFC (Interface Clear) line via the bridge.
+
+        Maps ``viGpibSendIFC`` to the board-level ibsic verb (``0x1c`` on the
+        main socket; see :func:`pyvisa_py.protocols.nienet100._ibsic`). IFC is
+        a board operation, so it lives on the INTFC session — mirroring where
+        the linux-gpib backend places it. The INTFC opens a board session
+        (:meth:`EnetConnection.open_board_session`), which leaves the box in
+        the online state the box requires to accept IFC.
+
+        """
+        if self.interface is None:
+            return StatusCode.error_connection_lost
+        try:
+            self.interface.ibsic()
+        except nienet100.NIEnet100IOError as e:
+            return _map_iberr_to_status(e.err)
+        return StatusCode.success
+
     def close(self) -> StatusCode:
         # Always deregister; if open partially failed there may be no entry.
         board = getattr(self.parsed, "board", None)
@@ -163,7 +182,10 @@ class NIEnet100TCPIPIntfcSession(_NIEnet100IntfcSession):
                 open_timeout=connect_timeout_s,
                 timeout=connect_timeout_s,
             )
-            self.interface.open()
+            # Board-level open (not the device open()): leaves the box online
+            # so a board-level ibsic (gpib_send_ifc) is accepted. A bare open()
+            # wedges the box on ibsic.
+            self.interface.open_board_session()
         except Exception as e:
             LOGGER.exception(
                 "Failed to open NI GPIB-ENET/100 at %s for board %s",
