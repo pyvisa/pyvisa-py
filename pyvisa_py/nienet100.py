@@ -147,8 +147,11 @@ class NIEnet100TCPIPIntfcSession(_NIEnet100IntfcSession):
 
     def after_parsing(self) -> None:
         # pyvisa open_timeout is in milliseconds; convert to seconds for the
-        # socket layer. The default of 10 s mirrors what VXI-11 uses.
-        if self.open_timeout is None:
+        # socket layer. ``None`` or 0 (VI_TMO_IMMEDIATE, the pyvisa default)
+        # means "use a sane default": a literal ~1 ms socket timeout is far
+        # too short for the multi-frame board open, so fall back to 10 s (as
+        # VXI-11 does) rather than ``max(0, 0.001)``.
+        if not self.open_timeout:
             connect_timeout_s = 10.0
         else:
             connect_timeout_s = max(self.open_timeout / 1000.0, 0.001)
@@ -238,7 +241,10 @@ class NIEnet100InstrSession(Session):
         except KeyError as e:
             raise OpenError() from e
 
-        if self.open_timeout is None:
+        # ``None`` or 0 (VI_TMO_IMMEDIATE, the pyvisa default) means "use a
+        # sane default": a literal ~1 ms timeout makes the TCP connect flaky,
+        # so fall back to 10 s rather than ``max(0, 0.001)``.
+        if not self.open_timeout:
             connect_timeout_s = 10.0
         else:
             connect_timeout_s = max(self.open_timeout / 1000.0, 0.001)
