@@ -371,8 +371,8 @@ def _u32_from_ip(ip: str) -> int:
 class EnetConnection:
     """Synchronous TCP transport to a single GPIB-ENET/100 box.
 
-    Opens the main socket (port 5000) and the companion socket (port 5015)
-    on instantiation and sends the mandatory companion hello frame. The
+    :meth:`open` connects the main socket (port 5000) and the companion
+    socket (port 5015) and sends the mandatory companion hello frame. The
     companion socket doubles as the asynchronous/SRQ event channel: ibwait
     polls it (see :meth:`ibwait`). The control socket (port 5005) is opened
     lazily by :meth:`ensure_control_socket` for the 'O' verbs (e.g. ibsic).

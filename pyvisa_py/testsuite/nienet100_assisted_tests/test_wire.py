@@ -4,9 +4,8 @@
 Drives :class:`~pyvisa_py.protocols.nienet100.EnetConnection` against a
 real bridge. Does **not** go through pyvisa-py's session layer, so these
 tests pass without requiring the upstream ``InterfaceType.ni_enet100_tcpip``
-addition in pyvisa. Useful for first-light validation against new hardware
-and for catching wire-protocol regressions independently of the session
-layer.
+addition in pyvisa. Useful for bringing up new hardware and for catching
+wire-protocol regressions independently of the session layer.
 
 See the package ``__init__`` docstring for environment-variable setup.
 
