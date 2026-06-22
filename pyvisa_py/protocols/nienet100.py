@@ -812,10 +812,7 @@ def _ibwrt(self: EnetConnection, data: bytes) -> int:
 
     Wire layout: ``62 00 00 00 [htonl(byte_count):4] 00 00 00 00`` followed
     immediately by the raw payload in the same ``sendall``. The payload is
-    sent unpadded, exactly ``byte_count`` bytes — the genuine NI software
-    sends odd-length payloads with no padding (e.g. ``*SRE 16`` = 7 bytes,
-    count=7), and padding an odd payload makes the box reject the frame
-    (it replies with a malformed 22-byte chunk).
+    sent unpadded, exactly ``byte_count`` bytes.
 
     Returns the number of bytes the box reports as transferred.
 
@@ -854,7 +851,7 @@ def _ibrd(self: EnetConnection, tmo_ms: int = DEFAULT_IBRD_TMO_MS) -> bytes:
     Response shape depends on whether the device returned data within
     the timeout:
 
-    - **With data** (per wire spec): preliminary status chunk, then one
+    - **With data**: preliminary status chunk, then one
       or more data chunks (each a chunk-wrapped block of device bytes),
       then an END marker (flags=1 length=0), then the final status
       chunk whose ``cnt`` equals the total payload length.
@@ -1005,9 +1002,8 @@ def _ibsic(self: EnetConnection) -> None:
 
     Send-Interface-Clear is a bare ``0x1c`` command frame on the **main**
     socket — no sub-op and no address payload. Verified against the genuine
-    NI software (board session; see ``ENET-100/notes/ibsic_verified.md``):
-    the box replies with a status whose ``sta`` is ``CMPL|CIC|ATN`` (the
-    bridge becomes Controller-In-Charge with ATN asserted after the IFC).
+    NI software. The box replies with a status whose ``sta`` is ``CMPL|CIC|ATN``
+    (the bridge becomes Controller-In-Charge with ATN asserted after the IFC).
     Wire layout::
 
         1c 00 00 00 00 00 00 00 00 00 00 00
