@@ -773,7 +773,7 @@ def _pack_o_verb(sub_op: int, leading_u16: int, ip_u32: int, port: int) -> bytes
 # These methods are added to EnetConnection via assignment below. They cover
 # the pyvisa-Resource API surface: write, read, clear, trigger, serial poll,
 # local-lockout release, the I/O timeout setter, ibwait (SRQ poll on the
-# companion socket), and the board-level ibsic on the control socket.
+# companion socket), and the board-level ibsic on the main socket.
 
 
 def _ibwrt(self: EnetConnection, data: bytes) -> int:
@@ -972,29 +972,17 @@ def _transact_main_status(
 def _ibsic(self: EnetConnection) -> None:
     """Pulse the GPIB IFC (Interface Clear) line on the bridge.
 
-    Sends ``'O 49'`` on the control socket (lazily opened). The frame
-    carries the main socket's ``getsockname()`` so the box knows which
-    session is asking. Wire layout::
+    Send-Interface-Clear is a bare ``0x1c`` command frame on the **main**
+    socket — no sub-op and no address payload. Verified against the genuine
+    NI software (board session; see ``ENET-100/notes/ibsic_verified.md``):
+    the box replies with a status whose ``sta`` is ``CMPL|CIC|ATN`` (the
+    bridge becomes Controller-In-Charge with ATN asserted after the IFC).
+    Wire layout::
 
-        4f 49 00 00 [ip_main:4] [htons(port_main):2] 00 00
+        1c 00 00 00 00 00 00 00 00 00 00 00
 
     """
-    self.ensure_control_socket()
-    assert self.control is not None
-    if self.main is None:
-        raise NIEnet100Error("cannot ibsic: main socket is not open")
-    main_ip, main_port = self.main.getsockname()
-    frame = _pack_o_verb(
-        sub_op=0x49,
-        leading_u16=0,
-        ip_u32=_u32_from_ip(main_ip),
-        port=main_port,
-    )
-    self.control.sendall(frame)
-    control = self.control
-    sta, err, _cnt = read_status_chunk(lambda n: self._recv_exactly(control, n))
-    if sta & STA_ERR:
-        raise NIEnet100IOError(sta, err, "ibsic")
+    self.transact_main(pack_command(0x1C), "ibsic")
 
 
 def _ibwait(self: EnetConnection, mask: int) -> int:

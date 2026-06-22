@@ -529,37 +529,20 @@ def test_ibwait_raises_on_error_status():
 # --- ibsic (B3) -----------------------------------------------------------
 
 
-def _expected_o_verb(
-    sub_op: int, leading_u16: int, main_ip: str, main_port: int
-) -> bytes:
-    return struct.pack(
-        "!BBHLH2x",
-        0x4F,
-        sub_op,
-        leading_u16,
-        nienet100._u32_from_ip(main_ip),
-        main_port,
+def test_ibsic_sends_1c_on_main():
+    # IFC is a bare 0x1c command on the main socket (verified against the
+    # genuine NI software); the box replies CMPL|CIC|ATN.
+    expected = nienet100.pack_command(0x1C)
+    reply_sta = nienet100.STA_CMPL | nienet100.STA_CIC | nienet100.STA_ATN
+    main_sock, t = _run_scripted_peer(
+        [("recv", expected), ("send", _wrap_status(struct.pack("!HH4xL", reply_sta, 0, 0)))]
     )
-
-
-def test_ibsic_sends_o49_with_main_address():
-    main_a = _bound_inet_socket()
     try:
-        main_ip, main_port = main_a.getsockname()
-        expected = _expected_o_verb(0x49, 0, main_ip, main_port)
-        control_sock, t = _run_scripted_peer(
-            [("recv", expected), ("send", _status_ok())]
-        )
-        try:
-            conn = _make_empty_connection()
-            conn.main = main_a
-            conn.control = control_sock
-            conn.ibsic()
-        finally:
-            control_sock.close()
-            t.join(timeout=2.0)
+        conn = _make_bound_connection(main_sock)
+        conn.ibsic()
     finally:
-        main_a.close()
+        main_sock.close()
+        t.join(timeout=2.0)
 
 
 def test_close_drops_all_sockets_without_extra_frames():
