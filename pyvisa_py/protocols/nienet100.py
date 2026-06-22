@@ -429,6 +429,11 @@ class EnetConnection:
     #: Companion-hello flag word for device-mode sessions (single resource).
     COMPANION_FLAGS_DEVICE = 2
 
+    #: Companion-hello flag word for board-mode sessions (INTFC). The genuine
+    #: NI board open sends 0 here, vs :data:`COMPANION_FLAGS_DEVICE` for a
+    #: device session.
+    COMPANION_FLAGS_BOARD = 0
+
     def __init__(
         self,
         host: str,
@@ -579,7 +584,7 @@ class EnetConnection:
 
     # --- companion socket ----------------------------------------------
 
-    def _send_companion_hello(self) -> None:
+    def _send_companion_hello(self, flags: int = COMPANION_FLAGS_DEVICE) -> None:
         """Send the 'U 02' hello on the companion socket and read the status.
 
         Sub-op layout: ``55 02 [htons(flags)] 00 00 [htons(port)] [ip:4]``.
@@ -590,6 +595,10 @@ class EnetConnection:
         reporting the companion's own port (as earlier revisions did) leaves
         the event channel unlinked and ibwait never returns.
 
+        ``flags`` is :data:`COMPANION_FLAGS_DEVICE` for a device (INSTR)
+        session and :data:`COMPANION_FLAGS_BOARD` for a board (INTFC) session
+        — the genuine NI software uses different values for each.
+
         """
         if self.companion is None:
             raise NIEnet100Error("companion socket is not open")
@@ -599,7 +608,7 @@ class EnetConnection:
         frame = pack_command(
             cmd_id=0x55,  # 'U'
             b1=0x02,
-            w1=self.COMPANION_FLAGS_DEVICE,
+            w1=flags,
             w2=0,
             w3=main_port,
             dw=_u32_from_ip(main_ip),
@@ -619,6 +628,58 @@ class EnetConnection:
 
     #: Default Frame-E event-queue depth.
     DEFAULT_EVENT_QUEUE_DEPTH = 0x0B
+
+    def open_board_session(
+        self,
+        board_flags: int = DEFAULT_BOARD_FLAGS,
+        tmo_code: int = TMO_10s,
+    ) -> None:
+        """Open a board-level (INTFC) session and leave the box online.
+
+        The board counterpart to :meth:`open` + :meth:`open_gpib_session`
+        (which open a *device* session). This connects the sockets itself and
+        replays the genuine NI board-open, leaving the box online and
+        Controller-In-Charge-capable — the state in which it accepts a
+        board-level :meth:`ibsic` (Interface Clear). A bare :meth:`open`
+        (companion hello only) is **not** enough.
+
+        Unlike a device session this opens no operation bracket and arms no
+        async-notify. Wire sequence (main socket unless noted)::
+
+            0b ............................ identify (reply: firmware banner)
+            50 05 00 ...................... Mode/PPC = 0
+            07 00 [flags] 00 00 00 00 [tmo] SetConfig (non-SC): flags + timeout
+            50 10 01 ...................... Online = 1
+            55 02 .. (companion socket) ... board companion hello (flags=0)
+            12 01 ......................... board verb 0x12
+            06 1f 0f00 .................... board verb 0x06
+
+        The ``0x12`` / ``0x06`` verbs are not yet decoded; they are replayed
+        byte-exact from the genuine NI sequence because the box wedges on an
+        ibsic issued without them.
+
+        """
+        self.main = self._connect(PORT_MAIN)
+        try:
+            # identify: the reply is a single data chunk (firmware banner), not
+            # a status chunk; read and discard it.
+            self.send_main(pack_command(0x0B))
+            read_one_data_chunk(self.recv_main_exactly)
+            self.transact_main(_pack_property_set(0x05, 0x00), "board open Mode")
+            self.transact_main(
+                pack_command(0x07, 0x00, w1=board_flags, dw=tmo_code << 24),
+                "board open SetConfig",
+            )
+            self.transact_main(_pack_property_set(0x10, 0x01), "board open Online")
+            self.companion = self._connect(PORT_COMPANION)
+            self._send_companion_hello(flags=self.COMPANION_FLAGS_BOARD)
+            self.transact_main(pack_command(0x12, 0x01), "board open verb 0x12")
+            self.transact_main(
+                pack_command(0x06, 0x1F, w1=0x0F00), "board open verb 0x06"
+            )
+        except Exception:
+            self.close()
+            raise
 
     def open_gpib_session(
         self,
