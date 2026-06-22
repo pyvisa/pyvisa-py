@@ -28,9 +28,6 @@ LOGGER = logging.getLogger("pyvisa_py.protocols.nienet100")
 #: Main TCP port (synchronous request/response).
 PORT_MAIN = 5000
 
-#: Control socket TCP port (used by the 'O' verbs, e.g. ibsic).
-PORT_CONTROL = 5005
-
 #: Companion socket TCP port (hello-only, mandatory for FW >= A8). Also the
 #: asynchronous/SRQ event channel that ibwait polls.
 PORT_COMPANION = 5015
@@ -353,8 +350,8 @@ class NIEnet100IOError(NIEnet100Error):
 # carries all synchronous Device-I/O. The companion socket (5015) is
 # mandatory on every firmware shipped in the last ~20 years; it carries the
 # hello frame, must stay open for the session lifetime, and doubles as the
-# async/SRQ event channel that ibwait polls. The control socket (5005) is
-# lazy and only needed for the 'O' verbs (e.g. ibsic).
+# async/SRQ event channel that ibwait polls. No other sockets are used —
+# every verb (including the board-level ibsic) runs on main or companion.
 
 
 def _u32_from_ip(ip: str) -> int:
@@ -374,8 +371,7 @@ class EnetConnection:
     :meth:`open` connects the main socket (port 5000) and the companion
     socket (port 5015) and sends the mandatory companion hello frame. The
     companion socket doubles as the asynchronous/SRQ event channel: ibwait
-    polls it (see :meth:`ibwait`). The control socket (port 5005) is opened
-    lazily by :meth:`ensure_control_socket` for the 'O' verbs (e.g. ibsic).
+    polls it (see :meth:`ibwait`). No other sockets are used.
 
     The class is **not** thread-safe. Concurrent calls into a single
     instance (e.g. one thread issuing ibwrt while another polls ibwait)
@@ -400,9 +396,6 @@ class EnetConnection:
     companion : socket.socket
         The companion socket; kept open for the session lifetime and used as
         the async/SRQ event channel that :meth:`ibwait` polls.
-    control : socket.socket | None
-        The control socket for 'O' verbs; ``None`` until
-        :meth:`ensure_control_socket`.
 
     """
 
@@ -447,7 +440,6 @@ class EnetConnection:
         self._timeout = timeout
         self.main: socket.socket | None = None
         self.companion: socket.socket | None = None
-        self.control: socket.socket | None = None
         # Tracks whether a Frame F bracket-open has been acked by the box
         # without a matching Frame X close yet. Owned by _transact_bracket
         # so failures between bracket-open and the session-layer marker
@@ -473,16 +465,6 @@ class EnetConnection:
             self.close()
             raise
 
-    def ensure_control_socket(self) -> None:
-        """Open port 5005. No setup frames — first 'O' verb carries its own.
-
-        Idempotent.
-
-        """
-        if self.control is not None:
-            return
-        self.control = self._connect(PORT_CONTROL)
-
     def close(self) -> None:
         """Close every open socket. Idempotent.
 
@@ -500,9 +482,9 @@ class EnetConnection:
             except Exception as e:
                 LOGGER.debug("bracket close during teardown failed: %s", e)
 
-        # Close in reverse open-order so the box sees the auxiliary sockets
+        # Close in reverse open-order so the box sees the companion socket
         # disappear before main. The box does not require a goodbye frame.
-        for attr in ("control", "companion", "main"):
+        for attr in ("companion", "main"):
             sock = getattr(self, attr, None)
             if sock is not None:
                 try:
@@ -515,11 +497,11 @@ class EnetConnection:
         """Apply ``timeout`` (in seconds) to all currently open sockets.
 
         Use ``None`` for blocking without timeout. The value is cached so a
-        control socket opened later picks up the same setting.
+        socket opened later picks up the same setting.
 
         """
         self._timeout = timeout
-        for sock in (self.main, self.companion, self.control):
+        for sock in (self.main, self.companion):
             if sock is not None:
                 sock.settimeout(timeout)
 
@@ -755,18 +737,6 @@ def _pack_property_set(prop_idx: int, value_byte: int) -> bytes:
 
     """
     return struct.pack("!BBB9x", 0x50, prop_idx, value_byte)
-
-
-def _pack_o_verb(sub_op: int, leading_u16: int, ip_u32: int, port: int) -> bytes:
-    """Build an 'O' control-socket verb with the IP-before-port layout.
-
-    Wire layout: ``4f [sub_op] [htons(leading_u16):2] [ip:4] [htons(port):2] 00 00``.
-
-    Used by ibsic. Note that the layout differs from 'U' verbs (which put
-    port before ip); the inconsistency is part of the wire protocol.
-
-    """
-    return struct.pack("!BBHLH2x", 0x4F, sub_op, leading_u16, ip_u32, port)
 
 
 # --- Device-level verbs -----------------------------------------------------

@@ -254,7 +254,6 @@ def _make_bound_connection(client_sock: socket.socket) -> nienet100.EnetConnecti
     conn = nienet100.EnetConnection.__new__(nienet100.EnetConnection)
     conn.main = client_sock
     conn.companion = None
-    conn.control = None
     conn.host = "test-peer"
     conn._open_timeout = 1.0
     conn._timeout = 1.0
@@ -263,12 +262,10 @@ def _make_bound_connection(client_sock: socket.socket) -> nienet100.EnetConnecti
 
 def _make_empty_connection() -> nienet100.EnetConnection:
     """Build an EnetConnection with no sockets bound, for tests that drive
-    socket-lifecycle methods (ensure_control_socket) via a monkey-patched
-    ``_connect``."""
+    socket-lifecycle methods via a monkey-patched ``_connect``."""
     conn = nienet100.EnetConnection.__new__(nienet100.EnetConnection)
     conn.main = None
     conn.companion = None
-    conn.control = None
     conn.host = "test-peer"
     conn._open_timeout = 1.0
     conn._timeout = 1.0
@@ -457,25 +454,6 @@ def test_set_io_timeout_sends_property_set_frame():
         t.join(timeout=2.0)
 
 
-# --- control socket lifecycle (B1) -----------------------------------------
-
-
-def test_ensure_control_socket_is_lazy_and_idempotent():
-    fake_sock = object()
-    calls: list[int] = []
-
-    def fake_connect(port: int):
-        calls.append(port)
-        return fake_sock
-
-    conn = _make_empty_connection()
-    conn._connect = fake_connect
-    conn.ensure_control_socket()
-    conn.ensure_control_socket()
-    assert calls == [nienet100.PORT_CONTROL]
-    assert conn.control is fake_sock
-
-
 # --- ibwait (B2) -----------------------------------------------------------
 
 
@@ -535,7 +513,10 @@ def test_ibsic_sends_1c_on_main():
     expected = nienet100.pack_command(0x1C)
     reply_sta = nienet100.STA_CMPL | nienet100.STA_CIC | nienet100.STA_ATN
     main_sock, t = _run_scripted_peer(
-        [("recv", expected), ("send", _wrap_status(struct.pack("!HH4xL", reply_sta, 0, 0)))]
+        [
+            ("recv", expected),
+            ("send", _wrap_status(struct.pack("!HH4xL", reply_sta, 0, 0))),
+        ]
     )
     try:
         conn = _make_bound_connection(main_sock)
@@ -546,25 +527,22 @@ def test_ibsic_sends_1c_on_main():
 
 
 def test_close_drops_all_sockets_without_extra_frames():
-    # close() must not emit anything on the control socket (the 'O 4e'
-    # notify-off is gone); it just tears the sockets down. A control peer
-    # read therefore sees only EOF, no frame.
+    # close() must not emit anything on the companion socket; it just tears
+    # the sockets down. A companion peer read therefore sees only EOF.
     main_a = _bound_inet_socket()
-    control_a, control_b = socket.socketpair()
+    companion_a, companion_b = socket.socketpair()
     try:
         conn = _make_empty_connection()
         conn.main = main_a
-        conn.companion = socket.socket()
-        conn.control = control_a
+        conn.companion = companion_a
         conn.close()
         assert conn.main is None
         assert conn.companion is None
-        assert conn.control is None
-        control_b.settimeout(2.0)
-        assert control_b.recv(64) == b"", "close() unexpectedly sent a frame"
+        companion_b.settimeout(2.0)
+        assert companion_b.recv(64) == b"", "close() unexpectedly sent a frame"
     finally:
         main_a.close()
-        control_b.close()
+        companion_b.close()
 
 
 def test_close_swallows_socket_errors():
@@ -573,13 +551,11 @@ def test_close_swallows_socket_errors():
     main_a = _bound_inet_socket()
     try:
         fake_companion = socket.socket()
-        fake_control = socket.socket()
-        fake_control.close()  # already closed
+        fake_companion.close()  # already closed
         conn = _make_empty_connection()
         conn.main = main_a
         conn.companion = fake_companion
-        conn.control = fake_control
         conn.close()  # must not raise
-        assert conn.companion is None and conn.control is None
+        assert conn.companion is None
     finally:
         main_a.close()
