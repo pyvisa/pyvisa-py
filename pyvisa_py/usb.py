@@ -164,7 +164,7 @@ class USBSession(Session):
         def _usb_reader():
             """Data reader identifying usb timeout exception."""
             try:
-                return self.interface.read(count)
+                return self.interface.read(count, term_char if term_char_en else None)
             except usb.USBError as exc:
                 if exc.errno in (errno.ETIMEDOUT, -errno.ETIMEDOUT):
                     raise USBTimeoutException()

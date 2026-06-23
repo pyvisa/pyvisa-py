@@ -320,7 +320,7 @@ class USBRaw:
         except usb.core.USBError as e:
             raise ValueError(str(e))
 
-    def read(self, size):
+    def read(self, size, termchar):
         """Receive raw bytes to the instrument.
 
         :param size: number of bytes to receive
@@ -515,7 +515,7 @@ class USBTMC(USBRaw):
 
         return size
 
-    def read(self, size):
+    def read(self, size, termchar):
         usbtmc_header_size = 12
         eom = False
 
@@ -528,7 +528,7 @@ class USBTMC(USBRaw):
             received_transfer = bytearray()
             btag = self._btag.next()
 
-            req = BulkInMessage.build_array(btag, size, None)
+            req = BulkInMessage.build_array(btag, size, termchar)
             raw_write(req)
 
             try:
