@@ -467,14 +467,16 @@ class _GPIBCommon(Session):
 
         reader = lambda: ifc.read(count)  # noqa: E731
 
-        if (self.attrs[ResourceAttribute.termchar] is None
-            or not self.attrs[ResourceAttribute.termchar_enabled]):
-            ifc.config(0x0C, 0)         # IbcEOSrd
+        if (
+            self.attrs[ResourceAttribute.termchar] is None
+            or not self.attrs[ResourceAttribute.termchar_enabled]
+        ):
+            ifc.config(0x0C, 0)  # IbcEOSrd
         else:
             termchar = self.attrs[ResourceAttribute.termchar]
             ifc.config(0x0F, termchar)  # IbcEOSchar
-            ifc.config(0x0E, 1)         # IbcEOScmp
-            ifc.config(0x0C, 1)         # IbcEOSrd
+            ifc.config(0x0E, 1)  # IbcEOScmp
+            ifc.config(0x0C, 1)  # IbcEOSrd
 
         return self._read(reader, count, checker, False, None, False, gpib.GpibError)
 
