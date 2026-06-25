@@ -19,6 +19,7 @@ from . import prologix
 from .common import LOGGER
 from .sessions import Session, UnavailableSession, UnknownAttribute, VISARMSession
 
+from . import gpib_constants
 
 # NOTE dummy implementation that is overwritten when a GPIB library is found
 # Allow to provide session listing even when no GPIB library is available.
@@ -205,21 +206,17 @@ def _analyse_lines_value(value: int, line: int):
 
     """
     if line == constants.VI_ATTR_GPIB_REN_STATE:
-        # REN bit valid = 0x10, REN bit value = 0x100
-        validity_mask = 0x10
-        value_mask = 0x100
+        validity_mask = gpib_constants.lines.ValidREN
+        value_mask = gpib_constants.lines.BusREN
     elif line == constants.VI_ATTR_GPIB_ATN_STATE:
-        # ATN bit valid = 0x40, ATN bit value = 0x4000
-        validity_mask = 0x40
-        value_mask = 0x4000
+        validity_mask = gpib_constants.lines.ValidATN
+        value_mask = gpib_constants.lines.BusATN
     elif line == constants.VI_ATTR_GPIB_NDAC_STATE:
-        # NDAC bit valid = 0x2, NDAC bit value = 0x200
-        validity_mask = 0x2
-        value_mask = 0x200
+        validity_mask = gpib_constants.lines.ValidNDAC
+        value_mask = gpib_constants.lines.BusNDAC
     elif line == constants.VI_ATTR_GPIB_SRQ_STATE:
-        # SRQ bit valid = 0x20, SRQ bit value = 0x2000
-        validity_mask = 0x20
-        value_mask = 0x2000
+        validity_mask = gpib_constants.lines.ValidSRQ
+        value_mask = gpib_constants.lines.BusSRQ
 
     if not value & validity_mask:
         return constants.LineState.unknown, StatusCode.success
@@ -273,8 +270,8 @@ def convert_gpib_error(
         Status code matching the GPIB error.
 
     """
-    # First check the imeout condition in the status byte
-    if status & 0x4000:
+    # First check the timeout condition in the status byte
+    if status & gpib_constants.status.TIMO:
         return StatusCode.error_timeout
     # All other cases are hard errors.
     # In particular linux-gpib simply gives a string we could parse but that
@@ -284,26 +281,24 @@ def convert_gpib_error(
         LOGGER.debug("Failed to %s.", operation, exc_info=error)
         if not GPIB_CTYPES:
             return StatusCode.error_system_error
-        if error.code == 1:
+        if error.code == GPIBerror.ECIC:
             return StatusCode.error_not_cic
-        elif error.code == 2:
+        elif error.code == GPIBerror.ENOL:
             return StatusCode.error_no_listeners
-        elif error.code == 4:
+        elif error.code == GPIBerror.EARG:
             return StatusCode.error_invalid_mode
-        elif error.code == 11:
+        elif error.code == GPIBerror.ECAP:
             return StatusCode.error_nonsupported_operation
-        elif error.code == 1:
-            return StatusCode.error_not_cic
-        elif error.code == 21:
+        elif error.code == GPIBerror.ELCK:
             return StatusCode.error_resource_locked
         else:
             return StatusCode.error_system_error
 
 
 def convert_gpib_status(status: int) -> StatusCode:
-    if status & 0x4000:
+    if status & gpib_constants.status.TIMO:
         return StatusCode.error_timeout
-    elif status & 0x8000:
+    elif status & gpib_constants.status.ERR:
         return StatusCode.error_system_error
     else:
         return StatusCode.success
@@ -351,7 +346,7 @@ class _GPIBCommon(Session):
         # Secondary address (SAD) values should be in the range 96 to 126,
         # 0 means the SAD is disabled.
         sad = 0
-        timeout = 13
+        timeout = gpib_constants.timeout.T10s
         send_eoi = 1
         eos_mode = 0
         self.interface = None
@@ -389,9 +384,7 @@ class _GPIBCommon(Session):
         self, attribute: constants.ResourceAttribute
     ) -> Tuple[int, StatusCode]:
         if self.interface:
-            # 0x3 is the hexadecimal reference to the IbaTMO (timeout) configuration
-            # option in linux-gpib.
-            gpib_timeout = self.interface.ask(3)
+            gpib_timeout = self.interface.ask(gpib_constants.ask.IbaTMO)
             if gpib_timeout and gpib_timeout < len(TIMETABLE):
                 self.timeout = TIMETABLE[gpib_timeout]
             else:
@@ -466,8 +459,7 @@ class _GPIBCommon(Session):
         # INTFC don't have an interface so use the controller
         ifc = self.interface or self.controller
 
-        # END 0x2000
-        checker = lambda current: ifc.ibsta() & 0x2000  # noqa: E731
+        checker = lambda current: ifc.ibsta() & gpib_constants.status.END  # noqa: E731
 
         reader = lambda: ifc.read(count)  # noqa: E731
 
@@ -536,7 +528,7 @@ class _GPIBCommon(Session):
         try:
             if mode == constants.VI_GPIB_REN_DEASSERT_GTL:
                 # Send GTL command byte (cf linux-gpib documentation)
-                ifc.command(chr(1))
+                ifc.command(gpib_constants.command.IcGTL)
             if mode in (
                 constants.VI_GPIB_REN_DEASSERT,
                 constants.VI_GPIB_REN_DEASSERT_GTL,
@@ -544,11 +536,9 @@ class _GPIBCommon(Session):
                 self.controller.remote_enable(0)
 
             if mode == constants.VI_GPIB_REN_ASSERT_LLO:
-                # LLO
-                ifc.command(b"0x11")
+                ifc.command(gpib_constants.command.IcLLO)
             elif mode == constants.VI_GPIB_REN_ADDRESS_GTL:
-                # GTL
-                ifc.command(b"0x1")
+                ifc.command(gpib_constants.command.IcGTL)
             elif mode == constants.VI_GPIB_REN_ASSERT_ADDRESS_LLO:
                 pass
             elif mode in (
@@ -598,15 +588,13 @@ class _GPIBCommon(Session):
         ifc = self.interface or self.controller
 
         if attribute == ResourceAttribute.gpib_primary_address:
-            # IbaPAD 0x1
-            return ifc.ask(1), StatusCode.success
+            return ifc.ask(gpib_constants.ask.IbaPAD), StatusCode.success
 
         elif attribute == ResourceAttribute.gpib_secondary_address:
-            # IbaSAD 0x2
             # Remove 0x60 because National Instruments.
-            _ = ifc.ask(2)
-            if ifc.ask(2):
-                return ifc.ask(2) - 96, StatusCode.success
+            _ = ifc.ask(gpib_constants.ask.IbaSAD)
+            if ifc.ask(gpib_constants.ask.IbaSAD):
+                return ifc.ask(gpib_constants.ask.IbaSAD) - 96, StatusCode.success
             else:
                 return constants.VI_NO_SEC_ADDR, StatusCode.success
 
@@ -621,24 +609,22 @@ class _GPIBCommon(Session):
         elif attribute == ResourceAttribute.send_end_enabled:
             # Do not use IbaEndBitIsNormal 0x1a which relates to EOI on read()
             # not write(). see issue #196
-            # IbcEOT 0x4
-            if ifc.ask(4):
+            if ifc.ask(gpib_constants.ask.IbaEOT):
                 return constants.VI_TRUE, StatusCode.success
             else:
                 return constants.VI_FALSE, StatusCode.success
 
         elif attribute == ResourceAttribute.interface_number:
-            # IbaBNA 0x200
-            return ifc.ask(512), StatusCode.success
+            return ifc.ask(gpib_constants.ask.IbaBNA), StatusCode.success
 
         elif attribute == ResourceAttribute.interface_type:
             return constants.InterfaceType.gpib, StatusCode.success
 
         elif attribute == ResourceAttribute.termchar:
-            return ifc.ask(0x0F), StatusCode.success
+            return ifc.ask(gpib_constants.ask.IbaEOSchar), StatusCode.success
 
         elif attribute == ResourceAttribute.termchar_enabled:
-            return ifc.ask(0x0C), StatusCode.success
+            return ifc.ask(gpib_constants.ask.IbaEOSrd), StatusCode.success
 
         raise UnknownAttribute(attribute)
 
@@ -672,28 +658,25 @@ class _GPIBCommon(Session):
         ifc = self.interface or self.controller
 
         if attribute == ResourceAttribute.gpib_readdress_enabled:
-            # IbcREADDR 0x6
             # Setting has no effect in linux-gpib.
             if isinstance(attribute_state, int):
-                ifc.config(6, attribute_state)
+                ifc.config(gpib_constants.config.IbcREADDR, attribute_state)
                 return StatusCode.success
             else:
                 return StatusCode.error_nonsupported_attribute_state
 
         elif attribute == ResourceAttribute.gpib_primary_address:
-            # IbcPAD 0x1
             if isinstance(attribute_state, int) and 0 <= attribute_state <= 30:
-                ifc.config(1, attribute_state)
+                ifc.config(gpib_constants.config.IbcPAD, attribute_state)
                 return StatusCode.success
             else:
                 return StatusCode.error_nonsupported_attribute_state
 
         elif attribute == ResourceAttribute.gpib_secondary_address:
-            # IbcSAD 0x2
             # Add 0x60 because National Instruments.
             if isinstance(attribute_state, int) and 0 <= attribute_state <= 30:
-                if ifc.ask(2):
-                    ifc.config(2, attribute_state + 96)
+                if ifc.ask(gpib_constants.ask.IbaSAD):
+                    ifc.config(gpib_constants.config.IbcSAD, attribute_state + 96)
                     return StatusCode.success
                 else:
                     return StatusCode.error_nonsupported_attribute
@@ -701,9 +684,8 @@ class _GPIBCommon(Session):
                 return StatusCode.error_nonsupported_attribute_state
 
         elif attribute == ResourceAttribute.gpib_unadress_enable:
-            # IbcUnAddr 0x1b
             try:
-                ifc.config(27, attribute_state)
+                ifc.config(gpib_constants.config.IbcUnAddr, attribute_state)
                 return StatusCode.success
             except gpib.GpibError:
                 return StatusCode.error_nonsupported_attribute_state
@@ -711,24 +693,23 @@ class _GPIBCommon(Session):
         elif attribute == ResourceAttribute.send_end_enabled:
             # Do not use IbaEndBitIsNormal 0x1a which relates to EOI on read()
             # not write(). see issue #196
-            # IbcEOT 0x4
             if isinstance(attribute_state, int):
-                ifc.config(4, attribute_state)
+                ifc.config(gpib_constants.config.IbcEOT, attribute_state)
                 return StatusCode.success
             else:
                 return StatusCode.error_nonsupported_attribute_state
 
         elif attribute == ResourceAttribute.termchar:
             if isinstance(attribute_state, int):
-                ifc.config(0x0F, attribute_state)  ## IbcEOSchar
-                ifc.config(0x0E, 1)  ## IbcEOScmp
+                ifc.config(gpib_constants.config.IbcEOSchar, attribute_state)
+                ifc.config(gpib_constants.config.IbcEOScmp, 1)
                 return StatusCode.success
             else:
                 return StatusCode.error_nonsupported_attribute_state
 
         elif attribute == ResourceAttribute.termchar_enabled:
             if isinstance(attribute_state, int):
-                ifc.config(0x0C, attribute_state)  ## IbcEOSrd
+                ifc.config(gpib_constants.config.IbcEOSrd, attribute_state)
                 return StatusCode.success
             else:
                 return StatusCode.error_nonsupported_attribute_state
@@ -843,13 +824,11 @@ class GPIBSession(_GPIBCommon):  # type: ignore[no-redef]
         ifc = self.interface
 
         if attribute == constants.VI_ATTR_GPIB_READDR_EN:
-            # IbaREADDR 0x6
             # Setting has no effect in linux-gpib.
-            return ifc.ask(6), StatusCode.success
+            return ifc.ask(gpib_constants.ask.IbaREADDR), StatusCode.success
 
         elif attribute == constants.VI_ATTR_GPIB_UNADDR_EN:
-            # IbaUnAddr 0x1b
-            if ifc.ask(27):
+            if ifc.ask(gpib_constants.ask.IbaUnAddr):
                 return constants.VI_TRUE, StatusCode.success
             else:
                 return constants.VI_FALSE, StatusCode.success
@@ -883,18 +862,16 @@ class GPIBSession(_GPIBCommon):  # type: ignore[no-redef]
         ifc = self.interface
 
         if attribute == constants.VI_ATTR_GPIB_READDR_EN:
-            # IbcREADDR 0x6
             # Setting has no effect in linux-gpib.
             if isinstance(attribute_state, int):
-                ifc.config(6, attribute_state)
+                ifc.config(GPIBConfig.IbcREADDR, attribute_state)
                 return StatusCode.success
             else:
                 return StatusCode.error_nonsupported_attribute_state
 
         elif attribute == constants.VI_ATTR_GPIB_UNADDR_EN:
-            # IbcUnAddr 0x1b
             try:
-                ifc.config(27, attribute_state)
+                ifc.config(GPIBConfig.IbcUnAddr, attribute_state)
                 return StatusCode.success
             except gpib.GpibError:
                 return StatusCode.error_nonsupported_attribute_state
@@ -1054,7 +1031,7 @@ class GPIBInterface(_GPIBCommon):
 
         if attribute == constants.VI_ATTR_GPIB_CIC_STATE:
             # ibsta CIC = 0x0020
-            if ifc.ibsta() & 0x0020:
+            if ifc.ibsta() & gpib_constants.status.CIC:
                 return constants.VI_TRUE, StatusCode.success
             else:
                 return constants.VI_FALSE, StatusCode.success
