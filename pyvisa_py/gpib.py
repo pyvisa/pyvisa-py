@@ -371,15 +371,19 @@ class _GPIBCommon(Session):
         # Bus wide operation
         self.controller = Gpib(name=minor)
 
-        # Force timeout setting to interface
+        # Force timeout and termchar settings to interface
         self.set_attribute(
             constants.ResourceAttribute.timeout_value,
             attributes.AttributesByID[constants.VI_ATTR_TMO_VALUE].default,
         )
-
-        for name in ("TERMCHAR", "TERMCHAR_EN"):
-            attribute = getattr(constants, "VI_ATTR_" + name)
-            self.attrs[attribute] = attributes.AttributesByID[attribute].default
+        self.set_attribute(
+            constants.ResourceAttribute.termchar,
+            attributes.AttributesByID[constants.VI_ATTR_TERMCHAR].default,
+        )
+        self.set_attribute(
+            constants.ResourceAttribute.termchar_enabled,
+            attributes.AttributesByID[constants.VI_ATTR_TERMCHAR_EN].default,
+        )
 
     def _get_timeout(
         self, attribute: constants.ResourceAttribute
@@ -630,6 +634,12 @@ class _GPIBCommon(Session):
         elif attribute == ResourceAttribute.interface_type:
             return constants.InterfaceType.gpib, StatusCode.success
 
+        elif attribute == ResourceAttribute.termchar:
+            return ifc.ask(0x0F), StatusCode.success
+
+        elif attribute == ResourceAttribute.termchar_enabled:
+            return ifc.ask(0x0C), StatusCode.success
+
         raise UnknownAttribute(attribute)
 
     def _set_attribute(
@@ -704,6 +714,21 @@ class _GPIBCommon(Session):
             # IbcEOT 0x4
             if isinstance(attribute_state, int):
                 ifc.config(4, attribute_state)
+                return StatusCode.success
+            else:
+                return StatusCode.error_nonsupported_attribute_state
+
+        elif attribute == ResourceAttribute.termchar:
+            if isinstance(attribute_state, int):
+                ifc.config(0x0F, attribute_state)  ## IbcEOSchar
+                ifc.config(0x0E, 1)                ## IbcEOScmp
+                return StatusCode.success
+            else:
+                return StatusCode.error_nonsupported_attribute_state
+
+        elif attribute == ResourceAttribute.termchar_enabled:
+            if isinstance(attribute_state, int):
+                ifc.config(0x0C, attribute_state)  ## IbcEOSrd
                 return StatusCode.success
             else:
                 return StatusCode.error_nonsupported_attribute_state
