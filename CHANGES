@@ -23,6 +23,7 @@ PyVISA-py Changelog
   server to receive VXI-11 `DEVICE_INTR_SRQ` callbacks. This also fixes the
   `create_intr_chan` XDR packer in `protocols/vxi11.py`.
   Other transports (GPIB, USBTMC, HiSLIP, Serial) remain unsupported for now. PR #577 
+- Pass termchar information to USBTMC devices when reading.  PR#598
 
 0.8.1 (04-09-2025)
 ------------------
