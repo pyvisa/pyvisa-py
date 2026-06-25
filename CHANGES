@@ -23,6 +23,8 @@ PyVISA-py Changelog
   server to receive VXI-11 `DEVICE_INTR_SRQ` callbacks. This also fixes the
   `create_intr_chan` XDR packer in `protocols/vxi11.py`.
   Other transports (GPIB, USBTMC, HiSLIP, Serial) remain unsupported for now. PR #577 
+- Fix read timeouts when accessing older GPIB devices which do not signal EOI.
+  Implemented for USBTMC (#598) and GPIB (#599)
 
 0.8.1 (04-09-2025)
 ------------------
