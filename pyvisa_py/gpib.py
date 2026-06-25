@@ -721,7 +721,7 @@ class _GPIBCommon(Session):
         elif attribute == ResourceAttribute.termchar:
             if isinstance(attribute_state, int):
                 ifc.config(0x0F, attribute_state)  ## IbcEOSchar
-                ifc.config(0x0E, 1)                ## IbcEOScmp
+                ifc.config(0x0E, 1)  ## IbcEOScmp
                 return StatusCode.success
             else:
                 return StatusCode.error_nonsupported_attribute_state
