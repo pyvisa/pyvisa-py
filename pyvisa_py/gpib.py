@@ -62,8 +62,8 @@ class GPIBSessionDispatch(Session):
     def list_resources() -> List[str]:
         return [
             "GPIB%d::%d::INSTR" % (board, pad)
-            if sad == 0
-            else "GPIB%d::%d::%d::INSTR" % (board, pad, sad - 0x60)
+            if sad == gpib_constants.sad.NO_SAD
+            else "GPIB%d::%d::%d::INSTR" % (board, pad, sad - gpib_constants.sad.FIRST_SAD)
             for board, pad, sad in _find_listeners()
         ]
 
@@ -174,7 +174,7 @@ def _find_listeners() -> Iterator[Tuple[int, int, int]]:  # type: ignore[no-rede
                 if boardpad != i and gpib.listener(board, i):
                     yield board, i, j
                 elif boardpad != i:
-                    for j in range(96, 126):
+                    for j in range(gpib_constants.sad.FIRST_SAD, gpib_constants.sad.LAST_SAD):
                         if gpib.listener(board, i, j):
                             yield board, i, j
             except gpib.GpibError as e:
@@ -346,7 +346,7 @@ class _GPIBCommon(Session):
         minor = int(self.parsed.board)
         # Secondary address (SAD) values should be in the range 96 to 126,
         # 0 means the SAD is disabled.
-        sad = 0
+        sad = gpib_constants.sad.NO_SAD
         timeout = gpib_constants.timeout.T10s
         send_eoi = 1
         eos_mode = 0
@@ -354,7 +354,7 @@ class _GPIBCommon(Session):
         if isinstance(self.parsed, GPIBInstr):
             pad = int(self.parsed.primary_address)
             if self.parsed.secondary_address is not None:
-                sad = int(self.parsed.secondary_address) + 0x60
+                sad = int(self.parsed.secondary_address) + gpib_constants.sad.FIRST_SAD
             # Used to talk to a specific resource
             self.interface = Gpib(
                 name=minor,
@@ -595,7 +595,7 @@ class _GPIBCommon(Session):
             # Remove 0x60 because National Instruments.
             _ = ifc.ask(gpib_constants.ask.IbaSAD)
             if ifc.ask(gpib_constants.ask.IbaSAD):
-                return ifc.ask(gpib_constants.ask.IbaSAD) - 96, StatusCode.success
+                return ifc.ask(gpib_constants.ask.IbaSAD) - gpib_constants.sad.FIRST_SAD, StatusCode.success
             else:
                 return constants.VI_NO_SEC_ADDR, StatusCode.success
 
@@ -677,7 +677,7 @@ class _GPIBCommon(Session):
             # Add 0x60 because National Instruments.
             if isinstance(attribute_state, int) and 0 <= attribute_state <= 30:
                 if ifc.ask(gpib_constants.ask.IbaSAD):
-                    ifc.config(gpib_constants.config.IbcSAD, attribute_state + 96)
+                    ifc.config(gpib_constants.config.IbcSAD, attribute_state + gpib_constants.sad.FIRST_SAD)
                     return StatusCode.success
                 else:
                     return StatusCode.error_nonsupported_attribute
@@ -735,8 +735,8 @@ class GPIBSession(_GPIBCommon):  # type: ignore[no-redef]
     def list_resources() -> List[str]:
         return [
             "GPIB%d::%d::INSTR" % (board, pad)
-            if sad == 0
-            else "GPIB%d::%d::%d::INSTR" % (board, pad, sad - 0x60)
+            if sad == gpib_constants.sad.NO_SAD
+            else "GPIB%d::%d::%d::INSTR" % (board, pad, sad - gpib_constants.sad.FIRST_SAD)
             for board, pad, sad in _find_listeners()
         ]
 

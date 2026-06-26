@@ -138,6 +138,8 @@ class lines(IntEnum):
 class sad(IntEnum):
     NO_SAD = 0
     ALL_SAD = -1
+    FIRST_SAD = 0x60
+    LAST_SAD = 0x7E
 
 
 class stb(IntEnum):
