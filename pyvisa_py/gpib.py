@@ -21,6 +21,7 @@ from .sessions import Session, UnavailableSession, UnknownAttribute, VISARMSessi
 
 from . import gpib_constants
 
+
 # NOTE dummy implementation that is overwritten when a GPIB library is found
 # Allow to provide session listing even when no GPIB library is available.
 def _find_listeners() -> Iterator[Tuple[int, int, int]]:
