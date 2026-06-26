@@ -63,7 +63,8 @@ class GPIBSessionDispatch(Session):
         return [
             "GPIB%d::%d::INSTR" % (board, pad)
             if sad == gpib_constants.sad.NO_SAD
-            else "GPIB%d::%d::%d::INSTR" % (board, pad, sad - gpib_constants.sad.FIRST_SAD)
+            else "GPIB%d::%d::%d::INSTR"
+            % (board, pad, sad - gpib_constants.sad.FIRST_SAD)
             for board, pad, sad in _find_listeners()
         ]
 
@@ -174,7 +175,9 @@ def _find_listeners() -> Iterator[Tuple[int, int, int]]:  # type: ignore[no-rede
                 if boardpad != i and gpib.listener(board, i):
                     yield board, i, j
                 elif boardpad != i:
-                    for j in range(gpib_constants.sad.FIRST_SAD, gpib_constants.sad.LAST_SAD):
+                    for j in range(
+                        gpib_constants.sad.FIRST_SAD, gpib_constants.sad.LAST_SAD
+                    ):
                         if gpib.listener(board, i, j):
                             yield board, i, j
             except gpib.GpibError as e:
@@ -595,7 +598,9 @@ class _GPIBCommon(Session):
             # Remove 0x60 because National Instruments.
             _ = ifc.ask(gpib_constants.ask.IbaSAD)
             if ifc.ask(gpib_constants.ask.IbaSAD):
-                return ifc.ask(gpib_constants.ask.IbaSAD) - gpib_constants.sad.FIRST_SAD, StatusCode.success
+                return ifc.ask(
+                    gpib_constants.ask.IbaSAD
+                ) - gpib_constants.sad.FIRST_SAD, StatusCode.success
             else:
                 return constants.VI_NO_SEC_ADDR, StatusCode.success
 
@@ -677,7 +682,10 @@ class _GPIBCommon(Session):
             # Add 0x60 because National Instruments.
             if isinstance(attribute_state, int) and 0 <= attribute_state <= 30:
                 if ifc.ask(gpib_constants.ask.IbaSAD):
-                    ifc.config(gpib_constants.config.IbcSAD, attribute_state + gpib_constants.sad.FIRST_SAD)
+                    ifc.config(
+                        gpib_constants.config.IbcSAD,
+                        attribute_state + gpib_constants.sad.FIRST_SAD,
+                    )
                     return StatusCode.success
                 else:
                     return StatusCode.error_nonsupported_attribute
@@ -736,7 +744,8 @@ class GPIBSession(_GPIBCommon):  # type: ignore[no-redef]
         return [
             "GPIB%d::%d::INSTR" % (board, pad)
             if sad == gpib_constants.sad.NO_SAD
-            else "GPIB%d::%d::%d::INSTR" % (board, pad, sad - gpib_constants.sad.FIRST_SAD)
+            else "GPIB%d::%d::%d::INSTR"
+            % (board, pad, sad - gpib_constants.sad.FIRST_SAD)
             for board, pad, sad in _find_listeners()
         ]
 
