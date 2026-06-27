@@ -176,7 +176,8 @@ def _find_listeners() -> Iterator[Tuple[int, int, int]]:  # type: ignore[no-rede
                     yield board, i, j
                 elif boardpad != i:
                     for j in range(
-                        gpib_constants.sad.FIRST_SAD, gpib_constants.sad.LAST_SAD
+                        gpib_constants.sad.FIRST_SAD,
+                        gpib_constants.sad.LAST_SAD + 1
                     ):
                         if gpib.listener(board, i, j):
                             yield board, i, j
