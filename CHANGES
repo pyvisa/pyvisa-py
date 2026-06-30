@@ -27,6 +27,7 @@ PyVISA-py Changelog
 - Properly configure termchar on GPIB devices. This fix timeout issues for old GPIB devices which do not signal EOI PR #599
 - Clean up GPIB calls to the ib*() routines, by using symbolic definitions
   rather than bare integers.  PR #601
+
 0.8.1 (04-09-2025)
 ------------------
 
