@@ -15,11 +15,11 @@ from pyvisa import attributes, constants
 from pyvisa.constants import ResourceAttribute, StatusCode
 from pyvisa.rname import GPIBInstr, GPIBIntfc, parse_resource_name
 
+from . import gpib_constants
 from . import prologix
 from .common import LOGGER
 from .sessions import Session, UnavailableSession, UnknownAttribute, VISARMSession
 
-from . import gpib_constants
 
 
 # NOTE dummy implementation that is overwritten when a GPIB library is found
@@ -285,15 +285,15 @@ def convert_gpib_error(
         LOGGER.debug("Failed to %s.", operation, exc_info=error)
         if not GPIB_CTYPES:
             return StatusCode.error_system_error
-        if error.code == GPIBerror.ECIC:
+        if error.code == gpib_constants.error.ECIC:
             return StatusCode.error_not_cic
-        elif error.code == GPIBerror.ENOL:
+        elif error.code == gpib_constants.error.ENOL:
             return StatusCode.error_no_listeners
-        elif error.code == GPIBerror.EARG:
+        elif error.code == gpib_constants.error.EARG:
             return StatusCode.error_invalid_mode
-        elif error.code == GPIBerror.ECAP:
+        elif error.code == gpib_constants.error.ECAP:
             return StatusCode.error_nonsupported_operation
-        elif error.code == GPIBerror.ELCK:
+        elif error.code == gpib_constants.error.ELCK:
             return StatusCode.error_resource_locked
         else:
             return StatusCode.error_system_error
