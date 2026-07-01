@@ -873,14 +873,14 @@ class GPIBSession(_GPIBCommon):  # type: ignore[no-redef]
         if attribute == constants.VI_ATTR_GPIB_READDR_EN:
             # Setting has no effect in linux-gpib.
             if isinstance(attribute_state, int):
-                ifc.config(GPIBConfig.IbcREADDR, attribute_state)
+                ifc.config(gpib_constants.config.IbcREADDR, attribute_state)
                 return StatusCode.success
             else:
                 return StatusCode.error_nonsupported_attribute_state
 
         elif attribute == constants.VI_ATTR_GPIB_UNADDR_EN:
             try:
-                ifc.config(GPIBConfig.IbcUnAddr, attribute_state)
+                ifc.config(gpib_constants.config.IbcUnAddr, attribute_state)
                 return StatusCode.success
             except gpib.GpibError:
                 return StatusCode.error_nonsupported_attribute_state
