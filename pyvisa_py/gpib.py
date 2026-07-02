@@ -348,7 +348,7 @@ class _GPIBCommon(Session):
         minor = int(self.parsed.board)
         # Secondary address (SAD) values should be in the range 96 to 126,
         # 0 means the SAD is disabled.
-        sad = gpib_constants.sad.NO_SAD
+        sad = gpib_constants.sad.NO_SAD.value
         timeout = gpib_constants.timeout.T10s
         send_eoi = 1
         eos_mode = 0
@@ -356,7 +356,7 @@ class _GPIBCommon(Session):
         if isinstance(self.parsed, GPIBInstr):
             pad = int(self.parsed.primary_address)
             if self.parsed.secondary_address is not None:
-                sad = int(self.parsed.secondary_address) + int(gpib_constants.sad.FIRST_SAD)
+                sad = int(self.parsed.secondary_address) + gpib_constants.sad.FIRST_SAD
             # Used to talk to a specific resource
             self.interface = Gpib(
                 name=minor,
