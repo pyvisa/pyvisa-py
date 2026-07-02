@@ -356,7 +356,9 @@ class _GPIBCommon(Session):
         if isinstance(self.parsed, GPIBInstr):
             pad = int(self.parsed.primary_address)
             if self.parsed.secondary_address is not None:
-                sad = int(self.parsed.secondary_address) + int(gpib_constants.sad.FIRST_SAD)
+                sad = int(self.parsed.secondary_address) + int(
+                    gpib_constants.sad.FIRST_SAD
+                )
             # Used to talk to a specific resource
             self.interface = Gpib(
                 name=minor,
