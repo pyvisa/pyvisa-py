@@ -15,8 +15,7 @@ from pyvisa import attributes, constants
 from pyvisa.constants import ResourceAttribute, StatusCode
 from pyvisa.rname import GPIBInstr, GPIBIntfc, parse_resource_name
 
-from . import gpib_constants
-from . import prologix
+from . import gpib_constants, prologix
 from .common import LOGGER
 from .sessions import Session, UnavailableSession, UnknownAttribute, VISARMSession
 
