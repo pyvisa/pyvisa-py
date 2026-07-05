@@ -290,6 +290,61 @@ def _bound_inet_socket() -> socket.socket:
     return sock
 
 
+def test_set_read_timeout_code_reopens_bracket():
+    # Changing the read timeout mid-session must close the bracket, re-send
+    # Frame A (SetConfig SC) with the new tmo_code for the same target, and
+    # reopen the bracket -- the box rejects 'P 03' while a bracket is open.
+    # Arbitrary target address; this is an offline wire test.
+    pad, sad = 5, 0
+    new_code = gpib_constants.timeout.T1s
+    bracket_close = struct.pack("!BBB9x", 0x58, 0x00, 0x01)
+    frame_a = nienet100.pack_command(
+        cmd_id=0x07,
+        b1=0x02,
+        w1=0x0001,
+        w2=(pad << 8) | (sad & 0xFF),
+        w3=0,
+        dw=(new_code << 24) | 0x0400,
+    )
+    bracket_open = struct.pack("!BBB9x", 0x58, 0x01, 0x01)
+    script = [
+        ("recv", bracket_close),
+        ("send", _status_ok()),
+        ("recv", frame_a),
+        ("send", _status_ok()),
+        ("recv", bracket_open),
+        ("send", _status_ok()),
+    ]
+    sock, t = _run_scripted_peer(script)
+    conn = _make_bound_connection(sock)
+    conn._bracket_open = True
+    conn._pad, conn._sad = pad, sad
+    conn._read_tmo_code = gpib_constants.timeout.T10s
+    try:
+        conn.set_read_timeout_code(new_code)
+        assert conn._read_tmo_code == new_code
+        assert conn._bracket_open is True
+    finally:
+        sock.close()
+        t.join(timeout=1.0)
+
+
+def test_set_read_timeout_code_noop_when_unchanged():
+    # Same code -> returns immediately without touching the socket.
+    conn = _make_empty_connection()
+    conn._read_tmo_code = gpib_constants.timeout.T3s
+    conn.set_read_timeout_code(gpib_constants.timeout.T3s)
+    assert conn._read_tmo_code == gpib_constants.timeout.T3s
+
+
+def test_set_read_timeout_code_records_when_no_bracket():
+    # No open bracket -> just remember the code for the next open, no wire I/O.
+    conn = _make_empty_connection()
+    conn._read_tmo_code = gpib_constants.timeout.T10s
+    conn.set_read_timeout_code(gpib_constants.timeout.T1s)
+    assert conn._read_tmo_code == gpib_constants.timeout.T1s
+
+
 def test_ibwrt_sends_header_and_payload_combined():
     # Odd-length payload must be sent UNPADDED (count=5, 5 payload bytes) —
     # padding makes the box reject the frame. Mirrors the NI capture.

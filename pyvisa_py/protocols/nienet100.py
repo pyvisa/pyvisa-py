@@ -366,6 +366,8 @@ class EnetConnection:
 
         def set_io_timeout(self, tmo_code: int) -> None: ...
 
+        def set_read_timeout_code(self, tmo_code: int) -> None: ...
+
         def transact_main_status(
             self, operation: str = ...
         ) -> tuple[int, int, int]: ...
@@ -396,6 +398,14 @@ class EnetConnection:
         # close on the way out — otherwise the bridge leaks a session
         # slot per such failure.
         self._bracket_open: bool = False
+        # Target address and read-timeout code of the current device bracket.
+        # Remembered so the read timeout can be changed mid-session by
+        # reopening the bracket with a fresh Frame A (the box rejects the
+        # 'P 03' IbcTMO setter while a bracket is open). ``None`` until an
+        # open_gpib_session has run.
+        self._pad: int = 0
+        self._sad: int = 0
+        self._read_tmo_code: int | None = None
 
     # --- lifecycle ------------------------------------------------------
 
@@ -659,6 +669,12 @@ class EnetConnection:
             Frame-B mode byte. ``0`` is standard.
 
         """
+        # Remember the target and timeout so a later timeout change can
+        # rebuild Frame A for the bracket reopen (see set_read_timeout_code).
+        self._pad = primary_address
+        self._sad = secondary_address
+        self._read_tmo_code = tmo_code
+
         # Frame A: SetConfig with SC bit and target address.
         # Wire bytes: 07 02 00 01 [PAD] [SAD] 00 00 [tmo] 00 04 00
         frame_a = pack_command(
@@ -925,10 +941,46 @@ def _set_io_timeout(self: EnetConnection, tmo_code: int) -> None:
     """Set the wire-level I/O timeout via the IbcTMO property (idx 0x03).
 
     ``tmo_code`` is a discrete NI-488.2 timeout index, not milliseconds —
-    use :func:`seconds_to_tmo_code` to convert.
+    use :func:`seconds_to_tmo_code` to convert. Only valid *before* the
+    operation bracket is open: the box rejects this property with EARG
+    once a bracket is open. Use :meth:`set_read_timeout_code` to change
+    the timeout mid-session.
 
     """
     self.transact_main(_pack_property_set(0x03, tmo_code), "set IbcTMO")
+
+
+def _set_read_timeout_code(self: EnetConnection, tmo_code: int) -> None:
+    """Change the device read timeout to ``tmo_code`` mid-session.
+
+    The read timeout is the discrete NI-488.2 code carried in the open
+    Frame A. It cannot be changed with the 'P 03' IbcTMO property while a
+    bracket is open (the box answers EARG), so a change is applied by closing
+    the bracket, re-sending Frame A (SetConfig SC) with the same target
+    address and the new ``tmo_code``, and reopening the bracket — the wire
+    sequence the genuine driver uses for a target-address switch.
+
+    No-op when the code is unchanged. When no bracket is open the new code is
+    just recorded and takes effect at the next :meth:`open_gpib_session`.
+
+    """
+    if tmo_code == self._read_tmo_code:
+        return
+    if not self._bracket_open or self.main is None:
+        self._read_tmo_code = tmo_code
+        return
+    self._transact_bracket(enter=False)
+    frame_a = pack_command(
+        cmd_id=0x07,
+        b1=0x02,
+        w1=0x0001,
+        w2=(self._pad << 8) | (self._sad & 0xFF),
+        w3=0,
+        dw=(tmo_code << 24) | 0x0400,
+    )
+    self.transact_main(frame_a, "read-timeout change Frame A SetConfig SC")
+    self._transact_bracket(enter=True)
+    self._read_tmo_code = tmo_code
 
 
 def _transact_main_status(
@@ -1016,4 +1068,5 @@ EnetConnection.ibrsp = _ibrsp  # type: ignore[method-assign]
 EnetConnection.ibwait = _ibwait  # type: ignore[method-assign]
 EnetConnection.ibsic = _ibsic  # type: ignore[method-assign]
 EnetConnection.set_io_timeout = _set_io_timeout  # type: ignore[method-assign]
+EnetConnection.set_read_timeout_code = _set_read_timeout_code  # type: ignore[method-assign]
 EnetConnection.transact_main_status = _transact_main_status  # type: ignore[method-assign]
