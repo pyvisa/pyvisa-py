@@ -19,7 +19,7 @@ from pyvisa.constants import StatusCode
 # additions it depends on (InterfaceType.ni_enet100_tcpip) are missing; skip
 # the whole module cleanly in that case, mirroring the assisted suite.
 try:
-    from pyvisa_py import nienet100 as ni
+    from pyvisa_py import gpib_constants, nienet100 as ni
     from pyvisa_py.protocols import nienet100 as proto
 except ImportError as _import_err:  # pragma: no cover - depends on pyvisa version
     pytestmark = pytest.mark.skip(
@@ -37,7 +37,9 @@ class _FakeInterface:
     def ibsic(self) -> None:
         self.ibsic_calls += 1
         if self._raise_err is not None:
-            raise proto.NIEnet100IOError(proto.STA_ERR, self._raise_err, "ibsic")
+            raise proto.NIEnet100IOError(
+                gpib_constants.status.ERR, self._raise_err, "ibsic"
+            )
 
 
 def _make_intfc_session(interface) -> ni._NIEnet100IntfcSession:
@@ -58,7 +60,7 @@ def test_gpib_send_ifc_delegates_to_ibsic():
 def test_gpib_send_ifc_maps_wire_error():
     # A wire-level iberr (here ECIC = not controller-in-charge) must surface as
     # the matching VISA status, not raise.
-    fake = _FakeInterface(raise_err=proto.ERR_ECIC)
+    fake = _FakeInterface(raise_err=gpib_constants.error.ECIC)
     session = _make_intfc_session(fake)
     assert session.gpib_send_ifc() == StatusCode.error_not_cic
 

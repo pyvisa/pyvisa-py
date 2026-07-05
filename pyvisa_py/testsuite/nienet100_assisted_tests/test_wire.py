@@ -21,6 +21,7 @@ from collections.abc import Iterator
 
 import pytest
 
+from pyvisa_py import gpib_constants
 from pyvisa_py.protocols import nienet100, nienet100_discovery
 
 from . import (
@@ -131,7 +132,7 @@ def opened_session() -> Iterator[nienet100.EnetConnection]:
         conn.open_gpib_session(
             primary_address=PAD,
             secondary_address=SAD or 0,
-            tmo_code=nienet100.TMO_3s,
+            tmo_code=gpib_constants.timeout.T3s,
         )
     except Exception:
         conn.close()
@@ -201,7 +202,7 @@ def test_timeout_surfaces_as_iberr_eabo(
     started = time.monotonic()
     with pytest.raises(nienet100.NIEnet100IOError) as excinfo:
         opened_session.ibrd(tmo_ms=200)
-    assert excinfo.value.err == nienet100.ERR_EABO, (
+    assert excinfo.value.err == gpib_constants.error.EABO, (
         "expected EABO (timeout), got iberr=%d" % excinfo.value.err
     )
     elapsed = time.monotonic() - started
@@ -217,9 +218,9 @@ def test_ibwait_round_trip(opened_session: nienet100.EnetConnection):
     Arms a deterministic SRQ via the IEEE 488.2 status model: ``*SRE 16``
     enables SRQ-on-MAV and ``*IDN?`` queues a response, so MAV — and thus
     RQS — is set. ibwait (a 0x22 poll on the companion event channel) then
-    returns immediately with STA_RQS, and a serial poll reads a status byte
-    that carries the RQS bit. The queued response is drained afterwards so
-    it cannot leak into a later test.
+    returns immediately with RQS asserted, and a serial poll reads a status
+    byte that carries the RQS bit. The queued response is drained
+    afterwards so it cannot leak into a later test.
 
     """
     conn = opened_session
@@ -227,8 +228,10 @@ def test_ibwait_round_trip(opened_session: nienet100.EnetConnection):
     conn.ibwrt(b"*SRE 16")  # enable SRQ on MAV (message available)
     conn.ibwrt(b"*IDN?")  # queue a response -> MAV -> SRQ asserts
 
-    sta = conn.ibwait(nienet100.STA_RQS | nienet100.STA_TIMO)
-    assert sta & nienet100.STA_RQS, "ibwait did not report RQS: sta=0x%04x" % sta
+    sta = conn.ibwait(gpib_constants.status.RQS | gpib_constants.status.TIMO)
+    assert sta & gpib_constants.status.RQS, (
+        "ibwait did not report RQS: sta=0x%04x" % sta
+    )
 
     stb = conn.ibrsp()
     assert stb & 0x40, "serial-poll STB lacks the RQS bit: 0x%02x" % stb

@@ -24,6 +24,7 @@ from pyvisa import attributes, constants, rname
 from pyvisa.constants import ResourceAttribute, StatusCode
 from pyvisa.typing import VISARMSession
 
+from . import gpib_constants
 from .common import LOGGER
 from .protocols import nienet100
 from .sessions import OpenError, Session, UnknownAttribute
@@ -291,7 +292,7 @@ class NIEnet100InstrSession(Session):
                 secondary_address=sad,
                 tmo_code=nienet100.seconds_to_tmo_code(self.timeout)
                 if self.timeout
-                else nienet100.TMO_10s,
+                else gpib_constants.timeout.T10s,
             )
         except Exception as e:
             LOGGER.exception(
@@ -470,14 +471,14 @@ class NIEnet100InstrSession(Session):
 
 def _map_iberr_to_status(iberr: int) -> StatusCode:
     """Translate a wire-level iberr code into a pyvisa StatusCode."""
-    if iberr == nienet100.ERR_EABO:
+    if iberr == gpib_constants.error.EABO:
         return StatusCode.error_timeout
-    if iberr == nienet100.ERR_ENOL:
+    if iberr == gpib_constants.error.ENOL:
         return StatusCode.error_no_listeners
-    if iberr == nienet100.ERR_ECIC:
+    if iberr == gpib_constants.error.ECIC:
         return StatusCode.error_not_cic
-    if iberr == nienet100.ERR_EARG:
+    if iberr == gpib_constants.error.EARG:
         return StatusCode.error_invalid_mode
-    if iberr == nienet100.ERR_ESAC:
+    if iberr == gpib_constants.error.ESAC:
         return StatusCode.error_nonsupported_operation
     return StatusCode.error_system_error

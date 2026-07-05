@@ -23,6 +23,8 @@ import struct
 from collections.abc import Callable
 from typing import TYPE_CHECKING
 
+from .. import gpib_constants
+
 LOGGER = logging.getLogger("pyvisa_py.protocols.nienet100")
 
 #: Main TCP port (synchronous request/response).
@@ -42,67 +44,9 @@ STATUS_HEADER_SIZE = 12
 CHUNK_HEADER_SIZE = 4
 
 
-# --- NI-488.2 ibsta bits (subset relevant to this protocol) -----------------
-
-STA_ERR = 0x8000  # operation error, ``err`` field carries the code
-STA_TIMO = 0x4000  # timeout during operation
-STA_END = 0x2000  # EOI or EOS match (talker signaled end-of-message)
-STA_SRQI = 0x1000  # SRQ detected while controller-in-charge
-STA_RQS = 0x0800  # device RQS asserted (set in ibrsp/ibwait responses)
-STA_CMPL = 0x0100  # operation complete
-STA_LOK = 0x0080  # lockout state
-STA_REM = 0x0040  # remote state
-STA_CIC = 0x0020  # controller-in-charge
-STA_ATN = 0x0010  # ATN line asserted
-STA_TACS = 0x0008  # talker active
-STA_LACS = 0x0004  # listener active
-STA_DTAS = 0x0002  # device trigger state
-STA_DCAS = 0x0001  # device clear state
-
-
-# --- NI-488.2 iberr codes (subset relevant to this protocol) ----------------
-
-ERR_EDVR = 0  # OS error (rare)
-ERR_ECIC = 1  # function requires controller-in-charge
-ERR_ENOL = 2  # no listener on the bus
-ERR_EADR = 3  # address error
-ERR_EARG = 4  # invalid argument to API
-ERR_ESAC = 5  # function requires system controller
-ERR_EABO = 6  # I/O aborted / timeout
-ERR_ENEB = 7  # non-existent board
-ERR_EBUS = 0xA  # bus error
-ERR_ECAP = 0xB  # capability disabled
-ERR_EFSO = 0xC  # file-system error
-ERR_EBNP = 0xD  # board not present
-ERR_ESTB = 0xE  # serial-poll status byte lost
-ERR_ESRQ = 0xF  # SRQ stuck on
-
-
-# --- NI-488.2 timeout codes (TMO index, not milliseconds) -------------------
-# Used in SetConfig Frame A byte[8] and in the ``'P 03'`` property setter.
-
-TMO_NONE = 0
-TMO_10us = 1
-TMO_30us = 2
-TMO_100us = 3
-TMO_300us = 4
-TMO_1ms = 5
-TMO_3ms = 6
-TMO_10ms = 7
-TMO_30ms = 8
-TMO_100ms = 9
-TMO_300ms = 10
-TMO_1s = 11
-TMO_3s = 12
-TMO_10s = 13
-TMO_30s = 14
-TMO_100s = 15
-TMO_300s = 16
-TMO_1000s = 17
-
 #: Discrete timeout values in seconds, indexed by TMO code. ``None`` = disabled.
 TIMETABLE: tuple = (
-    None,  # TMO_NONE
+    None,  # infinite
     10e-6,
     30e-6,
     100e-6,
@@ -126,16 +70,16 @@ TIMETABLE: tuple = (
 def seconds_to_tmo_code(timeout: float) -> int:
     """Round a timeout (in seconds) up to the closest discrete TMO code.
 
-    Values larger than ``TIMETABLE[-1]`` are clamped to ``TMO_1000s``.
-    ``None`` or ``0`` map to ``TMO_NONE``.
+    Values larger than ``TIMETABLE[-1]`` are clamped to the largest code.
+    ``None`` or ``0`` map to the disabled (infinite) code.
 
     """
     if not timeout:
-        return TMO_NONE
+        return gpib_constants.timeout.TNONE
     for code in range(1, len(TIMETABLE)):
         if TIMETABLE[code] >= timeout * 0.999:
             return code
-    return TMO_1000s
+    return gpib_constants.timeout.T1000s
 
 
 # --- Chunk header flags (read stream after a status header) -----------------
@@ -183,8 +127,8 @@ _STATUS_HEADER_FMT = "!HH4xL"
 def parse_status_header(buf: bytes) -> tuple[int, int, int]:
     """Decode a 12-byte status header into ``(sta, err, cnt)``.
 
-    ``err`` is only meaningful when ``sta & STA_ERR`` is set; otherwise it
-    may carry sentinel values such as 0xFFFF that the caller must ignore.
+    ``err`` is only meaningful when the ERR bit is set; otherwise it may
+    carry sentinel values such as 0xFFFF that the caller must ignore.
 
     """
     if len(buf) != STATUS_HEADER_SIZE:
@@ -224,10 +168,10 @@ def read_chunks_until_end(read_exactly: Callable[[int], bytes]) -> bytes:
     treated as end-of-stream terminators with a warning — hardware has
     been observed to use flag 0x0004 on timeouts (and other terminal
     conditions the wire spec does not enumerate). The caller's
-    subsequent status-header read carries the real outcome (e.g. STA_ERR
-    + iberr=EABO for a timeout). Unknown flags carrying a non-zero
-    length still raise :class:`NIEnet100ProtocolError` because we
-    cannot stay frame-aligned without knowing how to consume the data.
+    subsequent status-header read carries the real outcome (e.g. the ERR
+    bit + iberr=EABO for a timeout). Unknown flags carrying a non-zero
+    length still raise :class:`NIEnet100ProtocolError` because we cannot
+    stay frame-aligned without knowing how to consume the data.
 
     Parameters
     ----------
@@ -323,7 +267,7 @@ class NIEnet100ProtocolError(NIEnet100Error):
 
 
 class NIEnet100IOError(NIEnet100Error):
-    """The box returned a status header with ``STA_ERR`` set.
+    """The box returned a status header with the ERR bit set.
 
     Attributes
     ----------
@@ -572,13 +516,13 @@ class EnetConnection:
     def transact_main(self, frame: bytes, operation: str = "") -> tuple[int, int, int]:
         """Send a command frame and read the status header on the main socket.
 
-        Raises :class:`NIEnet100IOError` if the status header has ``STA_ERR``
-        set. Returns ``(sta, err, cnt)`` on success.
+        Raises :class:`NIEnet100IOError` if the status header has the ERR
+        bit set. Returns ``(sta, err, cnt)`` on success.
 
         """
         self.send_main(frame)
         sta, err, cnt = self.read_status_main()
-        if sta & STA_ERR:
+        if sta & gpib_constants.status.ERR:
             raise NIEnet100IOError(sta, err, operation)
         return sta, err, cnt
 
@@ -616,7 +560,7 @@ class EnetConnection:
         self.companion.sendall(frame)
         companion = self.companion
         sta, err, _cnt = read_status_chunk(lambda n: self._recv_exactly(companion, n))
-        if sta & STA_ERR:
+        if sta & gpib_constants.status.ERR:
             raise NIEnet100IOError(sta, err, "companion hello")
 
     # --- GPIB-session open / close (Frames A-G of the spec) -----------
@@ -632,7 +576,7 @@ class EnetConnection:
     def open_board_session(
         self,
         board_flags: int = DEFAULT_BOARD_FLAGS,
-        tmo_code: int = TMO_10s,
+        tmo_code: int = gpib_constants.timeout.T10s,
     ) -> None:
         """Open a board-level (INTFC) session and leave the box online.
 
@@ -685,7 +629,7 @@ class EnetConnection:
         self,
         primary_address: int,
         secondary_address: int = 0,
-        tmo_code: int = TMO_10s,
+        tmo_code: int = gpib_constants.timeout.T10s,
         board_flags: int = DEFAULT_BOARD_FLAGS,
         event_queue_depth: int = DEFAULT_EVENT_QUEUE_DEPTH,
         mode_byte: int = 0,
@@ -704,8 +648,8 @@ class EnetConnection:
         secondary_address : int
             Target GPIB secondary address (0 means none).
         tmo_code : int
-            NI-488.2 timeout code (see ``TIMETABLE``). Default ``TMO_10s``
-            matches NI's measurement-equipment default.
+            NI-488.2 timeout code (see ``TIMETABLE``). Default is the 10 s
+            code, matching NI's measurement-equipment default.
         board_flags : int
             Frame-C bitmask. Default ``0x1801`` is the standard
             single-instrument baseline.
@@ -868,11 +812,16 @@ def _ibrd(self: EnetConnection, tmo_ms: int = DEFAULT_IBRD_TMO_MS) -> bytes:
     self.send_main(frame)
     # Preliminary status (typically sta=0x0100 cnt=0, err may be 0xFFFF).
     sta_p, err_p, _ = self.read_status_main()
-    if sta_p & STA_ERR:
+    if sta_p & gpib_constants.status.ERR:
         raise NIEnet100IOError(sta_p, err_p, "ibrd preliminary")
 
     payload = bytearray()
-    _status_bits = STA_CMPL | STA_ERR | STA_END | STA_TIMO
+    _status_bits = (
+        gpib_constants.status.CMPL
+        | gpib_constants.status.ERR
+        | gpib_constants.status.END
+        | gpib_constants.status.TIMO
+    )
     while True:
         flags, length = parse_chunk_header(self.recv_main_exactly(CHUNK_HEADER_SIZE))
 
@@ -883,7 +832,7 @@ def _ibrd(self: EnetConnection, tmo_ms: int = DEFAULT_IBRD_TMO_MS) -> bytes:
                     "END chunk has non-zero length %d" % length
                 )
             sta_f, err_f, _cnt = self.read_status_main()
-            if sta_f & STA_ERR:
+            if sta_f & gpib_constants.status.ERR:
                 raise NIEnet100IOError(sta_f, err_f, "ibrd final")
             return bytes(payload)
 
@@ -914,7 +863,7 @@ def _ibrd(self: EnetConnection, tmo_ms: int = DEFAULT_IBRD_TMO_MS) -> bytes:
         if length == STATUS_HEADER_SIZE:
             sta_c, err_c, _cnt_c = parse_status_header(body)
             if sta_c & _status_bits:
-                if sta_c & STA_ERR:
+                if sta_c & gpib_constants.status.ERR:
                     raise NIEnet100IOError(sta_c, err_c, "ibrd final")
                 return bytes(payload)
 
@@ -967,7 +916,7 @@ def _ibrsp(self: EnetConnection) -> int:
             % (len(chunk), STATUS_HEADER_SIZE + 1)
         )
     sta, err, _cnt = parse_status_header(chunk[:STATUS_HEADER_SIZE])
-    if sta & STA_ERR:
+    if sta & gpib_constants.status.ERR:
         raise NIEnet100IOError(sta, err, "ibrsp")
     return chunk[STATUS_HEADER_SIZE]
 
@@ -992,7 +941,7 @@ def _transact_main_status(
 
     """
     sta, err, cnt = self.read_status_main()
-    if sta & STA_ERR:
+    if sta & gpib_constants.status.ERR:
         raise NIEnet100IOError(sta, err, operation)
     return sta, err, cnt
 
@@ -1017,14 +966,14 @@ def _ibwait(self: EnetConnection, mask: int) -> int:
 
     Sends a single ``0x22`` poll frame carrying ``mask`` (a 16-bit ibsta
     bitmask of the events the caller is interested in — typically
-    ``STA_RQS`` for SRQ, OR'd with ``STA_TIMO`` so the box's own IbcTMO
+    the RQS bit for SRQ, OR'd with the TIMO bit so the box's own IbcTMO
     surfaces as a timeout event). The box **blocks** and replies with a
     12-byte status header whose ``sta`` is the result:
 
-        sta = conn.ibwait(STA_RQS | STA_TIMO)
-        if sta & STA_RQS:
+        sta = conn.ibwait(gpib_constants.status.RQS | gpib_constants.status.TIMO)
+        if sta & gpib_constants.status.RQS:
             stb = conn.ibrsp()   # acknowledge RQS
-        elif sta & STA_TIMO:
+        elif sta & gpib_constants.status.TIMO:
             ...   # no SRQ within IbcTMO
 
     The poll goes on the companion socket (the box's event channel, linked
@@ -1048,7 +997,7 @@ def _ibwait(self: EnetConnection, mask: int) -> int:
     self.companion.sendall(pack_command(cmd_id=0x22, b1=0x00, w1=mask))
     companion = self.companion
     sta, err, _cnt = read_status_chunk(lambda n: self._recv_exactly(companion, n))
-    if sta & STA_ERR:
+    if sta & gpib_constants.status.ERR:
         raise NIEnet100IOError(sta, err, "ibwait")
     return sta
 

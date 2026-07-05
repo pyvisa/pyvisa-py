@@ -19,6 +19,7 @@ import threading
 
 import pytest
 
+from pyvisa_py import gpib_constants
 from pyvisa_py.protocols import nienet100
 
 # --- frame pack / unpack ----------------------------------------------------
@@ -39,25 +40,25 @@ def test_pack_command_layout():
         w1=0x0001,
         w2=(16 << 8) | 0,
         w3=0,
-        dw=(nienet100.TMO_10s << 24) | 0x0400,
+        dw=(gpib_constants.timeout.T10s << 24) | 0x0400,
     )
     assert frame.hex() == "07020001" + "10000000" + "0d000400"
 
 
 def test_parse_status_header_ok():
-    raw = struct.pack("!HH4xL", nienet100.STA_CMPL, 0x0000, 42)
+    raw = struct.pack("!HH4xL", gpib_constants.status.CMPL, 0x0000, 42)
     sta, err, cnt = nienet100.parse_status_header(raw)
-    assert sta == nienet100.STA_CMPL
+    assert sta == gpib_constants.status.CMPL
     assert err == 0
     assert cnt == 42
 
 
 def test_parse_status_header_err_sentinel():
     # err=0xFFFF is a documented sentinel that callers must ignore unless
-    # STA_ERR is set.
-    raw = struct.pack("!HH4xL", nienet100.STA_CMPL, 0xFFFF, 0)
+    # the ERR bit is set.
+    raw = struct.pack("!HH4xL", gpib_constants.status.CMPL, 0xFFFF, 0)
     sta, err, cnt = nienet100.parse_status_header(raw)
-    assert sta == nienet100.STA_CMPL
+    assert sta == gpib_constants.status.CMPL
     assert err == 0xFFFF
     assert cnt == 0
 
@@ -154,18 +155,18 @@ def test_u32_from_ip(ip: str, want_hex: int):
 @pytest.mark.parametrize(
     "seconds, want",
     [
-        (None, nienet100.TMO_NONE),
-        (0, nienet100.TMO_NONE),
-        (10e-6, nienet100.TMO_10us),
-        (1e-3, nienet100.TMO_1ms),
-        (1.0, nienet100.TMO_1s),
-        (10.0, nienet100.TMO_10s),
+        (None, gpib_constants.timeout.TNONE),
+        (0, gpib_constants.timeout.TNONE),
+        (10e-6, gpib_constants.timeout.T10us),
+        (1e-3, gpib_constants.timeout.T1ms),
+        (1.0, gpib_constants.timeout.T1s),
+        (10.0, gpib_constants.timeout.T10s),
         # 0.5 s rounds up to 1 s (next discrete value)
-        (0.5, nienet100.TMO_1s),
+        (0.5, gpib_constants.timeout.T1s),
         # 5 s rounds up to 10 s
-        (5.0, nienet100.TMO_10s),
+        (5.0, gpib_constants.timeout.T10s),
         # Clamp to the largest available code
-        (5000.0, nienet100.TMO_1000s),
+        (5000.0, gpib_constants.timeout.T1000s),
     ],
 )
 def test_seconds_to_tmo_code(seconds, want: int):
@@ -177,12 +178,12 @@ def test_seconds_to_tmo_code(seconds, want: int):
 
 def test_iberr_exception_carries_fields():
     e = nienet100.NIEnet100IOError(
-        nienet100.STA_ERR | nienet100.STA_CMPL,
-        nienet100.ERR_ENOL,
+        gpib_constants.status.ERR | gpib_constants.status.CMPL,
+        gpib_constants.error.ENOL,
         "ibwrt",
     )
-    assert e.sta == nienet100.STA_ERR | nienet100.STA_CMPL
-    assert e.err == nienet100.ERR_ENOL
+    assert e.sta == gpib_constants.status.ERR | gpib_constants.status.CMPL
+    assert e.err == gpib_constants.error.ENOL
     assert "ibwrt" in str(e)
 
 
@@ -243,7 +244,7 @@ def _wrap_status(body: bytes) -> bytes:
 
 
 def _status_ok(cnt: int = 0) -> bytes:
-    body = struct.pack("!HH4xL", nienet100.STA_CMPL, 0, cnt)
+    body = struct.pack("!HH4xL", gpib_constants.status.CMPL, 0, cnt)
     return _wrap_status(body)
 
 
@@ -317,7 +318,12 @@ def test_ibrd_with_data_consumes_prelim_data_end_and_final():
         (
             "send",
             _wrap_status(
-                struct.pack("!HH4xL", nienet100.STA_END | nienet100.STA_CMPL, 0xFFFF, 6)
+                struct.pack(
+                    "!HH4xL",
+                    gpib_constants.status.END | gpib_constants.status.CMPL,
+                    0xFFFF,
+                    6,
+                )
             ),
         ),  # final status
     ]
@@ -350,13 +356,13 @@ def test_ibrd_no_data_path_accepts_final_status_without_end_marker():
 
 
 def test_ibrd_no_data_path_propagates_error_status():
-    """No-data path with an error final status — STA_ERR must raise."""
+    """No-data path with an error final status (``ERR`` bit set) must raise."""
     expected_frame = struct.pack("!BBHL4x", 0x16, 0x00, 0x0000, 100)
     error_status = _wrap_status(
         struct.pack(
             "!HH4xL",
-            nienet100.STA_ERR | nienet100.STA_CMPL,
-            nienet100.ERR_EABO,
+            gpib_constants.status.ERR | gpib_constants.status.CMPL,
+            gpib_constants.error.EABO,
             0,
         )
     )
@@ -370,7 +376,7 @@ def test_ibrd_no_data_path_propagates_error_status():
     try:
         with pytest.raises(nienet100.NIEnet100IOError) as excinfo:
             conn.ibrd(tmo_ms=100)
-        assert excinfo.value.err == nienet100.ERR_EABO
+        assert excinfo.value.err == gpib_constants.error.EABO
     finally:
         sock.close()
         t.join(timeout=2.0)
@@ -382,7 +388,7 @@ def test_ibrsp_returns_stb_from_combined_chunk(cnt: int):
     # chunk with length=13; the STB is always the trailing byte. cnt is not
     # reliably 1 (a serial poll right after an SRQ wait reports cnt=0 with a
     # valid STB), so the STB must be read by position regardless of cnt.
-    status_body = struct.pack("!HH4xL", nienet100.STA_CMPL, 0, cnt)
+    status_body = struct.pack("!HH4xL", gpib_constants.status.CMPL, 0, cnt)
     response = _chunk(0, status_body + b"\x42")
     script = [
         ("recv", nienet100.pack_command(0x19)),
@@ -405,8 +411,8 @@ def test_ibclr_raises_iberr_on_error_status():
             _wrap_status(
                 struct.pack(
                     "!HH4xL",
-                    nienet100.STA_ERR | nienet100.STA_CMPL,
-                    nienet100.ERR_ENOL,
+                    gpib_constants.status.ERR | gpib_constants.status.CMPL,
+                    gpib_constants.error.ENOL,
                     0,
                 )
             ),
@@ -417,7 +423,7 @@ def test_ibclr_raises_iberr_on_error_status():
     try:
         with pytest.raises(nienet100.NIEnet100IOError) as excinfo:
             conn.ibclr()
-        assert excinfo.value.err == nienet100.ERR_ENOL
+        assert excinfo.value.err == gpib_constants.error.ENOL
     finally:
         sock.close()
         t.join(timeout=2.0)
@@ -443,12 +449,12 @@ def test_simple_verbs_roundtrip(opcode, method):
 
 
 def test_set_io_timeout_sends_property_set_frame():
-    expected = struct.pack("!BBB9x", 0x50, 0x03, nienet100.TMO_10s)
+    expected = struct.pack("!BBB9x", 0x50, 0x03, gpib_constants.timeout.T10s)
     script = [("recv", expected), ("send", _status_ok())]
     sock, t = _run_scripted_peer(script)
     conn = _make_bound_connection(sock)
     try:
-        conn.set_io_timeout(nienet100.TMO_10s)
+        conn.set_io_timeout(gpib_constants.timeout.T10s)
     finally:
         sock.close()
         t.join(timeout=2.0)
@@ -459,9 +465,9 @@ def test_set_io_timeout_sends_property_set_frame():
 
 def test_ibwait_sends_mask_and_returns_sta():
     # ibwait polls with 0x22 on the companion socket (the event channel).
-    mask = nienet100.STA_RQS | nienet100.STA_TIMO
+    mask = gpib_constants.status.RQS | gpib_constants.status.TIMO
     expected_frame = nienet100.pack_command(cmd_id=0x22, b1=0x00, w1=mask)
-    response_sta = nienet100.STA_RQS | nienet100.STA_CMPL
+    response_sta = gpib_constants.status.RQS | gpib_constants.status.CMPL
     script = [
         ("recv", expected_frame),
         ("send", _wrap_status(struct.pack("!HH4xL", response_sta, 0xFFFF, 0))),
@@ -479,14 +485,17 @@ def test_ibwait_sends_mask_and_returns_sta():
 
 def test_ibwait_raises_on_error_status():
     script = [
-        ("recv", nienet100.pack_command(cmd_id=0x22, b1=0x00, w1=nienet100.STA_RQS)),
+        (
+            "recv",
+            nienet100.pack_command(cmd_id=0x22, b1=0x00, w1=gpib_constants.status.RQS),
+        ),
         (
             "send",
             _wrap_status(
                 struct.pack(
                     "!HH4xL",
-                    nienet100.STA_ERR | nienet100.STA_CMPL,
-                    nienet100.ERR_EARG,
+                    gpib_constants.status.ERR | gpib_constants.status.CMPL,
+                    gpib_constants.error.EARG,
                     0,
                 )
             ),
@@ -497,8 +506,8 @@ def test_ibwait_raises_on_error_status():
         conn = _make_bound_connection(socket.socket())
         conn.companion = companion_sock
         with pytest.raises(nienet100.NIEnet100IOError) as excinfo:
-            conn.ibwait(nienet100.STA_RQS)
-        assert excinfo.value.err == nienet100.ERR_EARG
+            conn.ibwait(gpib_constants.status.RQS)
+        assert excinfo.value.err == gpib_constants.error.EARG
     finally:
         companion_sock.close()
         t.join(timeout=2.0)
@@ -511,7 +520,11 @@ def test_ibsic_sends_1c_on_main():
     # IFC is a bare 0x1c command on the main socket (verified against the
     # genuine NI software); the box replies CMPL|CIC|ATN.
     expected = nienet100.pack_command(0x1C)
-    reply_sta = nienet100.STA_CMPL | nienet100.STA_CIC | nienet100.STA_ATN
+    reply_sta = (
+        gpib_constants.status.CMPL
+        | gpib_constants.status.CIC
+        | gpib_constants.status.ATN
+    )
     main_sock, t = _run_scripted_peer(
         [
             ("recv", expected),
