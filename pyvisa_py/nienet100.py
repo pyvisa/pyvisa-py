@@ -166,11 +166,12 @@ class NIEnet100TCPIPIntfcSession(_NIEnet100IntfcSession):
         super().__init__(resource_manager_session, resource_name, parsed, open_timeout)
 
     def after_parsing(self) -> None:
-        # pyvisa open_timeout is in milliseconds; convert to seconds for the
-        # socket layer. ``None`` or 0 (VI_TMO_IMMEDIATE, the pyvisa default)
-        # means "use a sane default": a literal ~1 ms socket timeout is far
-        # too short for the multi-frame board open, so fall back to 10 s (as
-        # VXI-11 does) rather than ``max(0, 0.001)``.
+        # pyvisa's open_timeout nominally bounds lock acquisition; like VXI-11
+        # we use it as the connection/open timeout, matching the genuine
+        # driver's own connect timeout. ``None`` or 0 (VI_TMO_IMMEDIATE, the
+        # pyvisa default) means "use a sane default": a literal ~1 ms socket
+        # timeout is far too short for the multi-frame board open, so fall
+        # back to 10 s rather than ``max(0, 0.001)``.
         if not self.open_timeout:
             connect_timeout_s = 10.0
         else:
@@ -181,7 +182,9 @@ class NIEnet100TCPIPIntfcSession(_NIEnet100IntfcSession):
             self.interface = nienet100.EnetConnection(
                 host,
                 open_timeout=connect_timeout_s,
-                timeout=connect_timeout_s,
+                # Operational socket timeout: honour the session timeout
+                # attribute when set, else the connect fallback.
+                timeout=self.timeout if self.timeout else connect_timeout_s,
             )
             # Board-level open (not the device open()): leaves the box online
             # so a board-level ibsic (gpib_send_ifc) is accepted. A bare open()
@@ -294,6 +297,9 @@ class NIEnet100InstrSession(Session):
                 if self.timeout
                 else gpib_constants.timeout.T10s,
             )
+            # Set the socket recv-timeout ceiling for the tmo_code just used;
+            # the code itself is already applied, so this does not reopen.
+            self._sync_read_timeout()
         except Exception as e:
             LOGGER.exception(
                 "Failed to open GPIB-ENET/100 session to %s pad=%d sad=%d",
@@ -358,9 +364,10 @@ class NIEnet100InstrSession(Session):
         # any remainder for the next call — this is what lets a caller read
         # a response one byte at a time without losing the tail.
         if not self._read_buffer:
-            # Propagate the pyvisa session timeout to the wire-level ibrd as
-            # tmo_ms. self.timeout is in seconds; None means infinite (no
-            # ceiling) — fall back to the wire layer's default in that case.
+            # The effective read timeout is the bracket's tmo_code, set from
+            # self.timeout in _set_timeout; this per-call tmo_ms has no effect.
+            # We still send a non-zero value because the genuine NI driver does
+            # and tmo_ms=0 means "no override" on the wire.
             if self.timeout is None:
                 tmo_ms = nienet100.DEFAULT_IBRD_TMO_MS
             else:
@@ -441,24 +448,32 @@ class NIEnet100InstrSession(Session):
 
     def _set_timeout(self, attribute: ResourceAttribute, value: int) -> StatusCode:
         status = super()._set_timeout(attribute, value)
-        if self.interface is not None:
-            # The bridge rejects the IbcTMO property setter ('P 03') once a
-            # bracket is open, so the wire-level timeout is delivered via
-            # the per-call tmo_ms argument of ibrd (see read() below). The
-            # socket-level timeout is a hard ceiling above the wire timeout
-            # so the bridge always surfaces its own timeout first.
-            #
-            # The bridge has a built-in minimum delay (observed ~3 s
-            # against a real GPIB-ENET/100) before it reports a timeout to
-            # the host, regardless of the per-call tmo_ms value, so the
-            # socket ceiling needs generous headroom above the configured
-            # wire timeout. Without it, short pyvisa timeouts (e.g. 200 ms)
-            # trip the socket before the bridge ever responds.
-            if self.timeout is None:
-                self.interface.set_socket_timeout(None)
-            else:
-                self.interface.set_socket_timeout(max(self.timeout + 5.0, 8.0))
+        self._sync_read_timeout()
         return status
+
+    def _sync_read_timeout(self) -> None:
+        """Push the current session timeout onto the wire.
+
+        The read timeout is the discrete ``tmo_code`` carried in the open
+        Frame A; the per-call ibrd ``tmo_ms`` has no effect (verified against
+        hardware). The 'P 03' IbcTMO property is rejected once a bracket is
+        open, so a change is applied by reopening the bracket
+        (``EnetConnection.set_read_timeout_code``). The socket recv-timeout is
+        set a little above the box's own timeout so the box surfaces its EABO
+        first; ``seconds_to_tmo_code`` rounds *up*, so the ceiling is based on
+        the code's real duration (``TIMETABLE``) rather than ``self.timeout``.
+
+        """
+        if self.interface is None:
+            return
+        tmo_code = (
+            nienet100.seconds_to_tmo_code(self.timeout)
+            if self.timeout
+            else gpib_constants.timeout.T10s
+        )
+        self.interface.set_read_timeout_code(tmo_code)
+        box_timeout = nienet100.TIMETABLE[tmo_code]
+        self.interface.set_socket_timeout(box_timeout * 1.25 + 1.0)
 
     def _get_attribute(self, attribute: ResourceAttribute) -> tuple[Any, StatusCode]:
         raise UnknownAttribute(attribute)
