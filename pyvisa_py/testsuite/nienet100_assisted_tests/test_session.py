@@ -191,15 +191,15 @@ def test_idn_query_small_chunks_stress_read_buffer(inst):
 
 
 @require_instrument
-def test_new_write_discards_unread_response(inst):
-    """A new write must drop bytes left unread from a previous response.
+def test_clear_discards_unread_response(inst):
+    """viClear drops bytes left unread from a previous response.
 
     Read only a few bytes of one *IDN? reply, leaving the remainder in the
-    session's intermediate buffer, then issue a fresh *IDN? query. The new
-    write has to discard the buffered tail so the second response comes back
-    clean and matches a normal one-shot query — otherwise the stale tail
-    (which ends in the termination char) would be returned as the answer and
-    the real reply would desync onto the next read.
+    session's intermediate buffer. An ordinary write does not discard that
+    tail -- like the other message-based backends, the buffer persists across
+    writes so a response can be read one byte at a time. ``clear()`` is the
+    VISA operation that flushes it, after which a fresh query returns a clean
+    response identical to a normal one-shot query.
 
     """
     expected = inst.query("*IDN?")
@@ -208,8 +208,10 @@ def test_new_write_discards_unread_response(inst):
     partial = inst.read_bytes(3)
     assert len(partial) == 3, "expected a 3-byte partial read, got %r" % (partial,)
 
+    inst.clear()
+
     again = inst.query("*IDN?")
-    assert again == expected, "stale buffered tail leaked: %r != %r" % (
+    assert again == expected, "clear did not discard the buffered tail: %r != %r" % (
         again,
         expected,
     )
