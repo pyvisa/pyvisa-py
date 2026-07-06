@@ -27,8 +27,8 @@ from pyvisa_py.protocols import nienet100
 
 def test_pack_command_zeroes_unset_fields():
     frame = nienet100.pack_command(0x04)
-    assert frame == b"\x04\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
     assert len(frame) == nienet100.COMMAND_FRAME_SIZE
+    assert frame == b"\x04\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
 
 
 def test_pack_command_layout():
