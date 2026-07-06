@@ -502,8 +502,7 @@ class EnetConnection:
         if self.main is None:
             raise NIEnet100Error("main socket is not open")
         data = self._recv_exactly(self.main, n)
-        if LOGGER.isEnabledFor(logging.DEBUG):
-            LOGGER.debug("← main: %s", data.hex())
+        LOGGER.debug("← main: %s", data.hex())
         return data
 
     def send_main(self, data: bytes) -> None:
@@ -515,8 +514,7 @@ class EnetConnection:
         """
         if self.main is None:
             raise NIEnet100Error("main socket is not open")
-        if LOGGER.isEnabledFor(logging.DEBUG):
-            LOGGER.debug("→ main: %s", data.hex())
+        LOGGER.debug("→ main: %s", data.hex())
         self.main.sendall(data)
 
     def read_status_main(self) -> tuple[int, int, int]:
