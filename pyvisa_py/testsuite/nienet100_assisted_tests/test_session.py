@@ -24,11 +24,9 @@ import pyvisa
 from pyvisa import constants
 from pyvisa.errors import VisaIOError
 from pyvisa.resources import MessageBasedResource
-
 from pyvisa_py import nienet100 as _ni
 
 from . import HOST, IDN_VENDOR, PAD, SAD, TERM, require_bridge, require_instrument
-
 
 # --- fixtures --------------------------------------------------------------
 

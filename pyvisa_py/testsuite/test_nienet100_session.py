@@ -12,7 +12,6 @@ exercised. Hardware-gated session tests live in ``nienet100_assisted_tests``.
 """
 
 from pyvisa.constants import StatusCode
-
 from pyvisa_py import gpib_constants, nienet100 as ni
 from pyvisa_py.protocols import nienet100 as proto
 
