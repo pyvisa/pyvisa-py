@@ -11,20 +11,10 @@ exercised. Hardware-gated session tests live in ``nienet100_assisted_tests``.
 
 """
 
-import pytest
-
 from pyvisa.constants import StatusCode
 
-# The session module raises ImportError on load when the upstream pyvisa
-# additions it depends on (InterfaceType.ni_enet100_tcpip) are missing; skip
-# the whole module cleanly in that case, mirroring the assisted suite.
-try:
-    from pyvisa_py import gpib_constants, nienet100 as ni
-    from pyvisa_py.protocols import nienet100 as proto
-except ImportError as _import_err:  # pragma: no cover - depends on pyvisa version
-    pytestmark = pytest.mark.skip(
-        reason="pyvisa-py NI GPIB-ENET/100 session layer unavailable: %s" % _import_err
-    )
+from pyvisa_py import gpib_constants, nienet100 as ni
+from pyvisa_py.protocols import nienet100 as proto
 
 
 class _FakeInterface:

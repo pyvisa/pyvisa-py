@@ -29,23 +29,6 @@ from .common import LOGGER
 from .protocols import nienet100
 from .sessions import OpenError, Session, UnknownAttribute
 
-# Resolve the required pyvisa names early so a missing upstream PR produces
-# an ImportError that highlevel.py logs at debug level (mirrors how vicp
-# falls back when pyvicp is not installed). Users opening NI-ENET100-TCPIP
-# resources then see a clean "No class registered" error instead of a
-# cryptic AttributeError during session creation.
-#
-# TODO(pre-release): drop this runtime guard once pyvisa-py pins a minimum
-# pyvisa version that ships the ni_enet100_tcpip definitions; the version
-# requirement then makes the check redundant.
-try:
-    _IFACE_NIENET100_TCPIP = constants.InterfaceType.ni_enet100_tcpip
-except AttributeError as e:
-    raise ImportError(
-        "pyvisa-py NI GPIB-ENET/100 support requires pyvisa with "
-        "some definitions specific to nienet100; please update pyvisa."
-    ) from e
-
 
 class _NIEnet100IntfcSession(Session):
     """Common base for NI GPIB-ENET/100 INTFC sessions.
@@ -114,7 +97,7 @@ class _NIEnet100IntfcSession(Session):
         return StatusCode.success
 
 
-@Session.register(_IFACE_NIENET100_TCPIP, "INTFC")
+@Session.register(constants.InterfaceType.ni_enet100_tcpip, "INTFC")
 class NIEnet100TCPIPIntfcSession(_NIEnet100IntfcSession):
     """Session for ``NI-ENET100-TCPIP<board>::<host>::INTFC`` resources."""
 

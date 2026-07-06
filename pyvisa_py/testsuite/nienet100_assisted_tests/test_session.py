@@ -6,8 +6,7 @@ opens the ``NI-ENET100-TCPIP::INTFC`` interface, then a
 ``GPIB<n>::<pad>::INSTR`` is routed by the central dispatcher in
 ``pyvisa_py.gpib_dispatch`` to ``NIEnet100InstrSession``. This requires the
 ``InterfaceType.ni_enet100_tcpip`` and ``NIEnet100TCPIPIntfc`` additions
-in upstream pyvisa — when those are missing, the whole module skips
-cleanly.
+in upstream pyvisa (available since pyvisa 1.17.0).
 
 See the package ``__init__`` docstring for environment-variable setup.
 
@@ -26,18 +25,9 @@ from pyvisa import constants
 from pyvisa.errors import VisaIOError
 from pyvisa.resources import MessageBasedResource
 
-from . import HOST, IDN_VENDOR, PAD, SAD, TERM, require_bridge, require_instrument
+from pyvisa_py import nienet100 as _ni
 
-# Skip the entire module if the upstream pyvisa changes that NIENET100
-# depends on (InterfaceType.ni_enet100_tcpip + rname.NIEnet100TCPIPIntfc)
-# are not in place. The pyvisa_py.nienet100 module raises ImportError on
-# load when they are missing.
-try:
-    from pyvisa_py import nienet100 as _ni
-except ImportError as _import_err:
-    pytestmark = pytest.mark.skip(
-        reason="pyvisa-py NI GPIB-ENET/100 session layer unavailable: %s" % _import_err
-    )
+from . import HOST, IDN_VENDOR, PAD, SAD, TERM, require_bridge, require_instrument
 
 
 # --- fixtures --------------------------------------------------------------
