@@ -46,7 +46,6 @@ class EventContext:
     """Immutable description of a single VISA event occurrence."""
 
     event_type: constants.EventType
-    status_byte: int = 0
     timestamp: float = field(default_factory=time.time)
     context_id: int = field(default_factory=lambda: random.getrandbits(32))
 

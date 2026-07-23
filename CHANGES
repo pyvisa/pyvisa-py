@@ -4,6 +4,9 @@ PyVISA-py Changelog
 0.9.0 (unreleased)
 ------------------
 
+- Removed additional read_stb inside VXI-11 (TCPIP::INSTR) SRQ handling. 
+  It is not standard behaviour, may confuse instruments, and does not 
+  cache the SRQ bit as would be required. Closes #603 PR #606
 - Added read_stb, assert_trigger and gpib_control_run functions to usbtmc PR #532
 - Implement viTerminate() for HiSLIP sessions using a CancellableSocket
   (self-pipe trick on recv_into), enabling cross-thread I/O cancellation
