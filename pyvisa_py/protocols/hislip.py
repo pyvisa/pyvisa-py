@@ -166,7 +166,7 @@ class CancellableSocket(socket.socket):
         if not self._cancel_enabled:
             return super().recv_into(buffer, nbytes, flags)
         timeout = self.gettimeout()
-        readable, _, _ = select.select([self.fileno(), self._cancel_r], [], [], timeout)
+        readable, _, _ = select.select([self, self._cancel_r], [], [], timeout)
         if not readable:
             raise socket.timeout("timed out")
         if self._cancel_r in readable:
