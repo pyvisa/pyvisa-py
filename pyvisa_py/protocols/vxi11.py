@@ -17,7 +17,6 @@ import struct
 import threading
 
 from pyvisa import constants
-from pyvisa.constants import StatusCode
 
 from ..common import LOGGER
 from ..events import EventContext
@@ -498,12 +497,9 @@ class SrqInterruptTCPServer(rpc.TCPServer):
             # Defensive: session may have been closed while we were spawned
             if self.session.interface is None or self.session.link == 0:
                 return
-            stb, status = self.session.read_stb()
-            if status == StatusCode.success and (stb & STB_RQS_BIT):
-                ctx = EventContext(
-                    event_type=constants.EventType.service_request,
-                    status_byte=stb,
-                )
-                self.session._fire_event(constants.EventType.service_request, ctx)
+            ctx = EventContext(
+                event_type=constants.EventType.service_request,
+            )
+            self.session._fire_event(constants.EventType.service_request, ctx)
         except Exception:
             LOGGER.exception("Error handling VXI-11 SRQ interrupt")

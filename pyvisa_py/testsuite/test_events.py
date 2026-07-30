@@ -37,7 +37,6 @@ class TestEventContext:
     def test_defaults(self):
         ctx = EventContext(event_type=constants.EventType.service_request)
         assert ctx.event_type == constants.EventType.service_request
-        assert ctx.status_byte == 0
         assert ctx.timestamp <= time.time()
         assert isinstance(ctx.context_id, int)
         assert 0 <= ctx.context_id < 2**32
@@ -51,12 +50,10 @@ class TestEventContext:
     def test_explicit_values(self):
         ctx = EventContext(
             event_type=constants.EventType.io_completion,
-            status_byte=0x42,
             timestamp=1234.5,
             context_id=99,
         )
         assert ctx.event_type == constants.EventType.io_completion
-        assert ctx.status_byte == 0x42
         assert ctx.timestamp == 1234.5
         assert ctx.context_id == 99
 
@@ -689,7 +686,6 @@ class TestVxi11SrqFlow:
         )
         ctx = EventContext(
             event_type=constants.EventType.service_request,
-            status_byte=0x50,
             context_id=9876,
         )
         # Use the real Session._fire_event logic via a partial call
