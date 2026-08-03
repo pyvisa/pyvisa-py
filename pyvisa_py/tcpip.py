@@ -573,8 +573,6 @@ class TCPIPInstrVxi11(Session):
             self.attrs[attribute] = attributes.AttributesByID[attribute].default
 
     def close(self) -> StatusCode:
-        # Calling _stop_event_monitor() here is not necessary because the session manager already does that for you
-        # self._stop_event_monitor()
         try:
             self.interface.destroy_link(self.link)
         except (errors.VisaIOError, socket.error, rpc.RPCError) as e:
@@ -662,12 +660,9 @@ class TCPIPInstrVxi11(Session):
             self._event_state.stop_flag.set()
             try:
                 self.interface.device_enable_srq(self.link, False, b"")
-            except Exception:
-                LOGGER.exception("Error disabling VXI-11 SRQ")
-            try:
                 self.interface.destroy_intr_chan()
             except Exception:
-                LOGGER.exception("Error destroying VXI-11 interrupt channel")
+                pass  # no need to log this, as the device may have been closed already
             with self._event_state._lock:
                 thread = self._event_state.monitor_thread
                 self._event_state.monitor_thread = None
