@@ -573,7 +573,8 @@ class TCPIPInstrVxi11(Session):
             self.attrs[attribute] = attributes.AttributesByID[attribute].default
 
     def close(self) -> StatusCode:
-        self._stop_event_monitor()
+        # Calling _stop_event_monitor() here is not necessary because the session manager already does that for you
+        # self._stop_event_monitor()
         try:
             self.interface.destroy_link(self.link)
         except (errors.VisaIOError, socket.error, rpc.RPCError) as e:
