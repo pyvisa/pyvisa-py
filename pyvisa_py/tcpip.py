@@ -660,9 +660,12 @@ class TCPIPInstrVxi11(Session):
             self._event_state.stop_flag.set()
             try:
                 self.interface.device_enable_srq(self.link, False, b"")
+            except Exception:
+                LOGGER.debug("Error disabling VXI-11 SRQ")
+            try:                
                 self.interface.destroy_intr_chan()
             except Exception:
-                pass  # no need to log this, as the device may have been closed already
+                LOGGER.debug("Error destroying VXI-11 interrupt channel")
             with self._event_state._lock:
                 thread = self._event_state.monitor_thread
                 self._event_state.monitor_thread = None
