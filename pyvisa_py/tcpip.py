@@ -662,7 +662,7 @@ class TCPIPInstrVxi11(Session):
                 self.interface.device_enable_srq(self.link, False, b"")
             except Exception:
                 LOGGER.debug("Error disabling VXI-11 SRQ")
-            try:                
+            try:
                 self.interface.destroy_intr_chan()
             except Exception:
                 LOGGER.debug("Error destroying VXI-11 interrupt channel")
