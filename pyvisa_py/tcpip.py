@@ -657,6 +657,8 @@ class TCPIPInstrVxi11(Session):
 
     def _stop_event_monitor(self) -> None:
         """Disable events and stop the interrupt server thread."""
+        if self._srq_server is None:
+            return
         with self._srq_lifecycle_lock:
             self._event_state.stop_flag.set()
             try:
