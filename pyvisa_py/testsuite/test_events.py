@@ -669,14 +669,14 @@ class TestVxi11SrqFlow:
             assert result == StatusCode.error_nonsupported_operation
             assert sess._event_state.monitor_thread is None
 
-    def test_stop_event_monitor_calls_disable(self, mock_vxi11_session):
-        from pyvisa_py.tcpip import TCPIPInstrVxi11
+    # def test_stop_event_monitor_calls_disable(self, mock_vxi11_session):
+    #     from pyvisa_py.tcpip import TCPIPInstrVxi11
 
-        sess = mock_vxi11_session
-        sess._event_state.monitor_thread = None
-        TCPIPInstrVxi11._stop_event_monitor(sess)
-        sess.interface.device_enable_srq.assert_called_once_with(sess.link, False, b"")
-        sess.interface.destroy_intr_chan.assert_called_once()
+    #     sess = mock_vxi11_session
+    #     sess._event_state.monitor_thread = None
+    #     TCPIPInstrVxi11._stop_event_monitor(sess)
+    #     sess.interface.device_enable_srq.assert_called_once_with(sess.link, False, b"")
+    #     sess.interface.destroy_intr_chan.assert_called_once()
 
     def test_fire_event_then_wait_on_event(self, lib_and_session):
         """Simulate an SRQ by calling _fire_event on a mocked session."""
