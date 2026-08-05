@@ -4,7 +4,7 @@ PyVISA-py Changelog
 0.9.0 (unreleased)
 ------------------
 
-- Removed logs in shutdown introduced by SRQ handling. Closes #609 PR #610
+- Removed SRQ server shutdown if the server was already shut down, reducing potential problems with non compliant devices. Closes #609 PR #610
 - Removed additional read_stb inside VXI-11 (TCPIP::INSTR) SRQ handling.
   It is not standard behaviour, may confuse instruments, and does not
   cache the SRQ bit as would be required. Closes #603 PR #606
