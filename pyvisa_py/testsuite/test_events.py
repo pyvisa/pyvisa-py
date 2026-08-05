@@ -678,7 +678,7 @@ class TestVxi11SrqFlow:
         TCPIPInstrVxi11._stop_event_monitor(sess)
         sess.interface.device_enable_srq.assert_not_called()
         sess.interface.destroy_intr_chan.assert_not_called()
-        
+
         # After monitor setup:
         sess = mock_vxi11_session
         sess._event_state.monitor_thread = None
@@ -689,7 +689,6 @@ class TestVxi11SrqFlow:
         TCPIPInstrVxi11._stop_event_monitor(sess)
         sess.interface.device_enable_srq.assert_called_once_with(sess.link, False, b"")
         sess.interface.destroy_intr_chan.assert_called_once()
-
 
     def test_fire_event_then_wait_on_event(self, lib_and_session):
         """Simulate an SRQ by calling _fire_event on a mocked session."""
