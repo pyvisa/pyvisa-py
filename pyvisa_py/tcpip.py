@@ -752,7 +752,10 @@ class TCPIPInstrVxi11(Session):
             count -= len(data)
 
             if count <= 0:
-                status = StatusCode.success_max_count_read
+                if reason & end_reason:
+                    status = StatusCode.success
+                else:
+                    status = StatusCode.success_max_count_read
                 break
 
             chunk_length = min(count, chunk_length)
