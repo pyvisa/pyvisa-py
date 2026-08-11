@@ -468,7 +468,7 @@ class SrqInterruptTCPServer(rpc.TCPServer):
                     call += leftover
 
                 self.handle(call)
-                # a reply to this call is not expected nor recommended for DEVICE_INTR_SRQ. 
+                # a reply to this call is not expected nor recommended for DEVICE_INTR_SRQ.
         except Exception:
             LOGGER.exception("Error handling TCP SRQ connection")
 
