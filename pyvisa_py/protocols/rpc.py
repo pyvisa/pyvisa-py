@@ -25,8 +25,11 @@ import struct
 import sys
 import time
 
-from ..common import LOGGER
+from ..common import LOGGER, connect_timeout
 from . import xdrlib
+
+#: Seconds allowed for the TCP connection when no ``open_timeout`` is given.
+DEFAULT_CONNECT_TIMEOUT = 5.0
 
 #: Version of the protocol
 RPCVERSION = 2
@@ -450,8 +453,7 @@ class RawTCPClient(Client):
 
     def __init__(self, host, prog, vers, port, open_timeout=5000):
         Client.__init__(self, host, prog, vers, port)
-        open_timeout = open_timeout if open_timeout is not None else 5000
-        self.connect(1e-3 * open_timeout)
+        self.connect(connect_timeout(open_timeout, DEFAULT_CONNECT_TIMEOUT))
         # self.timeout defaults higher than the default 2 second VISA timeout,
         # ensuring that VISA timeouts take precedence.
         self.timeout = 4.0

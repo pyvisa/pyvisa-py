@@ -40,6 +40,18 @@ def int_to_byte(val):
     return val.to_bytes(1, "big")
 
 
+def connect_timeout(open_timeout: Optional[float], default: float) -> float:
+    """Seconds to allow for connecting, from a VISA ``open_timeout``.
+
+    ``open_timeout`` is in milliseconds. Both ``None`` (unset) and ``0``
+    (``VI_TMO_IMMEDIATE``, which ``ResourceManager.open_resource`` passes
+    whenever the caller does not supply one) mean "use ``default``". Taking a 0
+    literally leaves no time for the TCP handshake, which turns a cold open into
+    a spurious ``VI_ERROR_RSRC_NFOUND``.
+    """
+    return default if not open_timeout else 1e-3 * open_timeout
+
+
 # TODO(anyone): This is copypasta from `pyvisa-sim` project - find a way to
 #   reduce duplication, probably in that project instead of here.
 def _create_bitmask(bits: int) -> int:

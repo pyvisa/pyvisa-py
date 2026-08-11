@@ -4,6 +4,13 @@ PyVISA-py Changelog
 0.9.0 (unreleased)
 ------------------
 
+- Treat an ``open_timeout`` of 0 (``VI_TMO_IMMEDIATE``) as "use the default"
+  rather than "give up immediately" across the TCP transports. Since
+  ``ResourceManager.open_resource`` passes 0 whenever the caller supplies no
+  ``open_timeout``, VXI-11 opens were allowing 100 ms for the entire TCP
+  handshake and reporting anything slower as ``VI_ERROR_RSRC_NFOUND``. HiSLIP
+  now applies ``open_timeout`` to its connections as the other TCP transports
+  do, rather than ignoring it. Closes #578
 - Removed return packet on device_intr_srq. Closes #614 PR #615
 - Removed SRQ server shutdown if the server was already shut down, reducing potential problems with non compliant devices. Closes #609 PR #610
 - Removed additional read_stb inside VXI-11 (TCPIP::INSTR) SRQ handling.
