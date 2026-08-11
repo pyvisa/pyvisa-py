@@ -15,9 +15,6 @@ from pyvisa_py.common import BytesBuffer, MutableBytesBuffer, connect_timeout
 
 PORT = 4880
 
-#: Seconds allowed for the TCP connection when no ``open_timeout`` is given.
-DEFAULT_CONNECT_TIMEOUT = 5.0
-
 MESSAGETYPE_STR: Dict[int, str] = {
     0: "Initialize",
     1: "InitializeResponse",
@@ -465,7 +462,7 @@ class Instrument:
         timeout = timeout or 5.0
         # ``open_timeout`` bounds the connection attempt on both channels, as it
         # does for the other TCP transports.
-        connecting = connect_timeout(open_timeout, DEFAULT_CONNECT_TIMEOUT)
+        connecting = connect_timeout(open_timeout)
 
         # open the synchronous socket and send an initialize packet
         raw_sync = socket.socket(socket.AF_INET, socket.SOCK_STREAM)

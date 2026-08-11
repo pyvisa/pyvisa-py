@@ -144,6 +144,44 @@ In the case of the DM3068, the VXI-11 lock timeout must be set to zero:
     >>> # can now communicate successfully with the DM3068
 
 
+What does ``open_timeout`` control?
+-----------------------------------
+
+For the TCP transports (``TCPIP::INSTR``, both VXI-11 and HiSLIP, and
+``TCPIP::SOCKET``), ``open_timeout`` bounds how long PyVISA-py will spend
+establishing the connection::
+
+    >>> import pyvisa
+    >>> rm = pyvisa.ResourceManager('@py')
+    >>> # allow 10 s to reach an instrument across a slow link
+    >>> inst = rm.open_resource('TCPIP::192.168.1.100::INSTR', open_timeout=10000)
+
+If you do not pass one, the connection attempt is given 2000 ms.  An
+``open_timeout`` of 0 selects that same default rather than meaning "give up
+immediately", since ``ResourceManager.open_resource`` passes 0 whenever you
+omit the argument.
+
+.. note::
+
+    **Portability:** what ``open_timeout`` does is seemingly inconsistent
+    across VISA implementations.  It is the ``viOpen`` timeout parameter, which
+    VPP-4.3 section 4.3.3 defines as the time to wait for a lock.  VPP-4.3
+    PERMISSION 4.3.2 also allows using it for the open itself, which is what
+    PyVISA-py does, but an implementation is free not to.  An ``open_timeout``
+    chosen for a slow link may therefore have no effect elsewhere.
+
+    The 2000 ms comes from VPP-4.3 RECOMMENDATION 4.3.3:
+
+        If the value of the timeout parameter to viOpen is 0 and a VISA
+        implementation uses the timeout when opening the resource, the
+        implementation should behave as if the timeout parameter is the VISA
+        default timeout value of 2000 milliseconds.
+
+    The trade-off is that ``VI_TMO_IMMEDIATE`` can no longer request "never
+    wait on a lock".  Set ``lock_timeout`` on the session for that, as in the
+    DM3068 example above.
+
+
 .. _PySerial: https://pythonhosted.org/pyserial/
 .. _PyVISA: http://pyvisa.readthedocs.org/
 .. _PyUSB: https://github.com/pyusb/pyusb

@@ -430,7 +430,7 @@ class Vxi11CoreClient(vxi11.CoreClient):
     """
 
     def __init__(
-        self, host: str, port: Optional[int], open_timeout: Optional[int] = 5000
+        self, host: str, port: Optional[int], open_timeout: Optional[int] = None
     ) -> None:
         self._lock = threading.Lock()
         self.packer = vxi11.Vxi11Packer()
@@ -1293,7 +1293,7 @@ class TCPIPSocketSession(Session):
             self.attrs[attribute] = attributes.AttributesByID[attribute].default
 
     def _connect(self) -> StatusCode:
-        timeout = connect_timeout(self.open_timeout, 10.0)
+        timeout = connect_timeout(self.open_timeout)
         try:
             self.interface = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.interface.setblocking(False)
