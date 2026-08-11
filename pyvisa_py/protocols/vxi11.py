@@ -467,10 +467,8 @@ class SrqInterruptTCPServer(rpc.TCPServer):
                         return
                     call += leftover
 
-                reply = self.handle(call)
-                if reply is not None:
-                    reply_frag = struct.pack(">I", 0x80000000 | len(reply)) + reply
-                    conn.sendall(reply_frag)
+                self.handle(call)
+                # a reply to this call is not expected nor recommended for DEVICE_INTR_SRQ.
         except Exception:
             LOGGER.exception("Error handling TCP SRQ connection")
 
