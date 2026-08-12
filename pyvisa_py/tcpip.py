@@ -22,7 +22,7 @@ from pyvisa import attributes, constants, errors, rname
 from pyvisa.constants import BufferOperation, ResourceAttribute, StatusCode
 from pyvisa.typing import VISAJobID
 
-from .common import LOGGER, connect_timeout, int_to_byte
+from .common import LOGGER, connect_timeout, int_to_byte, set_keepalive
 from .protocols import hislip, rpc, vxi11
 from .sessions import OpenError, Session, UnknownAttribute, VISARMSession
 
@@ -893,23 +893,10 @@ class TCPIPInstrVxi11(Session):
         # https://tech.xing.com/a-reason-for-unexplained-connection-timeouts-on-kubernetes-docker-abd041cf7e02
         if attribute == constants.VI_ATTR_TCPIP_KEEPALIVE:
             if attribute_state is True:
-                self.interface.sock.setsockopt(
-                    socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1
-                )
-                self.interface.sock.setsockopt(
-                    socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, 60
-                )
-                self.interface.sock.setsockopt(
-                    socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, 60
-                )
-                self.interface.sock.setsockopt(
-                    socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 5
-                )
+                set_keepalive(self.interface.sock, True)
                 self.keepalive = True
             elif attribute_state is False:
-                self.interface.sock.setsockopt(
-                    socket.SOL_SOCKET, socket.SO_KEEPALIVE, 0
-                )
+                set_keepalive(self.interface.sock, False)
                 self.keepalive = False
             else:
                 return StatusCode.error_nonsupported_format
@@ -1603,12 +1590,7 @@ class TCPIPSocketSession(Session):
         self, attribute: ResourceAttribute, attribute_state: bool
     ) -> StatusCode:
         if self.interface:
-            self.interface.setsockopt(
-                socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1 if attribute_state else 0
-            )
-            self.interface.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, 60)
-            self.interface.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, 60)
-            self.interface.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 5)
+            set_keepalive(self.interface, bool(attribute_state))
             return StatusCode.success
         return StatusCode.error_nonsupported_attribute
 
