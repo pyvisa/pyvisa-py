@@ -740,9 +740,9 @@ class TCPIPInstrVxi11(Session):
 
         # get the timeout as cleaned up by the upper layers
         timeout = self._io_timeout
-        
+
         # See if a timeout was really set. This is done by looking at the timeout
-        # that was given to the interface. If it is None, then there is no timeout. 
+        # that was given to the interface. If it is None, then there is no timeout.
         # This lookup method is also slightly convoluted because the unit test scripts
         # may not have set this correctly.
         finite_timeout = getattr(self, "timeout", None) is not None
