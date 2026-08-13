@@ -740,9 +740,9 @@ class TCPIPInstrVxi11(Session):
         status = StatusCode.success
 
         timeout = self._io_timeout  # this is derived from from self.timeout
-        # See if a timeout was set. This is derived from self.timeout, but slightly 
-        # convoluted because the unit test scripts may not have set this correctly.      
-        finite_timeout = getattr(self, "timeout", None) is not None  
+        # See if a timeout was set. This is derived from self.timeout, but slightly
+        # convoluted because the unit test scripts may not have set this correctly.
+        finite_timeout = getattr(self, "timeout", None) is not None
         start_time = time.time()
         while reason & stop_reason == 0:
             # Decrease timeout so that the total timeout does not get larger

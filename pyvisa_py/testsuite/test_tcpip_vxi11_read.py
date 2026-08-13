@@ -83,7 +83,9 @@ class TestTCPIPInstrVxi11Read:
         assert data == b"ab"
         assert status == StatusCode.error_timeout
 
-    def test_read_with_suppress_end_enabled_returns_max_count_when_count_is_reached(self):
+    def test_read_with_suppress_end_enabled_returns_max_count_when_count_is_reached(
+        self,
+    ):
         sess = self._make_session(termchar_enabled=False, suppress_end_enabled=True)
         sess.interface.device_read.return_value = (0, vxi11.RX_END, b"abc")
 
@@ -94,7 +96,11 @@ class TestTCPIPInstrVxi11Read:
 
     def test_read_with_suppress_end_enabled_still_honors_rx_chr(self):
         sess = self._make_session(termchar_enabled=True, suppress_end_enabled=True)
-        sess.interface.device_read.return_value = (0, vxi11.RX_END | vxi11.RX_CHR, b"abc")
+        sess.interface.device_read.return_value = (
+            0,
+            vxi11.RX_END | vxi11.RX_CHR,
+            b"abc",
+        )
 
         data, status = sess.read(10)
 
