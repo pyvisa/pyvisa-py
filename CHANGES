@@ -4,6 +4,7 @@ PyVISA-py Changelog
 0.9.0 (unreleased)
 ------------------
 
+- Fixed crash on DEVICE_ENABLE_SRQ(off). Closes #620 PR #621
 - Removed return packet on device_intr_srq. Closes #614 PR #615
 - Removed SRQ server shutdown if the server was already shut down, reducing potential problems with non compliant devices. Closes #609 PR #610
 - Removed additional read_stb inside VXI-11 (TCPIP::INSTR) SRQ handling.
