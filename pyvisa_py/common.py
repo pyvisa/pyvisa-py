@@ -68,13 +68,6 @@ def connect_timeout(open_timeout: Optional[float]) -> float:
         implementation should behave as if the timeout parameter is the VISA
         default timeout value of 2000 milliseconds.
 
-    That is the common path, not an edge case. ``ResourceManager.open_resource``
-    passes 0 whenever the caller supplies no ``open_timeout``. A literal 0 would
-    leave no time for the TCP handshake and fail every open with
-    ``VI_ERROR_RSRC_NFOUND``.
-
-    The cost is that ``VI_TMO_IMMEDIATE`` can no longer mean "never wait on a
-    lock". Use the session's ``lock_timeout`` for that.
     """
     return DEFAULT_OPEN_TIMEOUT / 1000 if not open_timeout else open_timeout / 1000
 
