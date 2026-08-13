@@ -606,7 +606,7 @@ class TestVxi11SrqFlow:
 
         sess = MagicMock(spec=TCPIPInstrVxi11)
         sess._event_state = EventState()
-        sess.link = 1
+        sess.link = 0  # any number is valid
         sess.interface = MagicMock()
         sess.interface.create_intr_chan.return_value = 0
         sess.interface.device_enable_srq.return_value = 0
