@@ -738,9 +738,13 @@ class TCPIPInstrVxi11(Session):
         read_fun = self.interface.device_read
         status = StatusCode.success
 
-        timeout = self._io_timeout  # this is derived from from self.timeout
-        # See if a timeout was set. This is derived from self.timeout, but slightly
-        # convoluted because the unit test scripts may not have set this correctly.
+        # get the timeout as cleaned up by the upper layers
+        timeout = self._io_timeout
+        
+        # See if a timeout was really set. This is done by looking at the timeout
+        # that was given to the interface. If it is None, then there is no timeout. 
+        # This lookup method is also slightly convoluted because the unit test scripts
+        # may not have set this correctly.
         finite_timeout = getattr(self, "timeout", None) is not None
         start_time = time.time()
         while reason & stop_reason == 0:
