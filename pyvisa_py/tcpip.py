@@ -580,7 +580,6 @@ class TCPIPInstrVxi11(Session):
             LOGGER.error("Error closing VISA link: {}".format(e))
 
         self.interface.close()
-        self.link = 0  # watch out: 0 is still a valid link number, do not consider 0 to be 'closed'
         self.interface = None
 
         return StatusCode.success

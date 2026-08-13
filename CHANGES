@@ -4,7 +4,8 @@ PyVISA-py Changelog
 0.9.0 (unreleased)
 ------------------
 
-- Allow link ID 0 to be used. Closes #618 PR #619
+- VXI-11: Allow link ID 0 to be used for SRQ in agreement with the specs
+  and other implementations. Closes #618 PR #619
 - Removed return packet on device_intr_srq. Closes #614 PR #615
 - Removed SRQ server shutdown if the server was already shut down, reducing potential problems with non compliant devices. Closes #609 PR #610
 - Removed additional read_stb inside VXI-11 (TCPIP::INSTR) SRQ handling.
