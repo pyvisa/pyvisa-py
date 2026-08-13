@@ -493,7 +493,7 @@ class SrqInterruptTCPServer(rpc.TCPServer):
     def _fire_srq(self):
         try:
             # Defensive: session may have been closed while we were spawned
-            if self.session.interface is None or self.session.link == 0:
+            if self.session.interface is None:
                 return
             ctx = EventContext(
                 event_type=constants.EventType.service_request,
