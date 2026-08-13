@@ -5,6 +5,8 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
+import pytest
+
 from pyvisa.constants import ResourceAttribute, StatusCode
 from pyvisa_py.protocols import vxi11
 from pyvisa_py.tcpip import TCPIPInstrVxi11
@@ -70,6 +72,40 @@ class TestTCPIPInstrVxi11Read:
 
         assert data == b"abc"
         assert status == StatusCode.success
+
+    @pytest.mark.parametrize("chunk_size", range(1, 11))
+    def test_read_handles_exact_ten_byte_content_for_all_chunk_sizes(
+        self, chunk_size: int
+    ):
+        sess = self._make_session(termchar_enabled=False, suppress_end_enabled=False)
+        sess.max_recv_size = chunk_size
+        content = b"abcdefghij"
+        sess.interface.device_read.side_effect = [
+            (0, 0, content[offset : offset + chunk_size])
+            for offset in range(0, len(content), chunk_size)
+        ]
+
+        data, status = sess.read(len(content))
+
+        assert data == content
+        assert status == StatusCode.success_max_count_read
+
+    @pytest.mark.parametrize("chunk_size", range(1, 11))
+    def test_read_with_suppress_end_enabled_handles_exact_ten_byte_content_for_all_chunk_sizes(
+        self, chunk_size: int
+    ):
+        sess = self._make_session(termchar_enabled=False, suppress_end_enabled=True)
+        sess.max_recv_size = chunk_size
+        content = b"abcdefghij"
+        sess.interface.device_read.side_effect = [
+            (0, vxi11.RX_END, content[offset : offset + chunk_size])
+            for offset in range(0, len(content), chunk_size)
+        ]
+
+        data, status = sess.read(len(content))
+
+        assert data == content
+        assert status == StatusCode.success_max_count_read
 
     def test_read_with_suppress_end_enabled_ignores_rx_end(self):
         sess = self._make_session(termchar_enabled=False, suppress_end_enabled=True)
