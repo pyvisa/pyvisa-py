@@ -2,7 +2,9 @@
 """Unit tests for TCPIPInstrVxi11.read status resolution."""
 
 from __future__ import annotations
+
 from unittest.mock import MagicMock
+
 from pyvisa.constants import ResourceAttribute, StatusCode
 from pyvisa_py.protocols import vxi11
 from pyvisa_py.tcpip import TCPIPInstrVxi11
