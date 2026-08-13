@@ -4,7 +4,10 @@ PyVISA-py Changelog
 0.9.0 (unreleased)
 ------------------
 
-- Corrected timeout caused by when response length is an exact multiple of chunk_size
+- Read function termination overhaul:
+  Corrected timeout in read when response length is an exact multiple
+  of chunk_size, implemented read count boundary checks, completed termination
+  character detection, allowed use of suppress_end_en, corrected timeout handling.
   Closes #608 PR #612
 - Removed return packet on device_intr_srq. Closes #614 PR #615
 - Removed SRQ server shutdown if the server was already shut down,
