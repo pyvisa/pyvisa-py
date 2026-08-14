@@ -4,7 +4,7 @@ PyVISA-py Changelog
 0.9.0 (unreleased)
 ------------------
 
-- Fixed crash on DEVICE_ENABLE_SRQ(off). Closes #620 PR #621
+- Fixed crash on DEVICE_ENABLE_SRQ(off) and accept malformed SRQ packets. Closes #620 PR #621
 - VXI-11: Allow link ID 0 to be used for SRQ in agreement with the specs
   and other implementations. Closes #618 PR #619
 - Removed return packet on device_intr_srq. Closes #614 PR #615
