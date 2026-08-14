@@ -492,7 +492,9 @@ class SrqInterruptTCPServer(rpc.TCPServer):
                 return None
             data += chunk
         LOGGER.debug(
-            f"TCP SRQ: Received {len(data)} bytes from TCP SRQ connection: {data}"
+            "TCP SRQ: Received %d bytes from TCP SRQ connection: %r",
+            len(data),
+            data,
         )
         return data
 
