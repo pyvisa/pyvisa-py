@@ -491,7 +491,9 @@ class SrqInterruptTCPServer(rpc.TCPServer):
                 LOGGER.debug("TCP SRQ: timeout")
                 return None
             data += chunk
-        LOGGER.debug(f"TCP SRQ: Received {len(data)} bytes from TCP SRQ connection: {data}")
+        LOGGER.debug(
+            f"TCP SRQ: Received {len(data)} bytes from TCP SRQ connection: {data}"
+        )
         return data
 
     def handle_30(self):
