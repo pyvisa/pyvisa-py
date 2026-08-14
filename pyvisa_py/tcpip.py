@@ -744,7 +744,7 @@ class TCPIPInstrVxi11(Session):
         # See if a timeout was really set.
         # if self.timeout is None, the given timeout was VI_TMO_INFINITE
         finite_timeout = self.timeout is not None
-        
+
         start_time = time.time()
         while reason & stop_reason == 0:
             # Decrease timeout so that the total timeout does not get larger
