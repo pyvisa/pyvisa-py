@@ -409,14 +409,17 @@ class SrqInterruptTCPServer(rpc.TCPServer):
     def loop(self):
         """Accept connections from the instrument and handle SRQ until stopped."""
         self.sock.settimeout(1.0)
+        self.port = self.sock.getsockname()[1]
         stop_flag = self.session._event_state.stop_flag
         while not stop_flag.is_set():
+            LOGGER.debug("TCP SRQ (%d): Waiting for new connection from instrument", self.port)
             try:
                 conn, _addr = self.sock.accept()
-            except socket.timeout:
+            except TimeoutError:
                 continue
             except OSError:
                 break
+            LOGGER.debug("TCP SRQ (%d): Accepted connection from %s", self.port, _addr)
             try:
                 self._handle_connection(conn)
             finally:
@@ -441,8 +444,9 @@ class SrqInterruptTCPServer(rpc.TCPServer):
                     # Read record marker (4 bytes)
                     marker = self._recv_all(conn, 4)
                     if marker is None:
+                        LOGGER.debug("TCP SRQ (%d): Connection closed by peer", self.port)
                         return  # Connection closed by peer
-                except socket.timeout:
+                except TimeoutError:
                     continue
 
                 frag = struct.unpack(">I", marker)[0]
@@ -470,29 +474,38 @@ class SrqInterruptTCPServer(rpc.TCPServer):
                 self.handle(call)
                 # a reply to this call is not expected nor recommended for DEVICE_INTR_SRQ.
         except Exception:
-            LOGGER.exception("Error handling TCP SRQ connection")
+            LOGGER.exception("TCP SRQ (%d): Error handling TCP SRQ connection", self.port)
 
     def _recv_all(self, sock, n):
+        LOGGER.debug("TCP SRQ (%d): Receiving %d bytes from TCP SRQ connection", self.port, n)
+        remaining = n
         data = b""
         while len(data) < n:
-            remaining = n - len(data)
             # Some instruments omit the final 4 bytes of a VXI-11 SRQ fragment.
             # If we already received a partial payload, treat a timeout while waiting for
             # the last 1-4 bytes as a valid short read instead of dropping the SRQ.
+            # LOGGER.debug("TCP SRQ (%d): %d out of %d bytes remaining to receive", self.port, remaining, n)
+            
             try:
                 chunk = sock.recv(remaining)
-            except socket.timeout:
+            except TimeoutError:
+                LOGGER.debug("TCP SRQ (%d): timeout while receiving %d bytes from TCP SRQ connection", self.port, remaining)
                 if len(data) > 0 and remaining <= 4:
-                    LOGGER.debug(
-                        "TCP SRQ: timed out after partial payload; treating %d missing bytes as short read",
-                        remaining,
-                    )
+                    chunk = b""  # Treat as short read
                     break
-                LOGGER.debug("TCP SRQ: timeout")
+                raise TimeoutError
+            if not chunk:
+                LOGGER.debug("TCP SRQ (%d): peer closed connection while receiving payload", self.port)
                 return None
+
             data += chunk
+            remaining = n - len(data)
+            if remaining > 0 and len(data) > 0 and remaining <= 4:
+                LOGGER.debug("TCP SRQ (%d): missing %d bytes, treating as short read", self.port, remaining)
+                break
         LOGGER.debug(
-            "TCP SRQ: Received %d bytes from TCP SRQ connection: %r",
+            "TCP SRQ (%d): Received %d bytes: %r",
+            self.port,
             len(data),
             data,
         )
@@ -503,7 +516,7 @@ class SrqInterruptTCPServer(rpc.TCPServer):
         handle = self.unpacker.unpack_opaque()
         self.turn_around()
         if handle != b"srq":
-            LOGGER.warning("Ignoring VXI-11 SRQ with unexpected handle: %r", handle)
+            LOGGER.warning("TCP SRQ (%d): Ignoring VXI-11 SRQ with unexpected handle: %r", self.port, handle)
             return
         self._srq_queue.put(True)
 
@@ -517,4 +530,4 @@ class SrqInterruptTCPServer(rpc.TCPServer):
             )
             self.session._fire_event(constants.EventType.service_request, ctx)
         except Exception:
-            LOGGER.exception("Error handling VXI-11 SRQ interrupt")
+            LOGGER.exception("TCP SRQ (%d): Error handling VXI-11 SRQ interrupt", self.port)
