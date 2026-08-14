@@ -743,9 +743,8 @@ class TCPIPInstrVxi11(Session):
 
         # See if a timeout was really set.
         # if self.timeout is None, the given timeout was VI_TMO_INFINITE
-        # This lookup method is also slightly convoluted because the unit test scripts
-        # may not have set this correctly.
-        finite_timeout = getattr(self, "timeout", None) is not None
+        finite_timeout = self.timeout is not None
+        
         start_time = time.time()
         while reason & stop_reason == 0:
             # Decrease timeout so that the total timeout does not get larger

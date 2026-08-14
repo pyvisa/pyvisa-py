@@ -22,6 +22,7 @@ class TestTCPIPInstrVxi11Read:
         sess.lock_timeout = 10000
         sess.max_recv_size = 1024
         sess._io_timeout = 5000
+        sess.timeout = 5
         sess.attrs = {
             ResourceAttribute.termchar_enabled: termchar_enabled,
             ResourceAttribute.termchar: ord("\n"),
