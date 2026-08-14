@@ -475,10 +475,23 @@ class SrqInterruptTCPServer(rpc.TCPServer):
     def _recv_all(self, sock, n):
         data = b""
         while len(data) < n:
-            chunk = sock.recv(n - len(data))
-            if not chunk:
+            remaining = n - len(data)
+            # Some instruments omit the final 4 bytes of a VXI-11 SRQ fragment.
+            # If we already received a partial payload, treat a timeout while waiting for
+            # the last 1-4 bytes as a valid short read instead of dropping the SRQ.
+            try:
+                chunk = sock.recv(remaining)
+            except socket.timeout:
+                if len(data) > 0 and remaining <= 4:
+                    LOGGER.debug(
+                        "TCP SRQ: timed out after partial payload; treating %d missing bytes as short read",
+                        remaining,
+                    )
+                    break
+                LOGGER.debug("TCP SRQ: timeout")
                 return None
             data += chunk
+        LOGGER.debug(f"TCP SRQ: Received {len(data)} bytes from TCP SRQ connection: {data}")
         return data
 
     def handle_30(self):
