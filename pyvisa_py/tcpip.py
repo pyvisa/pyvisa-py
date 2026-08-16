@@ -120,7 +120,9 @@ class TCPIPInstrHiSLIP(Session):
     def list_resources(wait_time=1.0) -> List[str]:
         resources = []
         try:
-            for host,props in get_services("_hislip._tcp.local.", wait_time=wait_time).items():
+            for host, props in get_services(
+                "_hislip._tcp.local.", wait_time=wait_time
+            ).items():
                 port = 4880
                 if "port" in props:
                     port = props["port"]
@@ -1262,12 +1264,14 @@ class TCPIPSocketSession(Session):
     @staticmethod
     def list_resources(wait_time=1.0) -> List[str]:
         resources = []
-        
+
         try:
-            for host,props in get_services("_scpi-raw._tcp.local.", wait_time=wait_time).items():
+            for host, props in get_services(
+                "_scpi-raw._tcp.local.", wait_time=wait_time
+            ).items():
                 port = 5025
                 if "port" in props:
-                    port = props["port"]                
+                    port = props["port"]
                 resources.append(f"TCPIP::{host}::{port}::SOCKET")
         except NotImplementedError:
             warnings.warn(
