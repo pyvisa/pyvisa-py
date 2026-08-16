@@ -393,6 +393,7 @@ class AsyncRemoteLocalResponse(RxHeader):
 
 class AsyncServiceRequest(RxHeader):
     def __init__(self, sock: socket.socket) -> None:
+        print("AsyncServiceRequest received")
         super().__init__(sock, "AsyncServiceRequest")
         self.server_status = self.control_code
         assert self.message_parameter == 0
@@ -489,6 +490,10 @@ class Instrument:
         self._async_init = self.async_initialize(session_id=init.session_id)
         # We set the user timeout once we managed to initialize the connection.
         self._async.settimeout(timeout)
+        
+        # TODO: the async channel, as now, is in reality still a sync connection. I send, and expect a reply.
+        # It is not built to receive async messages from the instrument, like AsyncServiceRequest. 
+        # I need to implement a thread that will listen to the async channel and dispatch messages to the right handler.
 
         # initialize variables
         self.max_msg_size = DEFAULT_MAX_MSG_SIZE
