@@ -27,13 +27,16 @@ To discover VXI-11 devices on all network interfaces, please install
 `psutil`_. Otherwise, discovery will only occur on the default network
 interface.
 
-Discovery of both HiSLIP  and VICP devices relies on `mDNS`_, which is a protocol for
-service discovery in a local area network.  To enable resource
-discovery for HiSLIP and VICP, you should install `zeroconf`_.
+Discovery of HiSLIP, raw-socket (SOCKET) and VICP devices relies on `mDNS`_,
+which is a protocol for service discovery in a local area network.
+To enable resource discovery for those devices, you should install `zeroconf`_.
 
 The TCP/IP VICP protocol (proprietary to Teledyne LeCroy) depends on
 the `pyvicp`_ package.  You should install this package if you need to
 use VICP.
+
+Note that `list_resources()` and `list_resources_info()` by default only return `INSTR`
+resources.  Adapt those functions' `query` parameter to return other resource types.
 
 
 Serial resources: ASRL INSTR
