@@ -115,7 +115,7 @@ class TCPIPInstrHiSLIP(Session):
     # Override parsed to take into account the fact that this class is only used
     # for a specific kind of resource
     parsed: rname.TCPIPInstr
-    
+
     default_tcpip_port = 4880
 
     @staticmethod
@@ -1262,7 +1262,7 @@ class TCPIPSocketSession(Session):
     # Override parsed to take into account the fact that this class is only used
     # for a specific kind of resource
     parsed: rname.TCPIPSocket
-    
+
     default_tcpip_port = 5025
 
     @staticmethod
