@@ -112,7 +112,7 @@ class TCPIPInstrHiSLIP(Session):
     # want it to be registered in the _session_classes array, but we still
     # need to define session_type to make the set_attribute machinery work.
     session_type = (constants.InterfaceType.tcpip, "INSTR")
-    
+
     _supported_event_types = {constants.EventType.service_request}
 
     # Override parsed to take into account the fact that this class is only used

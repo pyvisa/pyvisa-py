@@ -520,8 +520,8 @@ class AsyncChannel:
 
     def _read_message(self) -> AsyncMessage:
         header = self._read_exact(HEADER_SIZE)
-        prologue, msg_type, control_code, message_parameter, payload_length = struct.unpack(
-            HEADER_FORMAT, header
+        prologue, msg_type, control_code, message_parameter, payload_length = (
+            struct.unpack(HEADER_FORMAT, header)
         )
 
         if prologue != b"HS":
@@ -539,7 +539,10 @@ class AsyncChannel:
         )
 
     def _deliver_event(self, message: AsyncMessage) -> None:
-        if message.msg_type == "AsyncServiceRequest" and self._event_callback is not None:
+        if (
+            message.msg_type == "AsyncServiceRequest"
+            and self._event_callback is not None
+        ):
             try:
                 self._event_callback(message.control_code)
             except Exception:
@@ -576,12 +579,16 @@ class AsyncChannel:
                 break
             except Exception as e:
                 if not self._stop.is_set():
-                    LOGGER.exception(f"Async channel reader stopped due to protocol error: {e}")
+                    LOGGER.exception(
+                        f"Async channel reader stopped due to protocol error: {e}"
+                    )
                 with self._state_lock:
                     pending = self._pending_request
                     if pending is not None and not pending["done"]:
                         if not self._stop.is_set():
-                            pending["error"] = RuntimeError("async channel protocol error")
+                            pending["error"] = RuntimeError(
+                                "async channel protocol error"
+                            )
                         pending["done"] = True
                         self._pending_request = None
                         self._state_lock.notify_all()
@@ -591,7 +598,9 @@ class AsyncChannel:
                 with self._state_lock:
                     pending = self._pending_request
                     if pending is not None and not pending["done"]:
-                        pending["error"] = HiSLIPInterruptedError(message.message_parameter)
+                        pending["error"] = HiSLIPInterruptedError(
+                            message.message_parameter
+                        )
                         pending["done"] = True
                         self._pending_request = None
                         self._state_lock.notify_all()
