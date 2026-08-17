@@ -552,7 +552,8 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
             resources += st.list_resources()
         resources = list(
             set(resources)
-        )  # Remove duplicates, as prologix calls upon TCPIP sessions.
+        )  # Remove any duplicates that may have been found between
+           # the different classes.
         return rname.filter(resources, query)
 
     def read(self, session: VISASession, count: int) -> Tuple[bytes, StatusCode]:
