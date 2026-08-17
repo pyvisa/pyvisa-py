@@ -9,9 +9,10 @@ import socket
 import struct
 import threading
 import time
-from typing import Dict, Optional, Tuple
+from dataclasses import dataclass
+from typing import Callable, Dict, Optional, Tuple
 
-from pyvisa_py.common import BytesBuffer, MutableBytesBuffer
+from pyvisa_py.common import BytesBuffer, LOGGER, MutableBytesBuffer
 
 PORT = 4880
 
@@ -338,7 +339,7 @@ class AsyncInitializeResponse(RxHeader):
         super().__init__(sock, "AsyncInitializeResponse")
         assert self.control_code == 0
         assert self.payload_length == 0
-        self.vendor_id = struct.unpack("!4x4s8x", self.header)
+        self.vendor_id = struct.unpack("!4x4s8x", self.header)[0]
 
 
 class AsyncMaxMsgSizeResponse(RxHeader):
@@ -393,7 +394,6 @@ class AsyncRemoteLocalResponse(RxHeader):
 
 class AsyncServiceRequest(RxHeader):
     def __init__(self, sock: socket.socket) -> None:
-        print("AsyncServiceRequest received")
         super().__init__(sock, "AsyncServiceRequest")
         self.server_status = self.control_code
         assert self.message_parameter == 0
@@ -406,6 +406,204 @@ class AsyncStatusResponse(RxHeader):
         self.server_status = self.control_code
         assert self.message_parameter == 0
         assert self.payload_length == 0
+
+
+@dataclass
+class AsyncMessage:
+    msg_type: str
+    control_code: int
+    message_parameter: int
+    payload: bytes
+
+
+class AsyncChannel:
+    """Own the async HiSLIP socket and dispatch unsolicited messages."""
+
+    def __init__(
+        self,
+        sock: socket.socket,
+        event_callback: Optional[Callable[[int], None]] = None,
+        interrupt_callback: Optional[Callable[[int], None]] = None,
+    ) -> None:
+        self._sock = sock
+        self._event_callback = event_callback
+        self._interrupt_callback = interrupt_callback
+        self._send_lock = threading.Lock()
+        self._state_lock = threading.Condition()
+        self._pending_request: Optional[dict] = None
+        self._stop = threading.Event()
+        self._thread = threading.Thread(target=self._run, daemon=True)
+
+    def start(self) -> None:
+        if not self._thread.is_alive():
+            self._thread.start()
+
+    def close(self) -> None:
+        self._stop.set()
+        try:
+            self._sock.shutdown(socket.SHUT_RDWR)
+        except Exception:
+            pass
+        if self._thread.is_alive():
+            self._thread.join(timeout=1.0)
+        try:
+            self._sock.close()
+        except Exception:
+            pass
+
+    def request(
+        self,
+        msg_type: str,
+        control_code: int,
+        message_parameter: int,
+        payload: bytes = b"",
+        expected_response: Optional[str] = None,
+    ) -> AsyncMessage:
+        if expected_response is None:
+            raise ValueError("expected_response is required for async requests")
+
+        timeout = self._sock.gettimeout()
+        with self._state_lock:
+            if self._pending_request is not None:
+                raise RuntimeError("another async request is already pending")
+            pending = {
+                "expected_response": expected_response,
+                "response": None,
+                "error": None,
+                "done": False,
+            }
+            self._pending_request = pending
+
+        try:
+            with self._send_lock:
+                send_msg(self._sock, msg_type, control_code, message_parameter, payload)
+
+            deadline = None if timeout is None else time.monotonic() + float(timeout)
+            with self._state_lock:
+                while not pending["done"] and pending["error"] is None:
+                    if deadline is None:
+                        self._state_lock.wait()
+                    else:
+                        remaining = deadline - time.monotonic()
+                        if remaining <= 0:
+                            break
+                        self._state_lock.wait(remaining)
+
+                if not pending["done"]:
+                    if self._pending_request is pending:
+                        self._pending_request = None
+                    raise socket.timeout("timed out")
+
+                if pending["error"] is not None:
+                    raise pending["error"]
+                response = pending["response"]
+                assert response is not None
+                return response
+        finally:
+            with self._state_lock:
+                if self._pending_request is pending and not pending["done"]:
+                    self._pending_request = None
+
+    def _read_exact(self, size: int) -> bytes:
+        data = bytearray()
+        while len(data) < size:
+            if self._stop.is_set():
+                raise OSError("async channel stopped")
+            readable, _, _ = select.select([self._sock], [], [], 0.5)
+            if not readable:
+                continue
+            chunk = self._sock.recv(size - len(data))
+            if not chunk:
+                raise RuntimeError("async channel closed")
+            data.extend(chunk)
+        return bytes(data)
+
+    def _read_message(self) -> AsyncMessage:
+        header = self._read_exact(HEADER_SIZE)
+        prologue, msg_type, control_code, message_parameter, payload_length = struct.unpack(
+            HEADER_FORMAT, header
+        )
+
+        if prologue != b"HS":
+            raise RuntimeError("protocol synchronization error on async channel")
+
+        if msg_type not in MESSAGETYPE_STR:
+            raise RuntimeError("unrecognized async message type: %d" % msg_type)
+
+        payload = self._read_exact(payload_length) if payload_length else b""
+        return AsyncMessage(
+            msg_type=MESSAGETYPE_STR[msg_type],
+            control_code=control_code,
+            message_parameter=message_parameter,
+            payload=payload,
+        )
+
+    def _deliver_event(self, message: AsyncMessage) -> None:
+        if message.msg_type == "AsyncServiceRequest" and self._event_callback is not None:
+            try:
+                self._event_callback(message.control_code)
+            except Exception:
+                LOGGER.exception("Error handling async service request")
+
+    def _deliver_interrupt(self, message: AsyncMessage) -> None:
+        if self._interrupt_callback is None:
+            return
+        try:
+            self._interrupt_callback(message.message_parameter)
+        except Exception:
+            LOGGER.exception("Error handling async interruption")
+
+    def _complete_pending(self, message: AsyncMessage) -> bool:
+        with self._state_lock:
+            pending = self._pending_request
+            if pending is None or pending["done"]:
+                return False
+            if message.msg_type != pending["expected_response"]:
+                return False
+            pending["response"] = message
+            pending["done"] = True
+            self._pending_request = None
+            self._state_lock.notify_all()
+            return True
+
+    def _run(self) -> None:
+        while not self._stop.is_set():
+            try:
+                message = self._read_message()
+            except socket.timeout:
+                continue
+            except OSError:
+                break
+            except Exception:
+                LOGGER.exception("Async channel reader stopped due to protocol error")
+                with self._state_lock:
+                    pending = self._pending_request
+                    if pending is not None and not pending["done"]:
+                        pending["error"] = RuntimeError("async channel protocol error")
+                        pending["done"] = True
+                        self._pending_request = None
+                        self._state_lock.notify_all()
+                break
+
+            if message.msg_type == "AsyncInterrupted":
+                with self._state_lock:
+                    pending = self._pending_request
+                    if pending is not None and not pending["done"]:
+                        pending["error"] = HiSLIPInterruptedError(message.message_parameter)
+                        pending["done"] = True
+                        self._pending_request = None
+                        self._state_lock.notify_all()
+                self._deliver_interrupt(message)
+                continue
+
+            if self._complete_pending(message):
+                continue
+
+            if message.msg_type in {"AsyncServiceRequest"}:
+                self._deliver_event(message)
+                continue
+
+            LOGGER.debug("Ignoring unsolicited async message %s", message.msg_type)
 
 
 class DeviceClearAcknowledge(RxHeader):
@@ -453,6 +651,8 @@ class Instrument:
         timeout: Optional[float] = None,
         port: int = PORT,
         sub_address: str = "hislip0",
+        event_callback: Optional[Callable[[int], None]] = None,
+        interrupt_callback: Optional[Callable[[int], None]] = None,
     ) -> None:
         # init transaction:
         #     C->S: Initialize
@@ -490,10 +690,13 @@ class Instrument:
         self._async_init = self.async_initialize(session_id=init.session_id)
         # We set the user timeout once we managed to initialize the connection.
         self._async.settimeout(timeout)
-        
-        # TODO: the async channel, as now, is in reality still a sync connection. I send, and expect a reply.
-        # It is not built to receive async messages from the instrument, like AsyncServiceRequest. 
-        # I need to implement a thread that will listen to the async channel and dispatch messages to the right handler.
+
+        self._async_channel = AsyncChannel(
+            self._async,
+            event_callback=event_callback,
+            interrupt_callback=interrupt_callback,
+        )
+        self._async_channel.start()
 
         # initialize variables
         self.max_msg_size = DEFAULT_MAX_MSG_SIZE
@@ -511,8 +714,8 @@ class Instrument:
     # ================ #
 
     def close(self) -> None:
+        self._async_channel.close()
         self._sync.close()
-        self._async.close()
 
     @property
     def timeout(self) -> float:
@@ -821,9 +1024,15 @@ class Instrument:
         #     C->S: AsyncMaxMsgSize
         #     S->C: AsyncMaxMsgSizeResponse
         payload = struct.pack("!Q", size)
-        send_msg(self._async, "AsyncMaxMsgSize", 0, 0, payload)
-        response = AsyncMaxMsgSizeResponse(self._async)
-        return response.max_msg_size
+        response = self._async_channel.request(
+            "AsyncMaxMsgSize",
+            0,
+            0,
+            payload,
+            expected_response="AsyncMaxMsgSizeResponse",
+        )
+        assert len(response.payload) == 8
+        return struct.unpack("!Q", response.payload)[0]
 
     def async_lock_info(self) -> int:
         """
@@ -833,9 +1042,13 @@ class Instrument:
         # async_lock_info transaction:
         #     C->S: AsyncLockInfo
         #     S->C: AsyncLockInfoResponse
-        send_msg(self._async, "AsyncLockInfo", 0, 0)
-        response = AsyncLockInfoResponse(self._async)
-        return response.exclusive_lock
+        response = self._async_channel.request(
+            "AsyncLockInfo",
+            0,
+            0,
+            expected_response="AsyncLockInfoResponse",
+        )
+        return response.control_code
 
     def async_lock_request(self, timeout: float, lock_string: str = "") -> str:
         """
@@ -847,9 +1060,14 @@ class Instrument:
         #     S->C: AsyncLockResponse
         ctrl_code = LOCKCONTROLCODE["request"]
         timeout_ms = int(1e3 * timeout)
-        send_msg(self._async, "AsyncLock", ctrl_code, timeout_ms, lock_string.encode())
-        response = AsyncLockResponse(self._async)
-        return response.lock_response
+        response = self._async_channel.request(
+            "AsyncLock",
+            ctrl_code,
+            timeout_ms,
+            lock_string.encode(),
+            expected_response="AsyncLockResponse",
+        )
+        return LOCKRESPONSE[response.control_code]
 
     def async_lock_release(self) -> str:
         """
@@ -860,9 +1078,13 @@ class Instrument:
         #     C->S: AsyncLock
         #     S->C: AsyncLockResponse
         ctrl_code = LOCKCONTROLCODE["release"]
-        send_msg(self._async, "AsyncLock", ctrl_code, self.last_message_id)
-        response = AsyncLockResponse(self._async)
-        return response.lock_response
+        response = self._async_channel.request(
+            "AsyncLock",
+            ctrl_code,
+            self.last_message_id or 0,
+            expected_response="AsyncLockResponse",
+        )
+        return LOCKRESPONSE[response.control_code]
 
     def async_remote_local_control(self, remotelocalcontrol: str) -> None:
         """
@@ -872,10 +1094,12 @@ class Instrument:
         #     C->S: AsyncRemoteLocalControl
         #     S->C: AsyncRemoteLocalResponse
         ctrl_code = REMOTELOCALCONTROLCODE[remotelocalcontrol]
-        send_msg(
-            self._async, "AsyncRemoteLocalControl", ctrl_code, self.last_message_id
+        self._async_channel.request(
+            "AsyncRemoteLocalControl",
+            ctrl_code,
+            self.last_message_id or 0,
+            expected_response="AsyncRemoteLocalResponse",
         )
-        AsyncRemoteLocalResponse(self._async)
 
     def async_status_query(self) -> int:
         """
@@ -885,19 +1109,27 @@ class Instrument:
         # async_status_query transaction:
         #     C->S: AsyncStatusQuery
         #     S->C: AsyncStatusResponse
-        send_msg(self._async, "AsyncStatusQuery", self._rmt, self._message_id)
+        response = self._async_channel.request(
+            "AsyncStatusQuery",
+            self._rmt,
+            self._message_id,
+            expected_response="AsyncStatusResponse",
+        )
         self._rmt = 0
-        response = AsyncStatusResponse(self._async)
-        return response.server_status
+        return response.control_code
 
     def async_device_clear(self) -> int:
         """
         perform an AsyncDeviceClear transaction.
         returns the feature_bitmap from the AsyncDeviceClearAcknowledge packet.
         """
-        send_msg(self._async, "AsyncDeviceClear", 0, 0)
-        response = AsyncDeviceClearAcknowledge(self._async)
-        return response.feature_bitmap
+        response = self._async_channel.request(
+            "AsyncDeviceClear",
+            0,
+            0,
+            expected_response="AsyncDeviceClearAcknowledge",
+        )
+        return response.control_code
 
     def device_clear_complete(self, feature_bitmap: int) -> int:
         """
