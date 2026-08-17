@@ -40,6 +40,38 @@ def int_to_byte(val):
     return val.to_bytes(1, "big")
 
 
+#: Milliseconds allowed for establishing a connection when the caller does not
+#: ask for something else. See :func:`connect_timeout`.
+DEFAULT_OPEN_TIMEOUT = 2000.0
+
+
+def connect_timeout(open_timeout: Optional[float]) -> float:
+    """Seconds to allow for connecting, from a VISA ``open_timeout`` in ms.
+
+    ``None`` (unset) and ``0`` (``VI_TMO_IMMEDIATE``) both mean "use
+    :data:`DEFAULT_OPEN_TIMEOUT`".
+
+    VPP-4.3 section 4.3.3 defines the ``viOpen`` timeout parameter, which
+    PyVISA exposes as ``open_timeout``, as the time to wait for a lock. But
+    VPP-4.3 PERMISSION 4.3.2 also allows using it for the open itself:
+
+        A VISA implementation MAY use the timeout parameter when opening the
+        resource, regardless of whether the VI_EXCLUSIVE_LOCK flag is
+        specified.
+
+    PyVISA-py does that. For the TCP transports ``open_timeout`` bounds the
+    connection attempt, which lets a slow link be reached without raising the
+    I/O timeout too. VPP-4.3 RECOMMENDATION 4.3.3 then says how to read a 0:
+
+        If the value of the timeout parameter to viOpen is 0 and a VISA
+        implementation uses the timeout when opening the resource, the
+        implementation should behave as if the timeout parameter is the VISA
+        default timeout value of 2000 milliseconds.
+
+    """
+    return DEFAULT_OPEN_TIMEOUT / 1000 if not open_timeout else open_timeout / 1000
+
+
 # TODO(anyone): This is copypasta from `pyvisa-sim` project - find a way to
 #   reduce duplication, probably in that project instead of here.
 def _create_bitmask(bits: int) -> int:

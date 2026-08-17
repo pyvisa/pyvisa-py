@@ -22,7 +22,7 @@ from pyvisa import attributes, constants, errors, rname
 from pyvisa.constants import BufferOperation, ResourceAttribute, StatusCode
 from pyvisa.typing import VISAJobID
 
-from .common import LOGGER, int_to_byte
+from .common import LOGGER, connect_timeout, int_to_byte
 from .protocols import hislip, rpc, vxi11
 from .sessions import OpenError, Session, UnknownAttribute, VISARMSession
 
@@ -143,11 +143,9 @@ class TCPIPInstrHiSLIP(Session):
         try:
             self.interface = hislip.Instrument(
                 self.parsed.host_address,
-                open_timeout=(
-                    self.open_timeout * 1000.0
-                    if self.open_timeout is not None
-                    else self.open_timeout
-                ),
+                # ``open_timeout`` is already in milliseconds, which is what
+                # hislip.Instrument expects.
+                open_timeout=self.open_timeout,
                 timeout=self.timeout,
                 port=port,
                 sub_address=sub_address,
@@ -432,7 +430,7 @@ class Vxi11CoreClient(vxi11.CoreClient):
     """
 
     def __init__(
-        self, host: str, port: Optional[int], open_timeout: Optional[int] = 5000
+        self, host: str, port: Optional[int], open_timeout: Optional[int] = None
     ) -> None:
         self._lock = threading.Lock()
         self.packer = vxi11.Vxi11Packer()
@@ -1294,7 +1292,7 @@ class TCPIPSocketSession(Session):
             self.attrs[attribute] = attributes.AttributesByID[attribute].default
 
     def _connect(self) -> StatusCode:
-        timeout = self.open_timeout / 1000.0 if self.open_timeout else 10.0
+        timeout = connect_timeout(self.open_timeout)
         try:
             self.interface = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.interface.setblocking(False)

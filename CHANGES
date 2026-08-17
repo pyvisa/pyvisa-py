@@ -4,6 +4,18 @@ PyVISA-py Changelog
 0.9.0 (unreleased)
 ------------------
 
+- Apply ``open_timeout`` to the connection attempt across all the TCP
+  transports, as VPP-4.3 PERMISSION 4.3.2 allows. An ``open_timeout`` of 0
+  (``VI_TMO_IMMEDIATE``) now means 2000 ms, which is what VPP-4.3
+  RECOMMENDATION 4.3.3 asks of an implementation that does this.
+  ``ResourceManager.open_resource`` passes 0 whenever the caller supplies no
+  ``open_timeout``, so VXI-11 opens had been allowing 100 ms for the whole TCP
+  handshake and reporting anything slower as ``VI_ERROR_RSRC_NFOUND``. HiSLIP
+  now honors ``open_timeout`` rather than ignoring it. That same 2000 ms is the
+  new default everywhere, replacing 5 s for VXI-11 and HiSLIP and 10 s for
+  ``TCPIP::SOCKET``. The trade-off is that ``VI_TMO_IMMEDIATE`` can no longer
+  mean "never wait on a lock". Use the session's ``lock_timeout`` for that. See
+  the FAQ. Closes #578
 - VXI-11: Allow link ID 0 to be used for SRQ in agreement with the specs
   and other implementations. Closes #618 PR #619
 - Removed return packet on device_intr_srq. Closes #614 PR #615
