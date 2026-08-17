@@ -115,6 +115,8 @@ class TCPIPInstrHiSLIP(Session):
     # Override parsed to take into account the fact that this class is only used
     # for a specific kind of resource
     parsed: rname.TCPIPInstr
+    
+    default_tcpip_port = 4880
 
     @staticmethod
     def list_resources(wait_time=1.0) -> List[str]:
@@ -123,7 +125,7 @@ class TCPIPInstrHiSLIP(Session):
             for host, props in get_services(
                 "_hislip._tcp.local.", wait_time=wait_time
             ).items():
-                port = 4880
+                port = TCPIPInstrHiSLIP.default_tcpip_port
                 if "port" in props:
                     port = props["port"]
                 resources.append(f"TCPIP::{host}::hislip0,{port}::INSTR")
@@ -143,7 +145,7 @@ class TCPIPInstrHiSLIP(Session):
             port = int(port_str)
         else:
             sub_address = self.parsed.lan_device_name
-            port = 4880
+            port = self.default_tcpip_port
 
         try:
             self.interface = hislip.Instrument(
@@ -1260,6 +1262,8 @@ class TCPIPSocketSession(Session):
     # Override parsed to take into account the fact that this class is only used
     # for a specific kind of resource
     parsed: rname.TCPIPSocket
+    
+    default_tcpip_port = 5025
 
     @staticmethod
     def list_resources(wait_time=1.0) -> List[str]:
@@ -1269,7 +1273,7 @@ class TCPIPSocketSession(Session):
             for host, props in get_services(
                 "_scpi-raw._tcp.local.", wait_time=wait_time
             ).items():
-                port = 5025
+                port = TCPIPSocketSession.default_tcpip_port
                 if "port" in props:
                     port = props["port"]
                 resources.append(f"TCPIP::{host}::{port}::SOCKET")
