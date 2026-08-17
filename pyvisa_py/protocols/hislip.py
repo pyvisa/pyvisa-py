@@ -574,12 +574,14 @@ class AsyncChannel:
                 continue
             except OSError:
                 break
-            except Exception:
-                LOGGER.exception("Async channel reader stopped due to protocol error")
+            except Exception as e:
+                if not self._stop.is_set():
+                    LOGGER.exception(f"Async channel reader stopped due to protocol error: {e}")
                 with self._state_lock:
                     pending = self._pending_request
                     if pending is not None and not pending["done"]:
-                        pending["error"] = RuntimeError("async channel protocol error")
+                        if not self._stop.is_set():
+                            pending["error"] = RuntimeError("async channel protocol error")
                         pending["done"] = True
                         self._pending_request = None
                         self._state_lock.notify_all()
