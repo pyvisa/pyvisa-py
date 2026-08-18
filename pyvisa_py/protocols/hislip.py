@@ -495,9 +495,14 @@ class AsyncChannel:
                     raise socket.timeout("timed out")
 
                 if pending["error"] is not None:
-                    raise pending["error"]
+                    if isinstance(pending["error"], Exception):
+                        raise pending["error"]
+                    else:
+                        raise RuntimeError(pending["error"])
                 response = pending["response"]
                 assert response is not None
+                if not isinstance(response, AsyncMessage):
+                    raise RuntimeError("unexpected response type: %s" % type(response))
                 return response
         finally:
             with self._state_lock:

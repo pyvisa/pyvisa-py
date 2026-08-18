@@ -146,7 +146,7 @@ class TCPIPInstrHiSLIP(Session):
             port = 4880
 
         try:
-            self._async_interrupted_message_id = None
+            self._async_interrupted_message_id: Optional[int] = None
             self.interface = hislip.Instrument(
                 parsed.host_address,
                 # ``open_timeout`` is already in milliseconds, which is what
