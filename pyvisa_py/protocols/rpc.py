@@ -25,7 +25,7 @@ import struct
 import sys
 import time
 
-from ..common import LOGGER
+from ..common import LOGGER, connect_timeout
 from . import xdrlib
 
 #: Version of the protocol
@@ -448,10 +448,9 @@ def _connect(sock, host, port, timeout=0):
 class RawTCPClient(Client):
     """Client using TCP to a specific port."""
 
-    def __init__(self, host, prog, vers, port, open_timeout=5000):
+    def __init__(self, host, prog, vers, port, open_timeout=None):
         Client.__init__(self, host, prog, vers, port)
-        open_timeout = open_timeout if open_timeout is not None else 5000
-        self.connect(1e-3 * open_timeout)
+        self.connect(connect_timeout(open_timeout))
         # self.timeout defaults higher than the default 2 second VISA timeout,
         # ensuring that VISA timeouts take precedence.
         self.timeout = 4.0
@@ -799,7 +798,7 @@ class PartialPortMapperClient(object):
 
 
 class TCPPortMapperClient(PartialPortMapperClient, RawTCPClient):
-    def __init__(self, host, open_timeout=5000):
+    def __init__(self, host, open_timeout=None):
         RawTCPClient.__init__(self, host, PMAP_PROG, PMAP_VERS, PMAP_PORT, open_timeout)
         PartialPortMapperClient.__init__(self)
 
@@ -819,7 +818,7 @@ class BroadcastUDPPortMapperClient(PartialPortMapperClient, RawBroadcastUDPClien
 class TCPClient(RawTCPClient):
     """A TCP Client that find their server through the Port mapper"""
 
-    def __init__(self, host, prog, vers, open_timeout=5000):
+    def __init__(self, host, prog, vers, open_timeout=None):
         pmap = TCPPortMapperClient(host, open_timeout)
         port = pmap.get_port((prog, vers, IPPROTO_TCP, 0))
         pmap.close()
