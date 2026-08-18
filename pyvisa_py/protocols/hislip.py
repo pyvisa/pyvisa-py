@@ -12,7 +12,7 @@ import time
 from dataclasses import dataclass
 from typing import Callable, Dict, Optional, Tuple
 
-from pyvisa_py.common import BytesBuffer, LOGGER, MutableBytesBuffer
+from pyvisa_py.common import LOGGER, BytesBuffer, MutableBytesBuffer, connect_timeout
 
 PORT = 4880
 
