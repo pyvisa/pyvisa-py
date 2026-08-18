@@ -11,7 +11,7 @@ import threading
 import time
 from typing import Dict, Optional, Tuple
 
-from pyvisa_py.common import BytesBuffer, MutableBytesBuffer
+from pyvisa_py.common import BytesBuffer, MutableBytesBuffer, connect_timeout
 
 PORT = 4880
 
@@ -448,7 +448,7 @@ class Instrument:
     def __init__(
         self,
         ip_addr: str,
-        open_timeout: Optional[float] = 0.0,
+        open_timeout: Optional[float] = None,
         timeout: Optional[float] = None,
         port: int = PORT,
         sub_address: str = "hislip0",
@@ -460,13 +460,13 @@ class Instrument:
         #     S->C: AsyncInitializeResponse
 
         timeout = timeout or 5.0
+        # ``open_timeout`` bounds the connection attempt on both channels, as it
+        # does for the other TCP transports.
+        connecting = connect_timeout(open_timeout)
 
         # open the synchronous socket and send an initialize packet
         raw_sync = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        # The VISA spec does not allow to tune the socket timeout when opening
-        # a connection. ``open_timeout`` only applies to attempt to acquire a
-        # lock.
-        raw_sync.settimeout(5.0)
+        raw_sync.settimeout(connecting)
         raw_sync.connect((ip_addr, port))
         raw_sync.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
 
@@ -483,8 +483,8 @@ class Instrument:
 
         # open the asynchronous socket and send an initialize packet
         self._async = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self._async.settimeout(connecting)
         self._async.connect((ip_addr, port))
-        self._async.settimeout(5.0)
         self._async.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
         self._async_init = self.async_initialize(session_id=init.session_id)
         # We set the user timeout once we managed to initialize the connection.
