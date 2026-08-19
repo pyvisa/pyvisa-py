@@ -145,6 +145,15 @@ class PrologixTCPIPIntfcSession(_PrologixIntfcSession, TCPIPSocketSession):
     # used for specific kinds of resources
     parsed: rname.TCPIPSocket
 
+    @staticmethod
+    def list_resources(wait_time=1.0) -> list[str]:
+        # There is no known fast method of distinguishing Prologix TCPIP interfaces
+        # from other TCPIP devices, so we return an empty list.
+        # If I do not define this method, the base class will call
+        # TCPIPSocketSession.list_resources(), which would create duplicates
+        # of all TCPIP::SOCKET resources, which is not what we want.
+        return []
+
     def write(self, data: bytes) -> tuple[int, StatusCode]:
         """Writes data to device or interface synchronously.
 
