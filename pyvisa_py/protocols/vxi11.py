@@ -492,7 +492,6 @@ class SrqInterruptTCPServer(rpc.TCPServer):
             # Some instruments omit the final 4 bytes of a VXI-11 SRQ fragment.
             # If we already received a partial payload, treat a timeout while waiting for
             # the last 1-4 bytes as a valid short read instead of dropping the SRQ.
-            # LOGGER.debug("TCP SRQ (%d): %d out of %d bytes remaining to receive", self.port, remaining, n)
 
             try:
                 chunk = sock.recv(remaining)
