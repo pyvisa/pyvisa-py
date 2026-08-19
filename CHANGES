@@ -4,6 +4,7 @@ PyVISA-py Changelog
 0.9.0 (unreleased)
 ------------------
 
+- TCPIP::SOCKET can now also be found via `list_resources(query='TCPIP?*')` #622 PR #623
 - Apply ``open_timeout`` to the connection attempt across all the TCP
   transports, as VPP-4.3 PERMISSION 4.3.2 allows. An ``open_timeout`` of 0
   (``VI_TMO_IMMEDIATE``) now means 2000 ms, which is what VPP-4.3
