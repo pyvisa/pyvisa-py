@@ -759,10 +759,13 @@ class TCPIPInstrVxi11(Session):
             # Calculate timeout for current chunk.
             # Limit the minimum timeout to 10ms, because 0 is undefined
             # according to VXI-11 spec (done also by Visas)
-            elapsed_ms = int((time.time() - start_time) * 1000)
-            remaining_timeout = timeout - elapsed_ms
-            if finite_timeout and remaining_timeout <= 0:
-                return bytes(read_data), StatusCode.error_timeout
+            if finite_timeout:
+                elapsed_ms = int((time.time() - start_time) * 1000)
+                remaining_timeout = timeout - elapsed_ms
+                if remaining_timeout <= 0:
+                    return bytes(read_data), StatusCode.error_timeout
+            else:
+                remaining_timeout = 2**32 - 1  # VI_TMO_INFINITE
             chunk_timeout = max(10, remaining_timeout)
             error, reason, data = read_fun(
                 self.link,
