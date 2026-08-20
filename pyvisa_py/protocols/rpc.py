@@ -898,7 +898,7 @@ class Server(object):
         self.prog = prog
         self.vers = vers
         self.port = port  # Should normally be 0 for random port
-        self.port = port
+        self.prot = IPPROTO_TCP  # default
         self.addpackers()
 
     def register(self):

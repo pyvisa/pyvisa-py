@@ -687,7 +687,9 @@ class TestVxi11SrqFlow:
         sess._srq_server.server_close = MagicMock()
         sess._event_state.stop_flag.set()
         TCPIPInstrVxi11._stop_event_monitor(sess)
-        sess.interface.device_enable_srq.assert_called_once_with(sess.link, False, b"")
+        sess.interface.device_enable_srq.assert_called_once_with(
+            sess.link, False, b"srq"
+        )
         sess.interface.destroy_intr_chan.assert_called_once()
 
     def test_fire_event_then_wait_on_event(self, lib_and_session):

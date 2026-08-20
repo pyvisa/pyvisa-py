@@ -9,6 +9,7 @@ PyVISA-py Changelog
   of chunk_size, implemented read count boundary checks, completed termination
   character detection, allowed use of suppress_end_en, corrected timeout handling.
   Closes #608 PR #612
+- Fixed crash on DEVICE_ENABLE_SRQ(off) and accept malformed SRQ packets. Closes #620 PR #621
 - TCPIP::SOCKET can now also be found via `list_resources(query='TCPIP?*')` #622 PR #623
 - Apply ``open_timeout`` to the connection attempt across all the TCP
   transports, as VPP-4.3 PERMISSION 4.3.2 allows. An ``open_timeout`` of 0
