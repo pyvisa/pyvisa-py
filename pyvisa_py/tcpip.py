@@ -119,12 +119,19 @@ class TCPIPInstrHiSLIP(Session):
     # for a specific kind of resource
     parsed: rname.TCPIPInstr
 
+    default_tcpip_port = 4880
+
     @staticmethod
     def list_resources(wait_time=1.0) -> List[str]:
         resources = []
         try:
-            for host in get_services("_hislip._tcp.local.", wait_time=wait_time):
-                resources.append(f"TCPIP::{host}::hislip0,4880::INSTR")
+            for host, props in get_services(
+                "_hislip._tcp.local.", wait_time=wait_time
+            ).items():
+                port = TCPIPInstrHiSLIP.default_tcpip_port
+                if "port" in props:
+                    port = props["port"]
+                resources.append(f"TCPIP::{host}::hislip0,{port}::INSTR")
         except NotImplementedError:
             warnings.warn(
                 "TCPIP::hislip resource discovery requires the zeroconf package "
@@ -143,7 +150,7 @@ class TCPIPInstrHiSLIP(Session):
             port = int(port_str)
         else:
             sub_address = parsed.lan_device_name
-            port = 4880
+            port = self.default_tcpip_port
 
         try:
             self._async_interrupted_message_id: Optional[int] = None
@@ -677,7 +684,8 @@ class TCPIPInstrVxi11(Session):
         with self._srq_lifecycle_lock:
             self._event_state.stop_flag.set()
             try:
-                self.interface.device_enable_srq(self.link, False, b"")
+                # even in disable, you must provide a body, so we use the same body as in enable
+                self.interface.device_enable_srq(self.link, False, b"srq")
             except Exception:
                 LOGGER.exception("Error disabling VXI-11 SRQ")
             try:
@@ -1272,10 +1280,27 @@ class TCPIPSocketSession(Session):
     # for a specific kind of resource
     parsed: rname.TCPIPSocket
 
+    default_tcpip_port = 5025
+
     @staticmethod
-    def list_resources() -> List[str]:
-        # TODO: is there a way to get this?
-        return []
+    def list_resources(wait_time=1.0) -> List[str]:
+        resources = []
+
+        try:
+            for host, props in get_services(
+                "_scpi-raw._tcp.local.", wait_time=wait_time
+            ).items():
+                port = TCPIPSocketSession.default_tcpip_port
+                if "port" in props:
+                    port = props["port"]
+                resources.append(f"TCPIP::{host}::{port}::SOCKET")
+        except NotImplementedError:
+            warnings.warn(
+                "TCPIP::SOCKET resource discovery requires the zeroconf package "
+                "to be installed... try 'pip install zeroconf'",
+                UserWarning,
+            )
+        return sorted(resources)
 
     def after_parsing(self) -> None:
         # TODO: board_number not handled
@@ -1640,6 +1665,7 @@ def get_services(service_type: str, wait_time: float = 0.1) -> Dict[str, dict]:
             if info is None:
                 return
             properties = {}
+            properties["port"] = info.port
             for key, val in info.properties.items():
                 if key == b"txtvers":
                     continue
