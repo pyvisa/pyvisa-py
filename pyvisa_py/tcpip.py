@@ -666,7 +666,8 @@ class TCPIPInstrVxi11(Session):
         with self._srq_lifecycle_lock:
             self._event_state.stop_flag.set()
             try:
-                self.interface.device_enable_srq(self.link, False, b"")
+                # even in disable, you must provide a body, so we use the same body as in enable
+                self.interface.device_enable_srq(self.link, False, b"srq")
             except Exception:
                 LOGGER.exception("Error disabling VXI-11 SRQ")
             try:
