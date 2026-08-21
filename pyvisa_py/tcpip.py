@@ -74,6 +74,7 @@ class TCPIPInstrSession(Session):
         resource_manager_session: VISARMSession,
         resource_name: str,
         parsed=None,
+        access_mode: constants.AccessModes = constants.AccessModes.no_lock,
         open_timeout: Optional[int] = None,
     ):
         newcls: Type
@@ -87,7 +88,7 @@ class TCPIPInstrSession(Session):
         else:
             newcls = TCPIPInstrVxi11
 
-        return newcls(resource_manager_session, resource_name, parsed, open_timeout)
+        return newcls(resource_manager_session, resource_name, parsed, access_mode, open_timeout)
 
     @staticmethod
     def list_resources(wait_time=1.0) -> List[str]:
@@ -437,7 +438,10 @@ class Vxi11CoreClient(vxi11.CoreClient):
     """
 
     def __init__(
-        self, host: str, port: Optional[int], open_timeout: Optional[int] = None
+        self, host: str, 
+        port: Optional[int], 
+        access_mode: constants.AccessModes = constants.AccessModes.no_lock, 
+        open_timeout: Optional[int] = None
     ) -> None:
         self._lock = threading.Lock()
         self.packer = vxi11.Vxi11Packer()
@@ -547,7 +551,7 @@ class TCPIPInstrVxi11(Session):
         else:
             port = None
         try:
-            self.interface = Vxi11CoreClient(host_address, port, self.open_timeout)
+            self.interface = Vxi11CoreClient(host_address, port, self.access_mode, self.open_timeout)
         except rpc.RPCError:
             LOGGER.exception(
                 f"Failed to open VX11 connection to {host_address} on port {port}"
@@ -558,9 +562,24 @@ class TCPIPInstrVxi11(Session):
         self.keepalive = False
         self._srq_server: vxi11.SrqInterruptTCPServer | None = None
         self._srq_lifecycle_lock = threading.Lock()
-
+        
+        if self.access_mode & constants.AccessModes.exclusive_lock:
+            access_mode_exclusive_lock = 1
+            # The below is for lock_timeout, the instrument has been opened already
+            # lock_timeout can be 0 for immediate
+            lock_timeout = self.open_timeout
+            if lock_timeout is None:
+                lock_timeout = 10000  # default lock timeout in ms. This shouldn't happen
+            if lock_timeout == constants.VI_TMO_INFINITE:
+                lock_timeout = 2**32 - 1  # This is dangerous, but hey, the caller wanted it.
+            if lock_timeout == constants.VI_TMO_IMMEDIATE:
+                lock_timeout = 0  # This is NOP, but makes the code more readable            
+        else:
+            access_mode_exclusive_lock = 0
+            lock_timeout = 0  # time is not used now.
+            
         error, link, _abort_port, max_recv_size = self.interface.create_link(
-            self.client_id, 0, self.lock_timeout, self.parsed.lan_device_name
+            self.client_id, access_mode_exclusive_lock, lock_timeout, self.parsed.lan_device_name
         )
 
         if error:

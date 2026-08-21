@@ -151,15 +151,35 @@ For the TCP transports (``TCPIP::INSTR``, both VXI-11 and HiSLIP, and
 ``TCPIP::SOCKET``), ``open_timeout`` bounds how long PyVISA-py will spend
 establishing the connection::
 
+Without a lock on open:
+
     >>> import pyvisa
     >>> rm = pyvisa.ResourceManager('@py')
     >>> # allow 10 s to reach an instrument across a slow link
     >>> inst = rm.open_resource('TCPIP::192.168.1.100::INSTR', open_timeout=10000)
 
-If you do not pass one, the connection attempt is given 2000 ms.  An
+If you do not specify ``open_timeout``, the connection attempt is given 2000 ms.  An
 ``open_timeout`` of 0 selects that same default rather than meaning "give up
 immediately", since ``ResourceManager.open_resource`` passes 0 whenever you
 omit the argument.
+
+With a lock on open:
+
+    >>> import pyvisa
+    >>> rm = pyvisa.ResourceManager('@py')
+    >>> # allow 10 s to reach an instrument across a slow link, 
+    >>> # and 10 s to acquire a lock on the instrument
+    >>> inst = rm.open_resource('TCPIP::192.168.1.100::INSTR', open_timeout=10000, 
+    >>>                         access_mode=pyvisa.constants.AccessModes.exclusive_lock)
+
+The connection will be established with the same timeout handling as above,
+but will then try to open a link with a lock timeout also governed by ``open_timeout``.
+That lock request will succeed if the instrument grants it within this period.
+An ``open_timeout`` of 0 or ``VI_TMO_IMMEDIATE`` there means: "give up immediately", 
+while None means "10 seconds", and ``VI_TMO_INFINITE`` means "wait indefinitely".
+
+If you want better control over the lock timing, open without a lock and then 
+use ``inst.lock_excl(timeout=timeout)``.
 
 .. note::
 
