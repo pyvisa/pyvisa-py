@@ -504,7 +504,7 @@ class USBTMC(USBRaw):
         # Set the EOM flag on the last transfer only.
         # Send at least one transfer (possibly empty).
         while (end == 0) or (end < size):
-            begin, end = end, begin + self.usb_send_ep.wMaxPacketSize
+            begin, end = end, end + self.usb_send_ep.wMaxPacketSize
 
             btag = self._btag.next()
 
