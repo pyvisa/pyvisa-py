@@ -592,7 +592,7 @@ class TCPIPInstrVxi11(Session):
         self.attrs[ResourceAttribute.tcpip_address] = self.parsed.host_address
         self.attrs[ResourceAttribute.tcpip_hostname] = ""
         self.attrs[ResourceAttribute.tcpip_device_name] = self.parsed.lan_device_name
-        for name in ("SEND_END_EN", "TERMCHAR", "TERMCHAR_EN"):
+        for name in ("SEND_END_EN", "TERMCHAR", "TERMCHAR_EN", "SUPPRESS_END_EN"):
             attribute = getattr(constants, "VI_ATTR_" + name)
             self.attrs[attribute] = attributes.AttributesByID[attribute].default
 
@@ -711,6 +711,15 @@ class TCPIPInstrVxi11(Session):
             except Exception:
                 pass
 
+    def _read_status_from_reason(
+        self, reason: int, suppress_end_en: bool
+    ) -> StatusCode:
+        if reason & vxi11.RX_CHR:
+            return StatusCode.success_termination_character_read
+        if reason & vxi11.RX_END and not suppress_end_en:
+            return StatusCode.success
+        return StatusCode.success_max_count_read
+
     def read(self, count: int) -> Tuple[bytes, StatusCode]:
         """Reads data from device or interface synchronously.
 
@@ -729,10 +738,12 @@ class TCPIPInstrVxi11(Session):
             Return value of the library call.
 
         """
-        if count < self.max_recv_size:
-            chunk_length = count
-        else:
-            chunk_length = self.max_recv_size
+        if count < 0:
+            return b"", StatusCode.error_invalid_parameter
+        if count == 0:
+            return b"", StatusCode.success_max_count_read
+
+        chunk_length = min(count, self.max_recv_size)
 
         if self.get_attribute(ResourceAttribute.termchar_enabled)[0]:
             term_char, _ = self.get_attribute(ResourceAttribute.termchar)
@@ -740,24 +751,41 @@ class TCPIPInstrVxi11(Session):
         else:
             term_char = flags = 0
 
+        suppress_end_en, _ = self.get_attribute(ResourceAttribute.suppress_end_enabled)
+
         read_data = bytearray()
         reason = 0
-        # Stop on end of message or when a termination character has been
-        # encountered.
-        end_reason = vxi11.RX_END | vxi11.RX_CHR
+        # RX_CHR always stops the read. RX_END only stops when suppress_end_en
+        # is disabled.
+        stop_reason = vxi11.RX_CHR
+        if not suppress_end_en:
+            stop_reason |= vxi11.RX_END
         read_fun = self.interface.device_read
         status = StatusCode.success
 
+        # Get the timeout as cleaned up by the upper layers
         timeout = self._io_timeout
+
+        # See if a timeout was really set.
+        # if self.timeout is None, the given timeout was VI_TMO_INFINITE
+        finite_timeout = self.timeout is not None
+
         start_time = time.time()
-        while reason & end_reason == 0:
+        while reason & stop_reason == 0:
             # Decrease timeout so that the total timeout does not get larger
             # than the specified timeout.
 
             # Calculate timeout for current chunk.
             # Limit the minimum timeout to 10ms, because 0 is undefined
             # according to VXI-11 spec (done also by Visas)
-            chunk_timeout = max(10, timeout - int((time.time() - start_time) * 1000))
+            if finite_timeout:
+                elapsed_ms = int((time.time() - start_time) * 1000)
+                remaining_timeout = timeout - elapsed_ms
+                if remaining_timeout <= 0:
+                    return bytes(read_data), StatusCode.error_timeout
+            else:
+                remaining_timeout = constants.VI_TMO_INFINITE  # This is 2**32 - 1
+            chunk_timeout = max(10, remaining_timeout)
             error, reason, data = read_fun(
                 self.link,
                 chunk_length,
@@ -776,10 +804,13 @@ class TCPIPInstrVxi11(Session):
             count -= len(data)
 
             if count <= 0:
-                status = StatusCode.success_max_count_read
+                status = self._read_status_from_reason(reason, suppress_end_en)
                 break
 
             chunk_length = min(count, chunk_length)
+
+        if count > 0 and (reason & stop_reason):
+            status = self._read_status_from_reason(reason, suppress_end_en)
 
         return bytes(read_data), status
 
@@ -851,9 +882,6 @@ class TCPIPInstrVxi11(Session):
         # This is an abuse of the VISA standard
         if attribute == constants.VI_ATTR_TCPIP_KEEPALIVE:
             return self.keepalive, StatusCode.success
-
-        elif attribute == constants.VI_ATTR_SUPPRESS_END_EN:
-            raise NotImplementedError
 
         raise UnknownAttribute(attribute)
 
@@ -1018,15 +1046,15 @@ class TCPIPInstrVxi11(Session):
 
     def _set_timeout(self, attribute: ResourceAttribute, value: int) -> StatusCode:
         """Sets timeout calculated value from python way to VI_ way"""
+        # value is in milliseconds,
+        # and can be VI_TMO_INFINITE (2**32 - 1) or VI_TMO_IMMEDIATE (0)
+        self._io_timeout = value
         if value == constants.VI_TMO_INFINITE:
             self.timeout = None
-            self._io_timeout = 2**32 - 1
         elif value == constants.VI_TMO_IMMEDIATE:
             self.timeout = 0
-            self._io_timeout = 0
         else:
             self.timeout = value / 1000.0
-            self._io_timeout = int(self.timeout * 1000)
         return StatusCode.success
 
 
