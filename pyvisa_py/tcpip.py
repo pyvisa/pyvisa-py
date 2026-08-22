@@ -22,7 +22,7 @@ from pyvisa import attributes, constants, errors, rname
 from pyvisa.constants import BufferOperation, ResourceAttribute, StatusCode
 from pyvisa.typing import VISAJobID
 
-from .common import LOGGER, int_to_byte
+from .common import LOGGER, connect_timeout, int_to_byte
 from .protocols import hislip, rpc, vxi11
 from .sessions import OpenError, Session, UnknownAttribute, VISARMSession
 
@@ -116,12 +116,19 @@ class TCPIPInstrHiSLIP(Session):
     # for a specific kind of resource
     parsed: rname.TCPIPInstr
 
+    default_tcpip_port = 4880
+
     @staticmethod
     def list_resources(wait_time=1.0) -> List[str]:
         resources = []
         try:
-            for host in get_services("_hislip._tcp.local.", wait_time=wait_time):
-                resources.append(f"TCPIP::{host}::hislip0,4880::INSTR")
+            for host, props in get_services(
+                "_hislip._tcp.local.", wait_time=wait_time
+            ).items():
+                port = TCPIPInstrHiSLIP.default_tcpip_port
+                if "port" in props:
+                    port = props["port"]
+                resources.append(f"TCPIP::{host}::hislip0,{port}::INSTR")
         except NotImplementedError:
             warnings.warn(
                 "TCPIP::hislip resource discovery requires the zeroconf package "
@@ -138,16 +145,14 @@ class TCPIPInstrHiSLIP(Session):
             port = int(port_str)
         else:
             sub_address = self.parsed.lan_device_name
-            port = 4880
+            port = self.default_tcpip_port
 
         try:
             self.interface = hislip.Instrument(
                 self.parsed.host_address,
-                open_timeout=(
-                    self.open_timeout * 1000.0
-                    if self.open_timeout is not None
-                    else self.open_timeout
-                ),
+                # ``open_timeout`` is already in milliseconds, which is what
+                # hislip.Instrument expects.
+                open_timeout=self.open_timeout,
                 timeout=self.timeout,
                 port=port,
                 sub_address=sub_address,
@@ -432,7 +437,7 @@ class Vxi11CoreClient(vxi11.CoreClient):
     """
 
     def __init__(
-        self, host: str, port: Optional[int], open_timeout: Optional[int] = 5000
+        self, host: str, port: Optional[int], open_timeout: Optional[int] = None
     ) -> None:
         self._lock = threading.Lock()
         self.packer = vxi11.Vxi11Packer()
@@ -568,7 +573,7 @@ class TCPIPInstrVxi11(Session):
         self.attrs[ResourceAttribute.tcpip_address] = self.parsed.host_address
         self.attrs[ResourceAttribute.tcpip_hostname] = ""
         self.attrs[ResourceAttribute.tcpip_device_name] = self.parsed.lan_device_name
-        for name in ("SEND_END_EN", "TERMCHAR", "TERMCHAR_EN"):
+        for name in ("SEND_END_EN", "TERMCHAR", "TERMCHAR_EN", "SUPPRESS_END_EN"):
             attribute = getattr(constants, "VI_ATTR_" + name)
             self.attrs[attribute] = attributes.AttributesByID[attribute].default
 
@@ -580,7 +585,6 @@ class TCPIPInstrVxi11(Session):
             LOGGER.error("Error closing VISA link: {}".format(e))
 
         self.interface.close()
-        self.link = 0
         self.interface = None
 
         return StatusCode.success
@@ -657,10 +661,13 @@ class TCPIPInstrVxi11(Session):
 
     def _stop_event_monitor(self) -> None:
         """Disable events and stop the interrupt server thread."""
+        if self._srq_server is None:
+            return
         with self._srq_lifecycle_lock:
             self._event_state.stop_flag.set()
             try:
-                self.interface.device_enable_srq(self.link, False, b"")
+                # even in disable, you must provide a body, so we use the same body as in enable
+                self.interface.device_enable_srq(self.link, False, b"srq")
             except Exception:
                 LOGGER.exception("Error disabling VXI-11 SRQ")
             try:
@@ -685,6 +692,15 @@ class TCPIPInstrVxi11(Session):
             except Exception:
                 pass
 
+    def _read_status_from_reason(
+        self, reason: int, suppress_end_en: bool
+    ) -> StatusCode:
+        if reason & vxi11.RX_CHR:
+            return StatusCode.success_termination_character_read
+        if reason & vxi11.RX_END and not suppress_end_en:
+            return StatusCode.success
+        return StatusCode.success_max_count_read
+
     def read(self, count: int) -> Tuple[bytes, StatusCode]:
         """Reads data from device or interface synchronously.
 
@@ -703,10 +719,12 @@ class TCPIPInstrVxi11(Session):
             Return value of the library call.
 
         """
-        if count < self.max_recv_size:
-            chunk_length = count
-        else:
-            chunk_length = self.max_recv_size
+        if count < 0:
+            return b"", StatusCode.error_invalid_parameter
+        if count == 0:
+            return b"", StatusCode.success_max_count_read
+
+        chunk_length = min(count, self.max_recv_size)
 
         if self.get_attribute(ResourceAttribute.termchar_enabled)[0]:
             term_char, _ = self.get_attribute(ResourceAttribute.termchar)
@@ -714,24 +732,41 @@ class TCPIPInstrVxi11(Session):
         else:
             term_char = flags = 0
 
+        suppress_end_en, _ = self.get_attribute(ResourceAttribute.suppress_end_enabled)
+
         read_data = bytearray()
         reason = 0
-        # Stop on end of message or when a termination character has been
-        # encountered.
-        end_reason = vxi11.RX_END | vxi11.RX_CHR
+        # RX_CHR always stops the read. RX_END only stops when suppress_end_en
+        # is disabled.
+        stop_reason = vxi11.RX_CHR
+        if not suppress_end_en:
+            stop_reason |= vxi11.RX_END
         read_fun = self.interface.device_read
         status = StatusCode.success
 
+        # Get the timeout as cleaned up by the upper layers
         timeout = self._io_timeout
+
+        # See if a timeout was really set.
+        # if self.timeout is None, the given timeout was VI_TMO_INFINITE
+        finite_timeout = self.timeout is not None
+
         start_time = time.time()
-        while reason & end_reason == 0:
+        while reason & stop_reason == 0:
             # Decrease timeout so that the total timeout does not get larger
             # than the specified timeout.
 
             # Calculate timeout for current chunk.
             # Limit the minimum timeout to 10ms, because 0 is undefined
             # according to VXI-11 spec (done also by Visas)
-            chunk_timeout = max(10, timeout - int((time.time() - start_time) * 1000))
+            if finite_timeout:
+                elapsed_ms = int((time.time() - start_time) * 1000)
+                remaining_timeout = timeout - elapsed_ms
+                if remaining_timeout <= 0:
+                    return bytes(read_data), StatusCode.error_timeout
+            else:
+                remaining_timeout = constants.VI_TMO_INFINITE  # This is 2**32 - 1
+            chunk_timeout = max(10, remaining_timeout)
             error, reason, data = read_fun(
                 self.link,
                 chunk_length,
@@ -750,10 +785,13 @@ class TCPIPInstrVxi11(Session):
             count -= len(data)
 
             if count <= 0:
-                status = StatusCode.success_max_count_read
+                status = self._read_status_from_reason(reason, suppress_end_en)
                 break
 
             chunk_length = min(count, chunk_length)
+
+        if count > 0 and (reason & stop_reason):
+            status = self._read_status_from_reason(reason, suppress_end_en)
 
         return bytes(read_data), status
 
@@ -825,9 +863,6 @@ class TCPIPInstrVxi11(Session):
         # This is an abuse of the VISA standard
         if attribute == constants.VI_ATTR_TCPIP_KEEPALIVE:
             return self.keepalive, StatusCode.success
-
-        elif attribute == constants.VI_ATTR_SUPPRESS_END_EN:
-            raise NotImplementedError
 
         raise UnknownAttribute(attribute)
 
@@ -992,15 +1027,15 @@ class TCPIPInstrVxi11(Session):
 
     def _set_timeout(self, attribute: ResourceAttribute, value: int) -> StatusCode:
         """Sets timeout calculated value from python way to VI_ way"""
+        # value is in milliseconds,
+        # and can be VI_TMO_INFINITE (2**32 - 1) or VI_TMO_IMMEDIATE (0)
+        self._io_timeout = value
         if value == constants.VI_TMO_INFINITE:
             self.timeout = None
-            self._io_timeout = 2**32 - 1
         elif value == constants.VI_TMO_IMMEDIATE:
             self.timeout = 0
-            self._io_timeout = 0
         else:
             self.timeout = value / 1000.0
-            self._io_timeout = int(self.timeout * 1000)
         return StatusCode.success
 
 
@@ -1255,10 +1290,27 @@ class TCPIPSocketSession(Session):
     # for a specific kind of resource
     parsed: rname.TCPIPSocket
 
+    default_tcpip_port = 5025
+
     @staticmethod
-    def list_resources() -> List[str]:
-        # TODO: is there a way to get this?
-        return []
+    def list_resources(wait_time=1.0) -> List[str]:
+        resources = []
+
+        try:
+            for host, props in get_services(
+                "_scpi-raw._tcp.local.", wait_time=wait_time
+            ).items():
+                port = TCPIPSocketSession.default_tcpip_port
+                if "port" in props:
+                    port = props["port"]
+                resources.append(f"TCPIP::{host}::{port}::SOCKET")
+        except NotImplementedError:
+            warnings.warn(
+                "TCPIP::SOCKET resource discovery requires the zeroconf package "
+                "to be installed... try 'pip install zeroconf'",
+                UserWarning,
+            )
+        return sorted(resources)
 
     def after_parsing(self) -> None:
         # TODO: board_number not handled
@@ -1293,7 +1345,7 @@ class TCPIPSocketSession(Session):
             self.attrs[attribute] = attributes.AttributesByID[attribute].default
 
     def _connect(self) -> StatusCode:
-        timeout = self.open_timeout / 1000.0 if self.open_timeout else 10.0
+        timeout = connect_timeout(self.open_timeout)
         try:
             self.interface = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.interface.setblocking(False)
@@ -1623,6 +1675,7 @@ def get_services(service_type: str, wait_time: float = 0.1) -> Dict[str, dict]:
             if info is None:
                 return
             properties = {}
+            properties["port"] = info.port
             for key, val in info.properties.items():
                 if key == b"txtvers":
                     continue

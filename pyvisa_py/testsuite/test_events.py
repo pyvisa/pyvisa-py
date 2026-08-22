@@ -606,7 +606,7 @@ class TestVxi11SrqFlow:
 
         sess = MagicMock(spec=TCPIPInstrVxi11)
         sess._event_state = EventState()
-        sess.link = 1
+        sess.link = 0  # any number is valid
         sess.interface = MagicMock()
         sess.interface.create_intr_chan.return_value = 0
         sess.interface.device_enable_srq.return_value = 0
@@ -672,10 +672,24 @@ class TestVxi11SrqFlow:
     def test_stop_event_monitor_calls_disable(self, mock_vxi11_session):
         from pyvisa_py.tcpip import TCPIPInstrVxi11
 
+        # Without monitor setup:
         sess = mock_vxi11_session
         sess._event_state.monitor_thread = None
         TCPIPInstrVxi11._stop_event_monitor(sess)
-        sess.interface.device_enable_srq.assert_called_once_with(sess.link, False, b"")
+        sess.interface.device_enable_srq.assert_not_called()
+        sess.interface.destroy_intr_chan.assert_not_called()
+
+        # After monitor setup:
+        sess = mock_vxi11_session
+        sess._event_state.monitor_thread = None
+        sess._srq_server = MagicMock()
+        sess._srq_server.shutdown = MagicMock()
+        sess._srq_server.server_close = MagicMock()
+        sess._event_state.stop_flag.set()
+        TCPIPInstrVxi11._stop_event_monitor(sess)
+        sess.interface.device_enable_srq.assert_called_once_with(
+            sess.link, False, b"srq"
+        )
         sess.interface.destroy_intr_chan.assert_called_once()
 
     def test_fire_event_then_wait_on_event(self, lib_and_session):
