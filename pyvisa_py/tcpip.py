@@ -750,6 +750,11 @@ class TCPIPInstrVxi11(Session):
             flags = vxi11.OP_FLAG_TERMCHAR_SET
         else:
             term_char = flags = 0
+            
+        # TODO determine if OP_FLAG_WAIT_BLOCK is needed
+        lock_timeout = self.lock_timeout
+        if not flags & vxi11.OP_FLAG_WAIT_BLOCK:
+            lock_timeout = 0
 
         suppress_end_en, _ = self.get_attribute(ResourceAttribute.suppress_end_enabled)
 
@@ -790,7 +795,7 @@ class TCPIPInstrVxi11(Session):
                 self.link,
                 chunk_length,
                 chunk_timeout,
-                self.lock_timeout,
+                lock_timeout,
                 flags,
                 term_char,
             )
@@ -836,7 +841,12 @@ class TCPIPInstrVxi11(Session):
             flags = 0
             num = len(data)
             offset = 0
-
+            
+            # TODO determine if OP_FLAG_WAIT_BLOCK is needed
+            lock_timeout = self.lock_timeout
+            if not flags & vxi11.OP_FLAG_WAIT_BLOCK:
+                lock_timeout = 0
+            
             while num > 0:
                 if num <= self.max_recv_size:
                     flags |= vxi11.OP_FLAG_END
@@ -844,7 +854,7 @@ class TCPIPInstrVxi11(Session):
                 block = data[offset : offset + self.max_recv_size]
 
                 error, size = self.interface.device_write(
-                    self.link, self._io_timeout, self.lock_timeout, flags, block
+                    self.link, self._io_timeout, lock_timeout, flags, block
                 )
 
                 if error == vxi11.ErrorCodes.io_timeout:
@@ -952,9 +962,15 @@ class TCPIPInstrVxi11(Session):
             Return value of the library call.
 
         """
+        flags = 0
+        # TODO determine if OP_FLAG_WAIT_BLOCK is needed
+        lock_timeout = self.lock_timeout
+        if not flags & vxi11.OP_FLAG_WAIT_BLOCK:
+            lock_timeout = 0
+
         # XXX make this nicer (either validate protocol or pass it)
         error = self.interface.device_trigger(
-            self.link, 0, self.lock_timeout, self._io_timeout
+            self.link, flags, lock_timeout, self._io_timeout
         )
 
         return VXI11_ERRORS_TO_VISA[error]
@@ -965,8 +981,13 @@ class TCPIPInstrVxi11(Session):
         Corresponds to viClear function of the VISA library.
 
         """
+        flags = 0
+        # TODO determine if OP_FLAG_WAIT_BLOCK is needed
+        lock_timeout = self.lock_timeout
+        if not flags & vxi11.OP_FLAG_WAIT_BLOCK:
+            lock_timeout = 0        
         error = self.interface.device_clear(
-            self.link, 0, self.lock_timeout, self._io_timeout
+            self.link, flags, lock_timeout, self._io_timeout
         )
 
         return VXI11_ERRORS_TO_VISA[error]
@@ -984,8 +1005,14 @@ class TCPIPInstrVxi11(Session):
             Return value of the library call.
 
         """
+        flags = 0
+        # TODO determine if OP_FLAG_WAIT_BLOCK is needed
+        lock_timeout = self.lock_timeout
+        if not flags & vxi11.OP_FLAG_WAIT_BLOCK:
+            lock_timeout = 0
+
         error, stb = self.interface.device_read_stb(
-            self.link, 0, self.lock_timeout, self._io_timeout
+            self.link, flags, lock_timeout, self._io_timeout
         )
 
         return stb, VXI11_ERRORS_TO_VISA[error]
@@ -1034,11 +1061,11 @@ class TCPIPInstrVxi11(Session):
         # lock is free. If the flag is not set, device_lock SHALL terminate with
         # error set to 11, device locked by another link.
         
-        # The waitlock flag is the only flag. It is 0x1
-        if timeout == constants.VI_TMO_IMMEDIATE:
-            flags = 0x0  # don't wait for lock
-        else:
-            flags = 0x1  # wait for lock
+        flags = 0
+        # The waitlock flag is the only flag used here
+        if timeout != constants.VI_TMO_IMMEDIATE:
+            flags = vxi11.OP_FLAG_WAIT_BLOCK
+            
         error = self.interface.device_lock(self.link, flags, timeout)
 
         return "", VXI11_ERRORS_TO_VISA[error]
