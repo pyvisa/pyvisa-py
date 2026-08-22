@@ -1022,10 +1022,24 @@ class TCPIPInstrVxi11(Session):
             Return value of the library call.
 
         """
-        #  TODO: lock type not implemented
-        flags = 0
-
-        error = self.interface.device_lock(self.link, flags, self.lock_timeout)
+        # TODO: shared lock is not implemented
+        if lock_type == constants.Lock.shared:
+            return "", StatusCode.error_nonsupported_operation
+        
+        # The only remaining lock type is exclusive lock
+        
+        # RULE B.6.74:
+        # If some other link has the lock, device_lock SHALL examine the waitlock
+        # flag in flags. If the flag is set, device_lock SHALL block until the
+        # lock is free. If the flag is not set, device_lock SHALL terminate with
+        # error set to 11, device locked by another link.
+        
+        # The waitlock flag is the only flag. It is 0x1
+        if timeout == constants.VI_TMO_IMMEDIATE:
+            flags = 0x0  # don't wait for lock
+        else:
+            flags = 0x1  # wait for lock
+        error = self.interface.device_lock(self.link, flags, timeout)
 
         return "", VXI11_ERRORS_TO_VISA[error]
 
