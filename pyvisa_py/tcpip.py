@@ -765,7 +765,7 @@ class TCPIPInstrVxi11(Session):
                 if remaining_timeout <= 0:
                     return bytes(read_data), StatusCode.error_timeout
             else:
-                remaining_timeout = 2**32 - 1  # VI_TMO_INFINITE
+                remaining_timeout = constants.VI_TMO_INFINITE  # This is 2**32 - 1
             chunk_timeout = max(10, remaining_timeout)
             error, reason, data = read_fun(
                 self.link,
@@ -1027,15 +1027,15 @@ class TCPIPInstrVxi11(Session):
 
     def _set_timeout(self, attribute: ResourceAttribute, value: int) -> StatusCode:
         """Sets timeout calculated value from python way to VI_ way"""
+        # value is in milliseconds,
+        # and can be VI_TMO_INFINITE (2**32 - 1) or VI_TMO_IMMEDIATE (0)
+        self._io_timeout = value
         if value == constants.VI_TMO_INFINITE:
             self.timeout = None
-            self._io_timeout = 2**32 - 1
         elif value == constants.VI_TMO_IMMEDIATE:
             self.timeout = 0
-            self._io_timeout = 0
         else:
             self.timeout = value / 1000.0
-            self._io_timeout = int(self.timeout * 1000)
         return StatusCode.success
 
 
