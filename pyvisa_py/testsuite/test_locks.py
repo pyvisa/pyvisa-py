@@ -2,12 +2,23 @@
 
 from unittest.mock import ANY, MagicMock, patch
 
+import pytest
 from pyvisa import constants, rname
 
 from pyvisa_py.tcpip import TCPIPInstrVxi11
 
 
-def test_open_with_exclusive_lock_passes_lock_to_create_link():
+@pytest.mark.parametrize(
+    "open_timeout, expected_lock_timeout",
+    [
+        (0, 0),
+        (2500, 2500),
+        (constants.VI_TMO_INFINITE, 2**32 - 1),
+    ],
+)
+def test_open_with_exclusive_lock_passes_lock_to_create_link(
+    open_timeout, expected_lock_timeout
+):
     resource_name = "TCPIP::localhost::INSTR"
     parsed = rname.parse_resource_name(resource_name)
     client = MagicMock()
@@ -19,11 +30,11 @@ def test_open_with_exclusive_lock_passes_lock_to_create_link():
             resource_name,
             parsed,
             constants.AccessModes.exclusive_lock,
-            1234,
+            open_timeout,
         )
 
     client.create_link.assert_called_once_with(
-        ANY, 1, 1234, parsed.lan_device_name
+        ANY, 1, expected_lock_timeout, parsed.lan_device_name
     )
     
     
