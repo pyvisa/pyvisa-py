@@ -112,9 +112,8 @@ if you want to read more about connection dropping in docker containers)
 Why not using LibreVISA?
 ------------------------
 
-LibreVISA_ is still young and appears mostly unmaintained at this
-point (latest release is from 2013).
-However, you can already use it with the IVI backend as it has the same API.
+LibreVISA_ is unmaintained at this point (latest release is from 2013).
+However, you can use it with the IVI backend as it has the same API.
 We think that PyVISA-py is easier to hack and we can quickly reach feature parity
 with other IVI-VISA implementation for message-based instruments.
 
@@ -173,7 +172,7 @@ There are different types of locks with VISA:
 
 **Pyvisa-py does not support shared locks.**
 
-There are two ways of using exclusive locking an instrument session via pyvisa:
+There are two ways of using **exclusive** locking on an instrument session via pyvisa:
 
 - lock on open
 - lock after open
@@ -198,8 +197,8 @@ If you want better control over the different timeout settings, lock after the o
 
     >>> import pyvisa
     >>> rm = pyvisa.ResourceManager('@py')
-    >>> # allow 2 s to reach an instrument, 
-    >>> inst = rm.open_resource('TCPIP::192.168.1.100::INSTR', open_timeout=2000)
+    >>> # allow 3 s to reach the instrument
+    >>> inst = rm.open_resource('TCPIP::192.168.1.100::INSTR', open_timeout=3000)
     >>> # and then try to acquire a lock on the instrument with a 10 s timeout
     >>> inst.lock_excl(timeout=10000) 
 
@@ -214,7 +213,7 @@ If you want better control over the different timeout settings, lock after the o
 
     **VXI-11:** VXI-11 supports a third way of locking, which is to request a lock 
     per operation (read/write/clear/...). That is not supported by VISA VPP-4.3, 
-    neither by pyvisa, no matter the VISA implementation.
+    therefore neither by pyvisa, no matter the chosen backend.
 
 
 .. _PySerial: https://pythonhosted.org/pyserial/
