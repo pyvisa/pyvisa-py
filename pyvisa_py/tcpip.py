@@ -563,8 +563,19 @@ class TCPIPInstrVxi11(Session):
         self._srq_server: vxi11.SrqInterruptTCPServer | None = None
         self._srq_lifecycle_lock = threading.Lock()
         
+        # RULE B.6.6:
+        # The operation of create_link SHALL ignore locks if lockDevice is false.
+        # RULE B.6.7:
+        # If lockDevice is true and the lock is not freed after at least lock_timeout milliseconds, create_link
+        # SHALL terminate without creating a link and return with error set to 11, device locked by another link.
+        
+        # However, some devices, even from the big brands, once they are locked, will respect nothing of the above.
+        # If there is already a lock, expect some devices to act as if lockDevice is True,  
+        # to use arbitrarily longer timeouts, and expect a reply of "timeout" instead of "device locked by another link".
+        # Comparable liberties are likely to be taken on device_lock().
+        
         if self.access_mode & constants.AccessModes.exclusive_lock:
-            access_mode_exclusive_lock = 1
+            lock_device = 1
             # The below is for lock_timeout, the instrument has been opened already
             # lock_timeout can be 0 for immediate
             lock_timeout = self.open_timeout
@@ -575,11 +586,11 @@ class TCPIPInstrVxi11(Session):
             if lock_timeout == constants.VI_TMO_IMMEDIATE:
                 lock_timeout = 0  # This is NOP, but makes the code more readable            
         else:
-            access_mode_exclusive_lock = 0
+            lock_device = 0
             lock_timeout = 0  # time is not used now.
             
         error, link, _abort_port, max_recv_size = self.interface.create_link(
-            self.client_id, access_mode_exclusive_lock, lock_timeout, self.parsed.lan_device_name
+            self.client_id, lock_device, lock_timeout, self.parsed.lan_device_name
         )
 
         if error:

@@ -165,19 +165,17 @@ omit the argument.
 Locking
 -------
 
-There are different types of locks with VISA:
+**PyVISA-Py only supports exclusive locking, and only on VXI-11. Shared locks are not supported.** 
 
-- Exclusive lock: only one session can access the instrument at a time
-- Shared lock: multiple sessions can access the instrument simultaneously
+Socket instruments (``TCPIP::SOCKET``) do not support locking.
+HiSLIP instruments (``TCPIP::hislip0``) could support locking, but PyVISA-Py does not yet implement this feature.
 
-**Pyvisa-py does not support shared locks.**
-
-There are two ways of using **exclusive** locking on an instrument session via pyvisa:
+There are two ways of using exclusive locking on an instrument session via pyvisa:
 
 - lock on open
 - lock after open
 
-Lock on open is done via the ``access_mode`` argument to ``ResourceManager.open_resource``.  The
+"Lock on open" is done via the ``access_mode`` argument to ``ResourceManager.open_resource``.  The
 default is ``pyvisa.constants.AccessModes.no_lock``, which does not request a lock.
 
     >>> import pyvisa
@@ -193,7 +191,7 @@ That lock request will succeed if the instrument grants it within this period.
 An ``open_timeout`` of 0 or ``VI_TMO_IMMEDIATE`` there means: "give up immediately", 
 while None means "10 seconds", and ``VI_TMO_INFINITE`` means "wait indefinitely".
 
-If you want better control over the different timeout settings, lock after the open:
+If you want better control over the different timeout settings, use "lock after open":
 
     >>> import pyvisa
     >>> rm = pyvisa.ResourceManager('@py')
@@ -204,16 +202,22 @@ If you want better control over the different timeout settings, lock after the o
 
 .. note::
 
-    **Portability:** Exclusive locking should work consistently across different 
-    VISA implementations.
+    **Portability:** Exclusive locking should work, but some devices (even recent ones from the big brands),
+    and also some of the VISA backends, use a certain amount of liberties. Do not expect respect of the following:
+
+    - the prescribed return codes (meaning: you may see "I/O Timeout" instead of "Resource already locked"),
+    - the length of the timeouts (timeouts may be significantly longer than specified)
+    - the sequencing: some devices, once already locked, will allow `open_resource(..no_lock)`
+      to succeed (as they should per VXI-11 spec RULE B.6.6), but others don't.
+
     If you are debugging locking issues, note that NI-Visa supports
     the lock-on-open method, but underneath uses the lock-after-open method, and, 
     after having established a lock, handles the locking internally without addressing
     the instrument.
 
-    **VXI-11:** VXI-11 supports a third way of locking, which is to request a lock 
+    **VXI-11** also technically supports a third way of locking, which is to request a lock 
     per operation (read/write/clear/...). That is not supported by VISA VPP-4.3, 
-    therefore neither by pyvisa, no matter the chosen backend.
+    therefore neither by PyVISA, no matter the chosen backend.
 
 
 .. _PySerial: https://pythonhosted.org/pyserial/
