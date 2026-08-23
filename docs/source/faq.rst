@@ -129,29 +129,12 @@ By using PyVISA as a frontend to many backends, we abstract these things
 from higher level applications.
 
 
-Why is my Ethernet instrument not working?
-------------------------------------------
-
-Some instruments, such as the Rigol DM3068 Digital Multimeter,
-expect a non-default parameter in order to communicate successfully over Ethernet.
-In the case of the DM3068, the VXI-11 lock timeout must be set to zero:
-
-    >>> import pyvisa
-    >>> rm = pyvisa.ResourceManager('@py')
-    >>> dm3068 = rm.open_resource('TCPIP::rigol-dm3068-hostname::INSTR')
-    >>> # default lock_timeout is still 10000ms at this point
-    >>> rm.visalib.sessions[dm3068.session].lock_timeout = 0
-    >>> # can now communicate successfully with the DM3068
-
-
 What does ``open_timeout`` control?
 -----------------------------------
 
 For the TCP transports (``TCPIP::INSTR``, both VXI-11 and HiSLIP, and
 ``TCPIP::SOCKET``), ``open_timeout`` bounds how long PyVISA-py will spend
 establishing the connection::
-
-Without a lock on open:
 
     >>> import pyvisa
     >>> rm = pyvisa.ResourceManager('@py')
@@ -162,24 +145,6 @@ If you do not specify ``open_timeout``, the connection attempt is given 2000 ms.
 ``open_timeout`` of 0 selects that same default rather than meaning "give up
 immediately", since ``ResourceManager.open_resource`` passes 0 whenever you
 omit the argument.
-
-With a lock on open:
-
-    >>> import pyvisa
-    >>> rm = pyvisa.ResourceManager('@py')
-    >>> # allow 10 s to reach an instrument across a slow link, 
-    >>> # and 10 s to acquire a lock on the instrument
-    >>> inst = rm.open_resource('TCPIP::192.168.1.100::INSTR', open_timeout=10000, 
-    >>>                         access_mode=pyvisa.constants.AccessModes.exclusive_lock)
-
-The connection will be established with the same timeout handling as above,
-but will then try to open a link with a lock timeout also governed by ``open_timeout``.
-That lock request will succeed if the instrument grants it within this period.
-An ``open_timeout`` of 0 or ``VI_TMO_IMMEDIATE`` there means: "give up immediately", 
-while None means "10 seconds", and ``VI_TMO_INFINITE`` means "wait indefinitely".
-
-If you want better control over the lock timing, open without a lock and then 
-use ``inst.lock_excl(timeout=timeout)``.
 
 .. note::
 
@@ -197,9 +162,59 @@ use ``inst.lock_excl(timeout=timeout)``.
         implementation should behave as if the timeout parameter is the VISA
         default timeout value of 2000 milliseconds.
 
-    The trade-off is that ``VI_TMO_IMMEDIATE`` can no longer request "never
-    wait on a lock".  Set ``lock_timeout`` on the session for that, as in the
-    DM3068 example above.
+
+Locking
+-------
+
+There are different types of locks with VISA:
+
+- Exclusive lock: only one session can access the instrument at a time
+- Shared lock: multiple sessions can access the instrument simultaneously
+
+**Pyvisa-py does not support shared locks.**
+
+There are two ways of using exclusive locking an instrument session via pyvisa:
+
+- lock on open
+- lock after open
+
+Lock on open is done via the ``access_mode`` argument to ``ResourceManager.open_resource``.  The
+default is ``pyvisa.constants.AccessModes.no_lock``, which does not request a lock.
+
+    >>> import pyvisa
+    >>> rm = pyvisa.ResourceManager('@py')
+    >>> # allow 10 s to reach an instrument across a slow link, 
+    >>> # and 10 s to acquire a lock on the instrument
+    >>> inst = rm.open_resource('TCPIP::192.168.1.100::INSTR', open_timeout=10000, 
+    >>>                         access_mode=pyvisa.constants.AccessModes.exclusive_lock)
+
+The connection will be established with the same timeout handling as mentioned above,
+but will then try to open a link with a lock timeout also governed by ``open_timeout``.
+That lock request will succeed if the instrument grants it within this period.
+An ``open_timeout`` of 0 or ``VI_TMO_IMMEDIATE`` there means: "give up immediately", 
+while None means "10 seconds", and ``VI_TMO_INFINITE`` means "wait indefinitely".
+
+If you want better control over the different timeout settings, lock after the open:
+
+    >>> import pyvisa
+    >>> rm = pyvisa.ResourceManager('@py')
+    >>> # allow 2 s to reach an instrument, 
+    >>> inst = rm.open_resource('TCPIP::192.168.1.100::INSTR', open_timeout=2000)
+    >>> # and then try to acquire a lock on the instrument with a 10 s timeout
+    >>> inst.lock_excl(timeout=10000) 
+
+.. note::
+
+    **Portability:** Exclusive locking should work consistently across different 
+    VISA implementations.
+    If you are debugging locking issues, note that NI-Visa supports
+    the lock-on-open method, but underneath uses the lock-after-open method, and, 
+    after having established a lock, handles the locking internally without addressing
+    the instrument.
+
+    **VXI-11:** VXI-11 supports a third way of locking, which is to request a lock 
+    per operation (read/write/clear/...). That is not supported by VISA VPP-4.3, 
+    neither by pyvisa, no matter the VISA implementation.
 
 
 .. _PySerial: https://pythonhosted.org/pyserial/
