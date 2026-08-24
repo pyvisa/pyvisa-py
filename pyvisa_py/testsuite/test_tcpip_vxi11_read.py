@@ -194,3 +194,62 @@ class TestTCPIPInstrVxi11Read:
 
         assert data == b"ab"
         assert status == StatusCode.error_io
+
+    def test_read_gives_end_priority_over_termination_character(self):
+        # VPP-4.3 RULE 6.1.1: END is answered regardless of whether the
+        # termination character was also read.
+        sess = self._make_session(termchar_enabled=True)
+        sess.interface.device_read.return_value = (
+            0,
+            vxi11.RX_END | vxi11.RX_CHR,
+            b"abc",
+        )
+
+        data, status = sess.read(10)
+
+        assert data == b"abc"
+        assert status == StatusCode.success
+
+    def test_read_gives_end_priority_when_count_is_exhausted(self):
+        # Same rule on the path that leaves the loop because count ran out.
+        sess = self._make_session(termchar_enabled=True)
+        sess.interface.device_read.return_value = (
+            0,
+            vxi11.RX_END | vxi11.RX_CHR,
+            b"abc",
+        )
+
+        data, status = sess.read(3)
+
+        assert data == b"abc"
+        assert status == StatusCode.success
+
+    def test_read_ignores_rx_chr_when_termchar_is_disabled(self):
+        # VPP-4.3 RULE 6.1.5: VI_SUCCESS_TERM_CHAR is withheld while
+        # VI_ATTR_TERMCHAR_EN is clear, even if the device reports RX_CHR.
+        sess = self._make_session(termchar_enabled=False)
+        sess.interface.device_read.return_value = (
+            0,
+            vxi11.RX_CHR,
+            b"abc",
+        )
+
+        data, status = sess.read(3)
+
+        assert data == b"abc"
+        assert status == StatusCode.success_max_count_read
+
+    def test_read_withholds_success_when_end_is_suppressed(self):
+        # VPP-4.3 RULE 6.1.4: VI_SUCCESS is withheld while
+        # VI_ATTR_SUPPRESS_END_EN is set, so the termination character answers.
+        sess = self._make_session(termchar_enabled=True, suppress_end_enabled=True)
+        sess.interface.device_read.return_value = (
+            0,
+            vxi11.RX_END | vxi11.RX_CHR,
+            b"abc",
+        )
+
+        data, status = sess.read(10)
+
+        assert data == b"abc"
+        assert status == StatusCode.success_termination_character_read

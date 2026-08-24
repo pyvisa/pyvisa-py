@@ -693,12 +693,20 @@ class TCPIPInstrVxi11(Session):
                 pass
 
     def _read_status_from_reason(
-        self, reason: int, suppress_end_en: bool
+        self, reason: int, suppress_end_en: bool, termchar_en: bool
     ) -> StatusCode:
-        if reason & vxi11.RX_CHR:
-            return StatusCode.success_termination_character_read
+        """Completion status for a read, from the reason the device gave.
+
+        VPP-4.3 RULE 6.1.1 gives the END indicator priority: it is answered
+        regardless of whether the termination character was also read, so it
+        is tested first. RULE 6.1.4 withholds VI_SUCCESS while
+        VI_ATTR_SUPPRESS_END_EN is set, and RULE 6.1.5 withholds
+        VI_SUCCESS_TERM_CHAR while VI_ATTR_TERMCHAR_EN is clear.
+        """
         if reason & vxi11.RX_END and not suppress_end_en:
             return StatusCode.success
+        if reason & vxi11.RX_CHR and termchar_en:
+            return StatusCode.success_termination_character_read
         return StatusCode.success_max_count_read
 
     def read(self, count: int) -> Tuple[bytes, StatusCode]:
@@ -726,7 +734,8 @@ class TCPIPInstrVxi11(Session):
 
         chunk_length = min(count, self.max_recv_size)
 
-        if self.get_attribute(ResourceAttribute.termchar_enabled)[0]:
+        termchar_en, _ = self.get_attribute(ResourceAttribute.termchar_enabled)
+        if termchar_en:
             term_char, _ = self.get_attribute(ResourceAttribute.termchar)
             flags = vxi11.OP_FLAG_TERMCHAR_SET
         else:
@@ -785,13 +794,15 @@ class TCPIPInstrVxi11(Session):
             count -= len(data)
 
             if count <= 0:
-                status = self._read_status_from_reason(reason, suppress_end_en)
+                status = self._read_status_from_reason(
+                    reason, suppress_end_en, termchar_en
+                )
                 break
 
             chunk_length = min(count, chunk_length)
 
         if count > 0 and (reason & stop_reason):
-            status = self._read_status_from_reason(reason, suppress_end_en)
+            status = self._read_status_from_reason(reason, suppress_end_en, termchar_en)
 
         return bytes(read_data), status
 
