@@ -879,6 +879,7 @@ class TCPIPInstrVxi11(Session):
                     return offset, StatusCode.error_timeout
 
                 elif error or size < len(block):
+                    # TODO: translate the proper error codes, especially 11 etc, everywhere
                     return offset, StatusCode.error_io
 
                 offset += size

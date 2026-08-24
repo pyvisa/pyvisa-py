@@ -183,7 +183,7 @@ If another session has a lock, another client will not be able to communicate wi
 the instrument. Either ``open_resource`` will fail, either ``read`` / ``write`` / ``query`` /... 
 operations will fail. 
 The related error codes in that case are:
-``VI_ERROR_RSRC_LOCKED`` (as it should), or ``VI_ERROR_TMO`` or ``VI_ERROR_RSRC_BUSY``.
+``VI_ERROR_RSRC_LOCKED`` (as it should), or ``VI_ERROR_TMO`` or ``VI_ERROR_RSRC_BUSY`` or ``VI_ERROR_IO``.
 
 There are two ways of using exclusive locking on an instrument session via pyvisa:
 
