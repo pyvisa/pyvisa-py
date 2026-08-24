@@ -50,7 +50,7 @@ except ImportError:
 VXI11_ERRORS_TO_VISA = {
     0: StatusCode.success,  # no_error
     1: StatusCode.error_invalid_format,  # syntax_error
-    3: StatusCode.error_connection_lost,  # device_no_accessible
+    3: StatusCode.error_connection_lost,  # device_not_accessible
     4: StatusCode.error_invalid_access_key,  # invalid_link_identifier
     5: StatusCode.error_invalid_parameter,  # parameter_error
     6: StatusCode.error_handler_not_installed,  # channel_not_established
@@ -63,6 +63,14 @@ VXI11_ERRORS_TO_VISA = {
     23: StatusCode.error_abort,  # abort
     29: StatusCode.error_window_already_mapped,  # channel_already_established
 }
+
+def vxi11_error_to_visa(error_code: int) -> StatusCode:
+    """Translate a VXI-11 return code into a VISA status code.
+
+    Unknown VXI-11 error codes are translated to ``VI_ERROR_IO`` because
+    VISA has no standard status code for them.
+    """
+    return VXI11_ERRORS_TO_VISA.get(int(error_code), StatusCode.error_io)
 
 
 @Session.register(constants.InterfaceType.tcpip, "INSTR")
@@ -661,7 +669,7 @@ class TCPIPInstrVxi11(Session):
                     server.sock.close()
                 except Exception:
                     pass
-                return StatusCode.error_nonsupported_operation
+                return vxi11_error_to_visa(error)
 
             error = self.interface.device_enable_srq(self.link, True, b"srq")
             if error:
@@ -674,7 +682,7 @@ class TCPIPInstrVxi11(Session):
                     server.sock.close()
                 except Exception:
                     pass
-                return StatusCode.error_io
+                return vxi11_error_to_visa(error)
 
             with self._event_state._lock:
                 if (
@@ -816,10 +824,8 @@ class TCPIPInstrVxi11(Session):
                 term_char,
             )
 
-            if error == vxi11.ErrorCodes.io_timeout:
-                return bytes(read_data), StatusCode.error_timeout
-            elif error:
-                return bytes(read_data), StatusCode.error_io
+            if error:
+                return bytes(read_data), vxi11_error_to_visa(error)
 
             read_data.extend(data)
             count -= len(data)
@@ -875,12 +881,8 @@ class TCPIPInstrVxi11(Session):
                     self.link, self._io_timeout, lock_timeout, flags, block
                 )
 
-                if error == vxi11.ErrorCodes.io_timeout:
-                    return offset, StatusCode.error_timeout
-
-                elif error or size < len(block):
-                    # TODO: translate the proper error codes, especially 11 etc, everywhere
-                    return offset, StatusCode.error_io
+                if error or size < len(block):
+                    return offset, vxi11_error_to_visa(error)
 
                 offset += size
                 num -= size
@@ -994,7 +996,7 @@ class TCPIPInstrVxi11(Session):
             self.link, flags, lock_timeout, self._io_timeout
         )
 
-        return VXI11_ERRORS_TO_VISA[error]
+        return vxi11_error_to_visa(error)
 
     def clear(self) -> StatusCode:
         """Clears a device.
@@ -1014,7 +1016,7 @@ class TCPIPInstrVxi11(Session):
             self.link, flags, lock_timeout, self._io_timeout
         )
 
-        return VXI11_ERRORS_TO_VISA[error]
+        return vxi11_error_to_visa(error)
 
     def read_stb(self) -> Tuple[int, StatusCode]:
         """Reads a status byte of the service request.
@@ -1041,7 +1043,7 @@ class TCPIPInstrVxi11(Session):
             self.link, flags, lock_timeout, self._io_timeout
         )
 
-        return stb, VXI11_ERRORS_TO_VISA[error]
+        return stb, vxi11_error_to_visa(error)
 
     def lock(
         self,
@@ -1094,7 +1096,7 @@ class TCPIPInstrVxi11(Session):
             
         error = self.interface.device_lock(self.link, flags, timeout)
 
-        return "", VXI11_ERRORS_TO_VISA[error]
+        return "", vxi11_error_to_visa(error)
 
     def unlock(self) -> constants.StatusCode:
         """Relinquish a lock for the specified resource.
@@ -1109,7 +1111,7 @@ class TCPIPInstrVxi11(Session):
         """
         error = self.interface.device_unlock(self.link)
 
-        return VXI11_ERRORS_TO_VISA[error]
+        return vxi11_error_to_visa(error)
 
     def _set_timeout(self, attribute: ResourceAttribute, value: int) -> StatusCode:
         """Sets timeout calculated value from python way to VI_ way"""
