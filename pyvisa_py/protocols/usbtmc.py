@@ -542,7 +542,7 @@ class USBTMC(USBRaw):
                     )
                     + 1
                 ) * self.usb_recv_ep.wMaxPacketSize
-                resp = raw_read(chunk_size)
+                resp = raw_read(chunk_size, termchar)
 
                 response = BulkInMessage.from_bytes(resp)
                 received_transfer.extend(response.data)
@@ -574,7 +574,7 @@ class USBTMC(USBRaw):
                             )
                             + 1
                         ) * self.usb_recv_ep.wMaxPacketSize
-                        resp = raw_read(chunk_size)
+                        resp = raw_read(chunk_size, termchar)
                         received_transfer.extend(resp)
                     if len(received_transfer) >= response.transfer_size:
                         eom = response.transfer_attributes & 1
