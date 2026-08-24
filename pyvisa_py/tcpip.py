@@ -475,6 +475,7 @@ class TCPIPInstrVxi11(Session):
     #: Time to wait in ms before erroring with a timeout when trying to acquire a lock
     # 0 = immediate, >0 = wait for that many milliseconds
     # This is used for most operations (mainly except open_resource and lock_excl)
+    # TODO: maybe expose this as VI_ATTR_LOCK_TIMEOUT. But this is not a standard VISA attribute.
     lock_timeout: int = 0
 
     #: Unique ID of the client used to authenticate messages.
