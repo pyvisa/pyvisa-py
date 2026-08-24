@@ -473,7 +473,9 @@ class TCPIPInstrVxi11(Session):
     max_recv_size: int
 
     #: Time to wait in ms before erroring with a timeout when trying to acquire a lock
-    lock_timeout: int = 10000
+    # 0 = immediate, >0 = wait for that many milliseconds
+    # This is used for most operations (mainly except open_resource and lock_excl)
+    lock_timeout: int = 0
 
     #: Unique ID of the client used to authenticate messages.
     client_id: int
@@ -764,11 +766,10 @@ class TCPIPInstrVxi11(Session):
             
         # TODO determine how OP_FLAG_WAIT_BLOCK could be set from the outside. 
         # VPP-4.3 does not provide a clear definition for it. 
-        # For now, we test if it is set and handle the flag properly, 
-        # although the flag is likely not set.
-        lock_timeout = 0
-        if flags & vxi11.OP_FLAG_WAIT_BLOCK:
-            lock_timeout = self.lock_timeout
+        # For now, we derive it from self.lock_timeout.
+        lock_timeout = self.lock_timeout
+        if lock_timeout != constants.VI_TMO_IMMEDIATE:
+            flags |= vxi11.OP_FLAG_WAIT_BLOCK
 
         suppress_end_en, _ = self.get_attribute(ResourceAttribute.suppress_end_enabled)
 
@@ -858,11 +859,10 @@ class TCPIPInstrVxi11(Session):
             
             # TODO determine how OP_FLAG_WAIT_BLOCK could be set from the outside. 
             # VPP-4.3 does not provide a clear definition for it. 
-            # For now, we test if it is set and handle the flag properly, 
-            # although the flag is likely not set.
-            lock_timeout = 0
-            if flags & vxi11.OP_FLAG_WAIT_BLOCK:
-                lock_timeout = self.lock_timeout
+            # For now, we derive it from self.lock_timeout.
+            lock_timeout = self.lock_timeout
+            if lock_timeout != constants.VI_TMO_IMMEDIATE:
+                flags |= vxi11.OP_FLAG_WAIT_BLOCK
             
             while num > 0:
                 if num <= self.max_recv_size:
@@ -980,13 +980,12 @@ class TCPIPInstrVxi11(Session):
 
         """
         flags = 0
-        # TODO determine how OP_FLAG_WAIT_BLOCK could be set from the outside.
-        # VPP-4.3 does not provide a clear definition for it.
-        # For now, we test if it is set and handle the flag properly,
-        # although the flag is likely not set.
-        lock_timeout = 0
-        if flags & vxi11.OP_FLAG_WAIT_BLOCK:
-            lock_timeout = self.lock_timeout
+        # TODO determine how OP_FLAG_WAIT_BLOCK could be set from the outside. 
+        # VPP-4.3 does not provide a clear definition for it. 
+        # For now, we derive it from self.lock_timeout.
+        lock_timeout = self.lock_timeout
+        if lock_timeout != constants.VI_TMO_IMMEDIATE:
+            flags |= vxi11.OP_FLAG_WAIT_BLOCK
 
         # XXX make this nicer (either validate protocol or pass it)
         error = self.interface.device_trigger(
@@ -1002,13 +1001,12 @@ class TCPIPInstrVxi11(Session):
 
         """
         flags = 0
-        # TODO determine how OP_FLAG_WAIT_BLOCK could be set from the outside.
-        # VPP-4.3 does not provide a clear definition for it.
-        # For now, we test if it is set and handle the flag properly,
-        # although the flag is likely not set.
-        lock_timeout = 0
-        if flags & vxi11.OP_FLAG_WAIT_BLOCK:
-            lock_timeout = self.lock_timeout
+        # TODO determine how OP_FLAG_WAIT_BLOCK could be set from the outside. 
+        # VPP-4.3 does not provide a clear definition for it. 
+        # For now, we derive it from self.lock_timeout.
+        lock_timeout = self.lock_timeout
+        if lock_timeout != constants.VI_TMO_IMMEDIATE:
+            flags |= vxi11.OP_FLAG_WAIT_BLOCK
         
         error = self.interface.device_clear(
             self.link, flags, lock_timeout, self._io_timeout
@@ -1030,13 +1028,12 @@ class TCPIPInstrVxi11(Session):
 
         """
         flags = 0
-        # TODO determine how OP_FLAG_WAIT_BLOCK could be set from the outside.
-        # VPP-4.3 does not provide a clear definition for it.
-        # For now, we test if it is set and handle the flag properly,
-        # although the flag is likely not set.
-        lock_timeout = 0
-        if flags & vxi11.OP_FLAG_WAIT_BLOCK:
-            lock_timeout = self.lock_timeout
+        # TODO determine how OP_FLAG_WAIT_BLOCK could be set from the outside. 
+        # VPP-4.3 does not provide a clear definition for it. 
+        # For now, we derive it from self.lock_timeout.
+        lock_timeout = self.lock_timeout
+        if lock_timeout != constants.VI_TMO_IMMEDIATE:
+            flags |= vxi11.OP_FLAG_WAIT_BLOCK
 
         error, stb = self.interface.device_read_stb(
             self.link, flags, lock_timeout, self._io_timeout

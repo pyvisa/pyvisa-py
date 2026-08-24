@@ -24,15 +24,15 @@ The blocked read will return with ``VI_ERROR_ABORT``.  The HiSLIP protocol
 state is automatically reset (via a device clear) so the session is ready for
 further I/O immediately::
 
-    import pyvisa
-    rm = pyvisa.ResourceManager('@py')
-    inst = rm.open_resource('TCPIP::192.168.1.100::hislip0::INSTR')
-
-    # From another thread, to cancel a blocked read:
-    inst.visalib.terminate(inst.session, None, None)
-
-    # The blocked read returns VI_ERROR_ABORT.
-    # The session is ready for further I/O — no manual viClear() needed.
+    >>> import pyvisa
+    >>> rm = pyvisa.ResourceManager('@py')
+    >>> inst = rm.open_resource('TCPIP::192.168.1.100::hislip0::INSTR')
+    >>> 
+    >>> # From another thread, to cancel a blocked read:
+    >>> inst.visalib.terminate(inst.session, None, None)
+    >>> 
+    >>> # The blocked read returns VI_ERROR_ABORT.
+    >>> # The session is ready for further I/O — no manual viClear() needed.
 
 ``viTerminate()`` is not yet supported for VXI-11, USBTMC, or serial sessions.
 
@@ -43,7 +43,7 @@ further I/O immediately::
     Libraries' ``viTerminate()`` returns ``VI_SUCCESS`` but does not actually
     cancel a blocked synchronous ``viRead()`` — the read continues until the
     normal timeout expires.  The VISA specification defines ``viTerminate()``
-    primarily for asynchronous operations (``viReadAsync``/``viWriteAsync``),
+    primarily for asynchronous operations (``viReadAsync`` / ``viWriteAsync``),
     and its behavior on synchronous calls is implementation-defined.  Code
     that relies on ``viTerminate()`` cancelling a synchronous read may not
     be portable to other VISA backends.
@@ -68,7 +68,8 @@ controlled by a GPIB VXI command module set to primary address `9`, while
 the command module itself is found at `GPIB0::9::0::INSTR`, which is distinct
 from a pure primary address like `GPIB0::9::INSTR`.
 
-``ResourceManager.list_resources()`` has become slower as a result,
+``ResourceManager.list_resources()`` can discover both primary and secondary 
+addressable `GPIB::...::INSTR` resources. As a result, it can be slow,
 as it now needs to check 992 addresses per GPIB controller instead of just 31.
 
 For every primary address where no listener is detected, all
@@ -78,8 +79,15 @@ VXI modules controlled by an HP E1406A.
 For primary addresses where a listener is detected, no secondary addresses are
 checked as most devices simply ignore secondary addressing.
 
-If you have a device that reacts to the primary address and has different
+If you have an instrument that reacts to the primary address and has different
 functionality on some secondary addresses, please leave a bug report.
+
+If you use a VXI-11.2 gateway (VXI-11 to GPIB), you can use constructions like 
+`TCPIP::host::gpib0,9,1::INSTR`, where `gpib0` is the 'GPIB SICL Interface Name' 
+configured on the gateway, `9` is the primary address of the instrument, 
+and `1` is the secondary address of that instrument.
+``ResourceManager.list_resources()`` will however not try to discover any resources
+on a VXI-11.2 gateway, as the SICL Interface Name is not automatically known.
 
 
 Can PyVISA-py be used from a VM?
@@ -102,7 +110,7 @@ collection. For this reason it is reasonable to enable keepalive packets.
 The VISA attribute `VI_ATTR_TCPIP_KEEPALIVE` has been modified to work
 for all TCP/IP instruments. Enabling this option can be done with:
 
-    inst.set_visa_attribute(pyvisa.constants.ResourceAttribute.tcpip_keepalive, True)
+    >>> inst.set_visa_attribute(pyvisa.constants.ResourceAttribute.tcpip_keepalive, True)
 
 where `inst` is an active TCP/IP visa session.
 (see https://tech.xing.com/a-reason-for-unexplained-connection-timeouts-on-kubernetes-docker-abd041cf7e02
@@ -165,10 +173,15 @@ omit the argument.
 Locking
 -------
 
-**PyVISA-Py only supports exclusive locking, and only on VXI-11. Shared locks are not supported.** 
+**PyVISA-Py only supports exclusive locking, and only on VXI-11. Shared locks and nested locking are not supported.** 
 
 Socket instruments (``TCPIP::SOCKET``) do not support locking.
 HiSLIP instruments (``TCPIP::hislip0``) could support locking, but PyVISA-Py does not yet implement this feature.
+
+With exclusive locking, only one session can be used at a time on an instrument.  
+If another session has a lock, another client calling `open_resource` may or may not succeed, 
+and, if opened, most operations will fail. In that case, expect error codes ``VI_ERROR_RSRC_LOCKED`` 
+(as it should), or ``VI_ERROR_TMO`` or ``VI_ERROR_RSRC_BUSY``.
 
 There are two ways of using exclusive locking on an instrument session via pyvisa:
 
@@ -198,7 +211,22 @@ If you want better control over the different timeout settings, use "lock after 
     >>> # allow 3 s to reach the instrument
     >>> inst = rm.open_resource('TCPIP::192.168.1.100::INSTR', open_timeout=3000)
     >>> # and then try to acquire a lock on the instrument with a 10 s timeout
-    >>> inst.lock_excl(timeout=10000) 
+    >>> inst.lock_excl(timeout=10000)
+
+If you have not locked the instrument, and want to control the behaviour of your program
+in case another program or session has locked it, you can either request a lock 
+(``inst.lock_excl()``), or use ``rm.visalib.sessions[inst.session].lock_timeout`` 
+to control a lock timeout on most operation on the instrument. 
+If you set it to `0`, an operation on an instrument that is locked by another session 
+will fail immediately. 
+If set to a positive value, it will wait for that many milliseconds for the lock to 
+be removed before failing. 
+The default value of ``lock_timeout`` is 0 or ``VI_TMO_IMMEDIATE`` (do not wait).
+
+Note that ``open_resource`` and ``lock_excl`` use their own timeout values, and do not use ``lock_timeout``.
+
+Event handling is not affected by locking. 
+
 
 .. note::
 
@@ -207,17 +235,13 @@ If you want better control over the different timeout settings, use "lock after 
 
     - the prescribed return codes (meaning: you may see "I/O Timeout" instead of "Resource already locked"),
     - the length of the timeouts (timeouts may be significantly longer than specified)
-    - the sequencing: some devices, once already locked, will allow `open_resource(..no_lock)`
+    - the sequencing: some devices, once already locked, will allow `open_resource`
       to succeed (as they should per VXI-11 spec RULE B.6.6), but others don't.
 
     If you are debugging locking issues, note that NI-Visa supports
     the lock-on-open method, but underneath uses the lock-after-open method, and, 
     after having established a lock, handles the locking internally without addressing
     the instrument.
-
-    **VXI-11** also technically supports a third way of locking, which is to request a lock 
-    per operation (read/write/clear/...). That is not supported by VISA VPP-4.3, 
-    therefore neither by PyVISA, no matter the chosen backend.
 
 
 .. _PySerial: https://pythonhosted.org/pyserial/
