@@ -4,6 +4,7 @@ PyVISA-py Changelog
 0.9.0 (unreleased)
 ------------------
 
+- USBTMC: fix long write PR #628
 - VXI-11 (TCPIP::INSTR) Read function termination overhaul:
   Corrected timeout in read when response length is an exact multiple
   of chunk_size, implemented read count boundary checks, completed termination
