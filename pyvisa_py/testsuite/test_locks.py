@@ -58,6 +58,43 @@ def test_open_without_exclusive_lock_passes_lock_to_create_link():
 
 
 @pytest.mark.parametrize(
+    "lock_timeout, expected_flags, expected_lock_timeout",
+    [
+        (0, 0x8, 0),
+        (1500, 0x9, 1500),
+    ],
+)
+def test_write_sets_device_write_flags_and_lock_timeout(
+    lock_timeout, expected_flags, expected_lock_timeout
+):
+    resource_name = "TCPIP::localhost::INSTR"
+    parsed = rname.parse_resource_name(resource_name)
+    client = MagicMock()
+    client.create_link.return_value = (0, 1, 0, 1024)
+    client.device_write.return_value = (0, 3)
+
+    with patch("pyvisa_py.tcpip.Vxi11CoreClient", return_value=client):
+        session = TCPIPInstrVxi11(
+            1,
+            resource_name,
+            parsed,
+            constants.AccessModes.no_lock,
+            1234,
+        )
+
+    session.lock_timeout = lock_timeout
+    status = session.write(b"abc")
+
+    assert status == (3, constants.StatusCode.success)
+    args, _ = client.device_write.call_args
+    assert args[0] == session.link
+    assert args[1] == session._io_timeout
+    assert args[2] == expected_lock_timeout
+    assert args[3] == expected_flags
+    assert args[4] == b"abc"
+
+
+@pytest.mark.parametrize(
     "lock_type, timeout, expected_flags",
     [
         (constants.Lock.exclusive, 0, 0x0),
