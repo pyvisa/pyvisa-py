@@ -8,7 +8,9 @@ Here's some guidelines to help the review process go smoothly.
    made.
 
 2. Please ensure that the code is properly formatted and typed by running
-   black, isort, flake8 and mypy.
+   the pre-commit hooks. Run ``pip install pre-commit && pre-commit install``
+   and they will run automatically; run ``pre-commit`` alone to test without
+   committing.
 
 3. Please ensure that you have written units tests for the changes made/features
    added if possible. If it is not possible please be sure to provide sufficient
