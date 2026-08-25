@@ -1,3 +1,4 @@
+import socket
 from typing import List, Optional
 
 import pytest
@@ -100,3 +101,20 @@ def test_iter_bytes_with_send_end_requires_data_bits() -> None:
 def test_iter_bytes_raises_on_bad_data_bits() -> None:
     with pytest.raises(ValueError):
         list(common.iter_bytes(b"", data_bits=0, send_end=None))
+
+
+@pytest.mark.parametrize("keepalive", [True, False])
+def test_set_keepalive(keepalive: bool) -> None:
+    """The probe timers are not named the same way on every platform.
+
+    TCP_KEEPIDLE does not exist on macOS, which calls it TCP_KEEPALIVE.
+    Setting it unconditionally raised AttributeError, so enabling
+    VI_ATTR_TCPIP_KEEPALIVE failed there for every TCPIP resource.
+    """
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        common.set_keepalive(sock, keepalive)
+        enabled = sock.getsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE)
+        assert bool(enabled) is keepalive
+    finally:
+        sock.close()
