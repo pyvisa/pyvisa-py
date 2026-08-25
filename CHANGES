@@ -10,6 +10,7 @@ PyVISA-py Changelog
   that have flawed VXI-11 implementations like the DM3068.
   Corrected error codes.
   Closes #583 PR #???
+- USBTMC: fix long write PR #628
 - VXI-11 (TCPIP::INSTR) Read function termination overhaul:
   Corrected timeout in read when response length is an exact multiple
   of chunk_size, implemented read count boundary checks, completed termination
