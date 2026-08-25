@@ -67,11 +67,11 @@ def test_hislip_connect_deadline(monkeypatch, open_timeout, expected):
     assert seen == [expected]
 
 
-
 # Per per VPP-4.3 RECOMMENDATION 4.3.2, the access_mode argument to open()
 # may be interpreted as having no influence on the open timeout.
 # The code now passes the access_mode to the VXI-11 client, but it is not used in the timeout calculation.
 # It does have an influence on the lock timeout, but that is test in `test_locks.py`
+
 
 @pytest.mark.parametrize("access_mode", list(constants.AccessModes))
 @pytest.mark.parametrize(

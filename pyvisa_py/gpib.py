@@ -55,7 +55,9 @@ class GPIBSessionDispatch(Session):
         else:
             newcls = GPIBSession
 
-        return newcls(resource_manager_session, resource_name, parsed, access_mode, open_timeout)
+        return newcls(
+            resource_manager_session, resource_name, parsed, access_mode, open_timeout
+        )
 
     @staticmethod
     def list_resources() -> List[str]:

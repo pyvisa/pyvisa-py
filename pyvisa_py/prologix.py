@@ -58,7 +58,9 @@ class _PrologixIntfcSession(Session):  # pylint: disable=W0223
         access_mode: constants.AccessModes = constants.AccessModes.no_lock,
         open_timeout: int | None = None,
     ) -> None:
-        super().__init__(resource_manager_session, resource_name, parsed, access_mode, open_timeout)
+        super().__init__(
+            resource_manager_session, resource_name, parsed, access_mode, open_timeout
+        )
 
         # store this instance in the dictionary of Prologix interfaces
         self.boards[self.parsed.board] = self

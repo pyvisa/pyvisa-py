@@ -17,7 +17,6 @@ from pyvisa_py.tcpip import TCPIPInstrVxi11
         (constants.VI_TMO_INFINITE, 2**32 - 1),
     ],
 )
-
 def test_open_with_exclusive_lock_passes_lock_to_create_link(
     open_timeout, expected_lock_timeout
 ):
@@ -38,8 +37,8 @@ def test_open_with_exclusive_lock_passes_lock_to_create_link(
     client.create_link.assert_called_once_with(
         ANY, 1, expected_lock_timeout, parsed.lan_device_name
     )
-    
-    
+
+
 def test_open_without_exclusive_lock_passes_lock_to_create_link():
     resource_name = "TCPIP::localhost::INSTR"
     parsed = rname.parse_resource_name(resource_name)
@@ -55,9 +54,7 @@ def test_open_without_exclusive_lock_passes_lock_to_create_link():
             1234,
         )
 
-    client.create_link.assert_called_once_with(
-        ANY, 0, 0, parsed.lan_device_name
-    )
+    client.create_link.assert_called_once_with(ANY, 0, 0, parsed.lan_device_name)
 
 
 @pytest.mark.parametrize(
@@ -101,4 +98,3 @@ def test_highlevel_lock_sets_vxi11_device_lock_flags_and_timeout(
     assert key == ""
     assert status == constants.StatusCode.success
     client.device_lock.assert_called_once_with(session.link, expected_flags, timeout)
-    

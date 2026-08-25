@@ -64,6 +64,7 @@ VXI11_ERRORS_TO_VISA = {
     29: StatusCode.error_window_already_mapped,  # channel_already_established
 }
 
+
 def vxi11_error_to_visa(error_code: int) -> StatusCode:
     """Translate a VXI-11 return code into a VISA status code.
 
@@ -96,7 +97,9 @@ class TCPIPInstrSession(Session):
         else:
             newcls = TCPIPInstrVxi11
 
-        return newcls(resource_manager_session, resource_name, parsed, access_mode, open_timeout)
+        return newcls(
+            resource_manager_session, resource_name, parsed, access_mode, open_timeout
+        )
 
     @staticmethod
     def list_resources(wait_time=1.0) -> List[str]:
@@ -446,10 +449,11 @@ class Vxi11CoreClient(vxi11.CoreClient):
     """
 
     def __init__(
-        self, host: str, 
-        port: Optional[int], 
-        access_mode: constants.AccessModes = constants.AccessModes.no_lock, 
-        open_timeout: Optional[int] = None
+        self,
+        host: str,
+        port: Optional[int],
+        access_mode: constants.AccessModes = constants.AccessModes.no_lock,
+        open_timeout: Optional[int] = None,
     ) -> None:
         self._lock = threading.Lock()
         self.packer = vxi11.Vxi11Packer()
@@ -562,7 +566,9 @@ class TCPIPInstrVxi11(Session):
         else:
             port = None
         try:
-            self.interface = Vxi11CoreClient(host_address, port, self.access_mode, self.open_timeout)
+            self.interface = Vxi11CoreClient(
+                host_address, port, self.access_mode, self.open_timeout
+            )
         except rpc.RPCError:
             LOGGER.exception(
                 f"Failed to open VX11 connection to {host_address} on port {port}"
@@ -573,33 +579,37 @@ class TCPIPInstrVxi11(Session):
         self.keepalive = False
         self._srq_server: vxi11.SrqInterruptTCPServer | None = None
         self._srq_lifecycle_lock = threading.Lock()
-        
+
         # RULE B.6.6:
         # The operation of create_link SHALL ignore locks if lockDevice is false.
         # RULE B.6.7:
         # If lockDevice is true and the lock is not freed after at least lock_timeout milliseconds, create_link
         # SHALL terminate without creating a link and return with error set to 11, device locked by another link.
-        
+
         # However, some devices, even from the big brands, once they are locked, will respect nothing of the above.
-        # If there is already a lock, expect some devices to act as if lockDevice is True,  
+        # If there is already a lock, expect some devices to act as if lockDevice is True,
         # to use arbitrarily longer timeouts, and expect a reply of "timeout" instead of "device locked by another link".
         # Comparable liberties are likely to be taken on device_lock().
-        
+
         if self.access_mode & constants.AccessModes.exclusive_lock:
             lock_device = 1
             # The below is for lock_timeout, the instrument has been opened already
             # lock_timeout can be 0 for immediate
             lock_timeout = self.open_timeout
             if lock_timeout is None:
-                lock_timeout = 10000  # default lock timeout in ms. This shouldn't happen
+                lock_timeout = (
+                    10000  # default lock timeout in ms. This shouldn't happen
+                )
             if lock_timeout == constants.VI_TMO_INFINITE:
-                lock_timeout = 2**32 - 1  # This is dangerous, but hey, the caller wanted it.
+                lock_timeout = (
+                    2**32 - 1
+                )  # This is dangerous, but hey, the caller wanted it.
             if lock_timeout == constants.VI_TMO_IMMEDIATE:
-                lock_timeout = 0  # This is NOP, but makes the code more readable            
+                lock_timeout = 0  # This is NOP, but makes the code more readable
         else:
             lock_device = 0
             lock_timeout = 0  # time is not used now.
-            
+
         error, link, _abort_port, max_recv_size = self.interface.create_link(
             self.client_id, lock_device, lock_timeout, self.parsed.lan_device_name
         )
@@ -772,9 +782,9 @@ class TCPIPInstrVxi11(Session):
             flags = vxi11.OP_FLAG_TERMCHAR_SET
         else:
             term_char = flags = 0
-            
-        # TODO determine how OP_FLAG_WAIT_BLOCK could be set from the outside. 
-        # VPP-4.3 does not provide a clear definition for it. 
+
+        # TODO determine how OP_FLAG_WAIT_BLOCK could be set from the outside.
+        # VPP-4.3 does not provide a clear definition for it.
         # For now, we derive it from self.lock_timeout.
         lock_timeout = self.lock_timeout
         if lock_timeout != constants.VI_TMO_IMMEDIATE:
@@ -863,14 +873,14 @@ class TCPIPInstrVxi11(Session):
             flags = 0
             num = len(data)
             offset = 0
-            
-            # TODO determine how OP_FLAG_WAIT_BLOCK could be set from the outside. 
-            # VPP-4.3 does not provide a clear definition for it. 
+
+            # TODO determine how OP_FLAG_WAIT_BLOCK could be set from the outside.
+            # VPP-4.3 does not provide a clear definition for it.
             # For now, we derive it from self.lock_timeout.
             lock_timeout = self.lock_timeout
             if lock_timeout != constants.VI_TMO_IMMEDIATE:
                 flags |= vxi11.OP_FLAG_WAIT_BLOCK
-            
+
             while num > 0:
                 if num <= self.max_recv_size:
                     flags |= vxi11.OP_FLAG_END
@@ -984,8 +994,8 @@ class TCPIPInstrVxi11(Session):
 
         """
         flags = 0
-        # TODO determine how OP_FLAG_WAIT_BLOCK could be set from the outside. 
-        # VPP-4.3 does not provide a clear definition for it. 
+        # TODO determine how OP_FLAG_WAIT_BLOCK could be set from the outside.
+        # VPP-4.3 does not provide a clear definition for it.
         # For now, we derive it from self.lock_timeout.
         lock_timeout = self.lock_timeout
         if lock_timeout != constants.VI_TMO_IMMEDIATE:
@@ -1005,13 +1015,13 @@ class TCPIPInstrVxi11(Session):
 
         """
         flags = 0
-        # TODO determine how OP_FLAG_WAIT_BLOCK could be set from the outside. 
-        # VPP-4.3 does not provide a clear definition for it. 
+        # TODO determine how OP_FLAG_WAIT_BLOCK could be set from the outside.
+        # VPP-4.3 does not provide a clear definition for it.
         # For now, we derive it from self.lock_timeout.
         lock_timeout = self.lock_timeout
         if lock_timeout != constants.VI_TMO_IMMEDIATE:
             flags |= vxi11.OP_FLAG_WAIT_BLOCK
-        
+
         error = self.interface.device_clear(
             self.link, flags, lock_timeout, self._io_timeout
         )
@@ -1032,8 +1042,8 @@ class TCPIPInstrVxi11(Session):
 
         """
         flags = 0
-        # TODO determine how OP_FLAG_WAIT_BLOCK could be set from the outside. 
-        # VPP-4.3 does not provide a clear definition for it. 
+        # TODO determine how OP_FLAG_WAIT_BLOCK could be set from the outside.
+        # VPP-4.3 does not provide a clear definition for it.
         # For now, we derive it from self.lock_timeout.
         lock_timeout = self.lock_timeout
         if lock_timeout != constants.VI_TMO_IMMEDIATE:
@@ -1080,20 +1090,20 @@ class TCPIPInstrVxi11(Session):
         # TODO: shared lock is not implemented
         if lock_type == constants.Lock.shared:
             return "", StatusCode.error_nonsupported_operation
-        
+
         # The only remaining lock type is exclusive lock
-        
+
         # RULE B.6.74:
         # If some other link has the lock, device_lock SHALL examine the waitlock
         # flag in flags. If the flag is set, device_lock SHALL block until the
         # lock is free. If the flag is not set, device_lock SHALL terminate with
         # error set to 11, device locked by another link.
-        
+
         flags = 0
         # The waitlock flag is the only flag used here
         if timeout != constants.VI_TMO_IMMEDIATE:
             flags = vxi11.OP_FLAG_WAIT_BLOCK
-            
+
         error = self.interface.device_lock(self.link, flags, timeout)
 
         return "", vxi11_error_to_visa(error)
