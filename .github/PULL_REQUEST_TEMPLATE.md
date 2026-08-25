@@ -28,7 +28,7 @@ Many thanks in advance for your cooperation!
 -->
 
 - [ ] Closes # (insert issue number if relevant)
-- [ ] Executed ``black . && isort -c . && flake8`` with no errors
+- [ ] Executed ``pre-commit`` with no errors
 - [ ] The change is fully covered by automated unit tests
 - [ ] Documented in docs/ as appropriate
 - [ ] Added an entry to the CHANGES file
