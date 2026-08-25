@@ -176,7 +176,7 @@ Locking
 **PyVISA-Py only supports exclusive locking, and only on VXI-11. Shared locks and nested locking are not supported.** 
 
 Socket instruments (``TCPIP::SOCKET``) do not support locking.
-HiSLIP instruments (``TCPIP::hislip0``) could support locking, but PyVISA-Py does not yet implement this feature.
+HiSLIP instruments (``TCPIP::hislip``) could support locking, but PyVISA-Py does not yet implement this feature.
 
 With exclusive locking, only one session can be used at a time on an instrument.  
 If another session has a lock, another client will not be able to communicate with
