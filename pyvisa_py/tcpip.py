@@ -487,7 +487,11 @@ class TCPIPInstrVxi11(Session):
     #: Time to wait in ms before erroring with a timeout when trying to acquire a lock
     # 0 = immediate, >0 = wait for that many milliseconds
     # This is used for most operations (mainly except open_resource and lock_excl)
-    # TODO: maybe expose this as VI_ATTR_LOCK_TIMEOUT. But this is not a standard VISA attribute.
+    #
+    # NI-VISA and R&S VISA do not expose any of this.
+    # Keysight exposes the Keysight-specific VISA ViBoolean local (per-session) attribute VI_KTATTR_LOCKWAIT
+    #   When False, when already locked, immediately returns VI_ERROR_RSRC_LOCKED
+    #   When True, uses lock timeout = session timeout interval. When locked and timed out, returns VI_ERROR_TMO
     lock_timeout: int = 0
 
     #: Unique ID of the client used to authenticate messages.

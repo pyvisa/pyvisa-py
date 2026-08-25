@@ -149,8 +149,8 @@ establishing the connection::
     >>> inst = rm.open_resource('TCPIP::192.168.1.100::INSTR', open_timeout=10000)
 
 If you do not specify ``open_timeout``, the connection attempt is given 2000 ms.  An
-``open_timeout`` of 0 selects that same default rather than meaning "give up
-immediately", since ``ResourceManager.open_resource`` passes 0 whenever you
+``open_timeout`` of ``0`` selects that same default rather than meaning "give up
+immediately", since ``ResourceManager.open_resource`` passes ``0`` whenever you
 omit the argument.
 
 .. note::
@@ -203,7 +203,7 @@ default is ``pyvisa.constants.AccessModes.no_lock``, which does not request a lo
 The connection will be established with the same timeout handling as mentioned above,
 but will then try to open a link with a lock timeout also governed by ``open_timeout``.
 That lock request will succeed if the instrument grants it within this period.
-An ``open_timeout`` of 0 or ``VI_TMO_IMMEDIATE`` there means: "give up immediately", 
+An ``open_timeout`` of ``0`` or ``VI_TMO_IMMEDIATE`` there means: "give up immediately", 
 while None means "10 seconds", and ``VI_TMO_INFINITE`` means "wait indefinitely".
 
 If you want better control over the different timeout settings, use "lock after open":
@@ -216,31 +216,42 @@ If you want better control over the different timeout settings, use "lock after 
     >>> inst.lock_excl(timeout=10000)
 
 If you have not locked the instrument, and want to control the behaviour of your program
-in case another program or session has locked it, you can either request a lock 
-(``inst.lock_excl()``), or use ``rm.visalib.sessions[inst.session].lock_timeout`` 
-to control a lock timeout on most operation on the instrument. 
-If you set it to `0`, an operation on an instrument that is locked by another session 
-will fail immediately. 
-If set to a positive value, it will wait for that many milliseconds for the lock to 
-be removed before failing. 
-The default value of ``lock_timeout`` is 0 or ``VI_TMO_IMMEDIATE`` (do not wait).
+in case another program or session has locked it, you must choose one of the following methods:
 
-Note that ``open_resource`` and ``lock_excl`` use their own timeout values, and do not use ``lock_timeout``.
+- Request a lock via ``inst.lock_excl()``. This is the most portable. See above.
+- Configure the lock timeout via the PyVISA-Py specific ``rm.visalib.sessions[inst.session].lock_timeout``.  
+
+    When using ``lock_timeout`` on an instrument that is locked by another session:
+
+    - If ``0``, operations will fail immediately. 
+    - If set to a positive value, operations will wait for that many milliseconds for the lock to be removed before failing. 
+
+    The default value of ``lock_timeout`` is ``0`` or ``VI_TMO_IMMEDIATE`` (do not wait).
+
+Note that ``open_resource()`` and ``lock_excl()`` use their own timeout values, and do not use ``lock_timeout``.
 
 Event handling is not affected by locking. 
 
 
 .. note::
 
-    **Portability:** Exclusive locking should work, but some devices (even recent ones from the big brands),
-    and also some of the VISA backends, use a certain amount of liberties. Do not expect respect of the following:
+    **Portability:** Use of `lock_excl()` is the most portable and robust way to request a lock.
+    
+    Know that some devices (even recent ones from the big brands), and all of the VISA 
+    backends, use a certain amount of liberties with regards to the standards. 
+    Do not expect respect of the following:
 
-    - the prescribed return codes (meaning: you may see "I/O Timeout" instead of "Resource already locked"),
-    - the length of the timeouts (timeouts may be significantly longer than specified)
+    - the prescribed return codes (example: you may see "I/O Timeout" instead of "Resource already locked"),
+    - the length of the timeouts (timeouts may be significantly longer or shorter than specified)
     - the sequencing: some devices, once already locked, will allow `open_resource`
       to succeed (as they should per VXI-11 spec RULE B.6.6), but others don't.
 
-    If you are debugging locking issues, note that NI-Visa supports
+    Keysight VISA supports the lock timeout attribute ``VI_KTATTR_LOCKWAIT``.
+
+    NI-VISA and R&S VISA have no known means of controlling the lock timeout, and mostly 
+    use the I/O timeout and/or internal timing for lock timeout handling.
+
+    If you are debugging locking issues, note that NI-VISA supports
     the lock-on-open method, but underneath uses the lock-after-open method, and, 
     after having established a lock, handles the locking internally without addressing
     the instrument.
