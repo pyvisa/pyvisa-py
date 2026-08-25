@@ -4,6 +4,12 @@ PyVISA-py Changelog
 0.9.0 (unreleased)
 ------------------
 
+- A VXI-11 read stopped by both the END indicator and the termination
+  character now reports ``VI_SUCCESS`` rather than
+  ``VI_SUCCESS_TERM_CHAR``. VPP-4.3 RULE 6.1.1 gives END priority over the
+  termination character. ``VI_SUCCESS_TERM_CHAR`` is also no longer
+  reported while ``VI_ATTR_TERMCHAR_EN`` is clear, which RULE 6.1.5
+  forbids. Follow-up to PR #612
 - USBTMC: fix long write PR #628
 - VXI-11 (TCPIP::INSTR) Read function termination overhaul:
   Corrected timeout in read when response length is an exact multiple
