@@ -10,6 +10,12 @@ PyVISA-py Changelog
   that have flawed VXI-11 implementations like the DM3068.
   Corrected error codes.
   Closes #583 PR #633
+- A VXI-11 read stopped by both the END indicator and the termination
+  character now reports ``VI_SUCCESS`` rather than
+  ``VI_SUCCESS_TERM_CHAR``. VPP-4.3 RULE 6.1.1 gives END priority over the
+  termination character. ``VI_SUCCESS_TERM_CHAR`` is also no longer
+  reported while ``VI_ATTR_TERMCHAR_EN`` is clear, which RULE 6.1.5
+  forbids. Follow-up to PR #612
 - USBTMC: fix long write PR #628
 - VXI-11 (TCPIP::INSTR) Read function termination overhaul:
   Corrected timeout in read when response length is an exact multiple
@@ -17,6 +23,9 @@ PyVISA-py Changelog
   character detection, allowed use of suppress_end_en, corrected timeout handling.
   Closes #608 PR #612
 - Fixed crash on DEVICE_ENABLE_SRQ(off) and accept malformed SRQ packets. Closes #620 PR #621
+- Set the TCP keepalive probe timers defensively for all TCPIP resources.
+  ``VI_ATTR_TCPIP_KEEPALIVE`` raised ``AttributeError`` on platforms without
+  ``socket.TCP_KEEPIDLE``, which includes macOS.
 - TCPIP::SOCKET can now also be found via `list_resources(query='TCPIP?*')` #622 PR #623
 - Apply ``open_timeout`` to the connection attempt across all the TCP
   transports, as VPP-4.3 PERMISSION 4.3.2 allows. An ``open_timeout`` of 0
