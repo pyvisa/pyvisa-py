@@ -703,9 +703,9 @@ class TCPIPInstrVxi11(Session):
         VI_ATTR_SUPPRESS_END_EN is set, and RULE 6.1.5 withholds
         VI_SUCCESS_TERM_CHAR while VI_ATTR_TERMCHAR_EN is clear.
         """
-        if reason & vxi11.RX_END and not suppress_end_en:
+        if not suppress_end_en and (reason & vxi11.RX_END):
             return StatusCode.success
-        if reason & vxi11.RX_CHR and termchar_en:
+        if termchar_en and (reason & vxi11.RX_CHR):
             return StatusCode.success_termination_character_read
         return StatusCode.success_max_count_read
 
