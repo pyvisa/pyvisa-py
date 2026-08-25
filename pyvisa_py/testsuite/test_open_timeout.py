@@ -8,8 +8,8 @@ caller supplies no ``open_timeout``. Every transport has to read that 0 as
 """
 
 import pytest
-from pyvisa import constants, errors
 
+from pyvisa import constants, errors
 from pyvisa_py import highlevel
 from pyvisa_py.common import DEFAULT_OPEN_TIMEOUT, connect_timeout
 from pyvisa_py.protocols import hislip, rpc

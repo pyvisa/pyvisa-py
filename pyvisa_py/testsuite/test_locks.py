@@ -3,8 +3,8 @@
 from unittest.mock import ANY, MagicMock, patch
 
 import pytest
-from pyvisa import constants, errors, rname
 
+from pyvisa import constants, errors, rname
 from pyvisa_py import highlevel
 from pyvisa_py.tcpip import TCPIPInstrVxi11
 
