@@ -344,7 +344,7 @@ class TCPIPInstrHiSLIP(Session):
                 constants.RENLineOperation.deassert: "disableRemote",
                 constants.RENLineOperation.deassert_gtl: "disableAndGTL",
             }[mode]
-        except:
+        except Exception:
             # unknown value?
             return StatusCode.error_nonsupported_operation
 
