@@ -228,6 +228,24 @@ in case another program or session has locked it, you must choose one of the fol
 
     The default value of ``VI_KTATTR_LOCKWAIT`` is ``FALSE/0`` (do not wait).
 
+    ``VI_KTATTR_LOCKWAIT`` may not be available yet in pyvisa. In that case, you could do this:
+
+    >>> import pyvisa
+    >>> rm = pyvisa.ResourceManager('@py')
+    >>> inst = rm.open_resource('TCPIP::192.168.1.100::INSTR')
+    >>>
+    >>> # Define the raw hex constant for VI_KTATTR_LOCKWAIT
+    >>> VI_KTATTR_LOCKWAIT = 0x0FFF002BL
+    >>>
+    >>> # Set lockwait to True (VI_TRUE = 1)
+    >>> inst.set_attribute(VI_KTATTR_LOCKWAIT, 1)
+    >>> # Read back the attribute value
+    >>> lockwait_val = inst.get_attribute(VI_KTATTR_LOCKWAIT)
+    >>> print("Lockwait state:", lockwait_val)
+    >>>
+    >>> # Do your operations
+
+
 Note that ``open_resource()`` and ``lock_excl()`` use their own timeout values, and do not use ``VI_KTATTR_LOCKWAIT``.
 
 ``lock_timeout`` from previous PyVISA-Py versions has been removed.
