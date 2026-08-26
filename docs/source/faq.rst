@@ -181,6 +181,31 @@ omit the argument.
     wait on a lock".  Set ``lock_timeout`` on the session for that, as in the
     DM3068 example above.
 
+Remote/Local control
+--------------------
+
+Setting an instrument to Remote or Local is possible via VXI-11, HiSLIP and GPIB.
+
+In PyVISA, this is done through ``inst.control_ren(pyvisa.constants.RENLineOperation.{op})``
+where valid ``{op}`` values are:
+
+================  ===========  =========================================
+RENLineOperation  VXI-11       HiSLIP
+================  ===========  =========================================
+address_gtl       goto local   goto local, no change to remote enable
+asrt              error        enable remote
+asrt_address      goto remote  enable remote, goto remote
+asrt_address_llo  goto remote  enable remote, goto remote, local lockout
+asrt_llo          error        enable remote, local lockout
+deassert          error        disable remote
+deassert_gtl      goto local   disable remote, goto local
+================  ===========  =========================================
+
+This is fully conform to what NI-VISA does. 
+
+GPIB has functionality comparable to HiSLIP, but may behave differently than NI-VISA, 
+depending on the type of interface.
+
 
 .. _PySerial: https://pythonhosted.org/pyserial/
 .. _PyVISA: http://pyvisa.readthedocs.org/
