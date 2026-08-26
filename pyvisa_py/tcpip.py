@@ -112,6 +112,16 @@ class TCPIPInstrHiSLIP(Session):
     # need to define session_type to make the set_attribute machinery work.
     session_type = (constants.InterfaceType.tcpip, "INSTR")
 
+    REMOTELOCALOPCODE: Dict[constants.RENLineOperation, str] = {
+        constants.RENLineOperation.address_gtl: "justGTL",
+        constants.RENLineOperation.asrt: "enableRemote",
+        constants.RENLineOperation.asrt_address: "enableAndGotoRemote",
+        constants.RENLineOperation.asrt_address_llo: "enableAndGTRLLO",
+        constants.RENLineOperation.asrt_llo: "enableAndLockoutLocal",
+        constants.RENLineOperation.deassert: "disableRemote",
+        constants.RENLineOperation.deassert_gtl: "disableAndGTL",
+    }
+
     # Override parsed to take into account the fact that this class is only used
     # for a specific kind of resource
     parsed: rname.TCPIPInstr
@@ -335,15 +345,7 @@ class TCPIPInstrHiSLIP(Session):
 
         """
         try:
-            method = {
-                constants.RENLineOperation.address_gtl: "justGTL",
-                constants.RENLineOperation.asrt: "enableRemote",
-                constants.RENLineOperation.asrt_address: "enableAndGotoRemote",
-                constants.RENLineOperation.asrt_address_llo: "enableAndGTRLLO",
-                constants.RENLineOperation.asrt_llo: "enableAndLockoutLocal",
-                constants.RENLineOperation.deassert: "disableRemote",
-                constants.RENLineOperation.deassert_gtl: "disableAndGTL",
-            }[mode]
+            method = self.REMOTELOCALOPCODE[mode]
         except Exception:
             # unknown value?
             return StatusCode.error_nonsupported_operation
