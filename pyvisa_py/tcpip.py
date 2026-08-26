@@ -16,7 +16,7 @@ import socket
 import threading
 import time
 import warnings
-from typing import Any, Dict, List, Optional, Tuple, Type, cast
+from typing import Any, Dict, Final, List, Optional, Tuple, Type, cast
 
 from pyvisa import attributes, constants, errors, rname
 from pyvisa.constants import BufferOperation, ResourceAttribute, StatusCode
@@ -111,6 +111,16 @@ class TCPIPInstrHiSLIP(Session):
     # want it to be registered in the _session_classes array, but we still
     # need to define session_type to make the set_attribute machinery work.
     session_type = (constants.InterfaceType.tcpip, "INSTR")
+
+    REMOTELOCALOPCODE: Final[dict[constants.RENLineOperation, str]] = {
+        constants.RENLineOperation.address_gtl: "justGTL",
+        constants.RENLineOperation.asrt: "enableRemote",
+        constants.RENLineOperation.asrt_address: "enableAndGotoRemote",
+        constants.RENLineOperation.asrt_address_llo: "enableAndGTRLLO",
+        constants.RENLineOperation.asrt_llo: "enableAndLockoutLocal",
+        constants.RENLineOperation.deassert: "disableRemote",
+        constants.RENLineOperation.deassert_gtl: "disableAndGTL",
+    }
 
     # Override parsed to take into account the fact that this class is only used
     # for a specific kind of resource
@@ -314,6 +324,36 @@ class TCPIPInstrHiSLIP(Session):
         self.interface.send(data)
 
         return len(data), StatusCode.success
+
+    def gpib_control_ren(self, mode: constants.RENLineOperation) -> StatusCode:
+        """Controls the state of the GPIB Remote Enable (REN) interface line.
+
+        Optionally the remote/local state of the device is also controlled.
+
+        Corresponds to viGpibControlREN function of the VISA library.
+
+        Parameters
+        ----------
+        mode : constants.RENLineOperation
+            Specifies the state of the REN line and optionally the device
+            remote/local state.
+
+        Returns
+        -------
+        StatusCode
+            Return value of the library call.
+
+        """
+        try:
+            method = self.REMOTELOCALOPCODE[mode]
+        except KeyError:
+            # unknown value?
+            return StatusCode.error_nonsupported_operation
+
+        interface = cast(hislip.Instrument, self.interface)
+        interface.async_remote_local_control(method)
+
+        return StatusCode.success
 
     def clear(self) -> StatusCode:
         """Clears a device.
@@ -852,6 +892,44 @@ class TCPIPInstrVxi11(Session):
 
         except vxi11.Vxi11Error:
             return 0, StatusCode.error_timeout
+
+    def gpib_control_ren(self, mode: constants.RENLineOperation) -> StatusCode:
+        """Controls the state of the GPIB Remote Enable (REN) interface line.
+
+        Optionally the remote/local state of the device is also controlled.
+
+        Corresponds to viGpibControlREN function of the VISA library.
+
+        Parameters
+        ----------
+        mode : constants.RENLineOperation
+            Specifies the state of the REN line and optionally the device
+            remote/local state.
+
+        Returns
+        -------
+        StatusCode
+            Return value of the library call.
+
+        """
+        if mode in (
+            constants.RENLineOperation.asrt_address,
+            constants.RENLineOperation.asrt_address_llo,
+        ):
+            error = self.interface.device_remote(
+                self.link, 0, self.lock_timeout, self._io_timeout
+            )
+            return VXI11_ERRORS_TO_VISA[error]
+        elif mode in (
+            constants.RENLineOperation.address_gtl,
+            constants.RENLineOperation.deassert_gtl,
+        ):
+            error = self.interface.device_local(
+                self.link, 0, self.lock_timeout, self._io_timeout
+            )
+            return VXI11_ERRORS_TO_VISA[error]
+        else:
+            return constants.StatusCode.error_nonsupported_operation
 
     def _get_attribute(self, attribute: ResourceAttribute) -> Tuple[Any, StatusCode]:
         """Get the value for a given VISA attribute for this session.
