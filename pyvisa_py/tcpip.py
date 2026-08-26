@@ -920,7 +920,10 @@ class TCPIPInstrVxi11(Session):
                 self.link, 0, self.lock_timeout, self._io_timeout
             )
             return VXI11_ERRORS_TO_VISA[error]
-        elif mode in (constants.RENLineOperation.address_gtl, constants.RENLineOperation.deassert_gtl):
+        elif mode in (
+            constants.RENLineOperation.address_gtl,
+            constants.RENLineOperation.deassert_gtl,
+        ):
             error = self.interface.device_local(
                 self.link, 0, self.lock_timeout, self._io_timeout
             )
