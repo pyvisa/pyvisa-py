@@ -912,14 +912,6 @@ class TCPIPInstrVxi11(Session):
             Return value of the library call.
 
         """
-        if mode not in (
-            constants.RENLineOperation.address_gtl,
-            constants.RENLineOperation.asrt_address,
-            constants.RENLineOperation.asrt_address_llo,
-            constants.RENLineOperation.deassert_gtl,
-        ):
-            return constants.StatusCode.error_nonsupported_operation
-
         if mode in (
             constants.RENLineOperation.asrt_address,
             constants.RENLineOperation.asrt_address_llo,
@@ -927,12 +919,14 @@ class TCPIPInstrVxi11(Session):
             error = self.interface.device_remote(
                 self.link, 0, self.lock_timeout, self._io_timeout
             )
-        else:
+            return VXI11_ERRORS_TO_VISA[error]
+        elif mode in (constants.RENLineOperation.address_gtl, constants.RENLineOperation.deassert_gtl):
             error = self.interface.device_local(
                 self.link, 0, self.lock_timeout, self._io_timeout
             )
-
-        return VXI11_ERRORS_TO_VISA[error]
+            return VXI11_ERRORS_TO_VISA[error]
+        else:
+            return constants.StatusCode.error_nonsupported_operation
 
     def _get_attribute(self, attribute: ResourceAttribute) -> Tuple[Any, StatusCode]:
         """Get the value for a given VISA attribute for this session.
