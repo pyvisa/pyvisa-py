@@ -18,6 +18,10 @@ PyVISA-py Changelog
   character detection, allowed use of suppress_end_en, corrected timeout handling.
   Closes #608 PR #612
 - Fixed crash on DEVICE_ENABLE_SRQ(off) and accept malformed SRQ packets. Closes #620 PR #621
+- Opening a VXI-11 resource whose instrument is unreachable now fails with a
+  VISA error rather than an OSError. A refused connection makes the socket
+  ready for select, which was taken for a completed connection, so the failure
+  only surfaced on the first send.
 - Set the TCP keepalive probe timers defensively for all TCPIP resources.
   ``VI_ATTR_TCPIP_KEEPALIVE`` raised ``AttributeError`` on platforms without
   ``socket.TCP_KEEPIDLE``, which includes macOS.
