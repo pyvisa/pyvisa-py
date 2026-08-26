@@ -8,8 +8,10 @@ For additional information and VISA attributes see pyvisa.constants
 """
 
 from pyvisa import constants
-from pyvisa.attributes import AttrVI_ATTR_TCPIP_KEEPALIVE as former_keepalive
-from pyvisa.attributes import BooleanAttribute
+from pyvisa.attributes import (
+    AttrVI_ATTR_TCPIP_KEEPALIVE as former_keepalive,
+    BooleanAttribute,
+)
 
 
 class AttrVI_ATTR_TCPIP_KEEPALIVE(former_keepalive):
