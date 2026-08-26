@@ -334,27 +334,19 @@ class TCPIPInstrHiSLIP(Session):
             Return value of the library call.
 
         """
-        valid_modes = (
-            constants.RENLineOperation.address_gtl,
-            constants.RENLineOperation.asrt,
-            constants.RENLineOperation.asrt_address,
-            constants.RENLineOperation.asrt_address_llo,
-            constants.RENLineOperation.asrt_llo,
-            constants.RENLineOperation.deassert,
-            constants.RENLineOperation.deassert_gtl,
-        )
-        if mode not in valid_modes:
+        try:
+            method = {
+                constants.RENLineOperation.address_gtl: "justGTL",
+                constants.RENLineOperation.asrt: "enableRemote",
+                constants.RENLineOperation.asrt_address: "enableAndGotoRemote",
+                constants.RENLineOperation.asrt_address_llo: "enableAndGTRLLO",
+                constants.RENLineOperation.asrt_llo: "enableAndLockoutLocal",
+                constants.RENLineOperation.deassert: "disableRemote",
+                constants.RENLineOperation.deassert_gtl: "disableAndGTL",
+            }[mode]
+        except:
+            # unknown value?
             return StatusCode.error_nonsupported_operation
-
-        method = {
-            constants.RENLineOperation.address_gtl: "justGTL",
-            constants.RENLineOperation.asrt: "enableRemote",
-            constants.RENLineOperation.asrt_address: "enableAndGotoRemote",
-            constants.RENLineOperation.asrt_address_llo: "enableAndGTRLLO",
-            constants.RENLineOperation.asrt_llo: "enableAndLockoutLocal",
-            constants.RENLineOperation.deassert: "disableRemote",
-            constants.RENLineOperation.deassert_gtl: "disableAndGTL",
-        }[mode]
 
         interface = cast(hislip.Instrument, self.interface)
         interface.async_remote_local_control(method)

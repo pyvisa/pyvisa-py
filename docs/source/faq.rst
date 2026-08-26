@@ -201,7 +201,8 @@ deassert          error        disable remote
 deassert_gtl      goto local   disable remote, goto local
 ================  ===========  =========================================
 
-This is fully conform to what NI-VISA does. 
+This is fully conform to what VPP-4.3 Rule 6.5.6 and Observations 6.5.1 + 6.5.2 say,
+and what NI-VISA does, so this should be fully portable.
 
 GPIB has functionality comparable to HiSLIP, but may behave differently than NI-VISA, 
 depending on the type of interface.
