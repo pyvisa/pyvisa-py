@@ -34,8 +34,8 @@ class AttrVI_ATTR_TCPIP_KEEPALIVE(former_keepalive):
 
 # force the definition of the attribute in pyvisa.constants to be able to use it in pyvisa-py
 if not hasattr(constants, "VI_KTATTR_LOCKWAIT"):
-    constants.VI_KTATTR_LOCKWAIT = 0x0FFF002B
-    constants.ResourceAttribute.lockwait = constants.VI_KTATTR_LOCKWAIT
+    constants.VI_KTATTR_LOCKWAIT = 0x0FFF002B  # type: ignore[attr-defined]
+    constants.ResourceAttribute.lockwait = constants.VI_KTATTR_LOCKWAIT  # type: ignore[attr-defined]
 
     class AttrVI_KTATTR_LOCKWAIT(BooleanAttribute):
         resources = [

@@ -634,7 +634,7 @@ class TCPIPInstrVxi11(Session):
 
         # add the Keysight and PyVISA-Py specific lock wait attribute, which is a boolean that
         # controls whether to wait for the lock or not
-        self.attrs[ResourceAttribute.lockwait] = constants.VI_FALSE
+        self.attrs[ResourceAttribute.lockwait] = constants.VI_FALSE  # type: ignore[attr-defined]
 
     def close(self) -> StatusCode:
         self._stop_event_monitor()
@@ -755,7 +755,7 @@ class TCPIPInstrVxi11(Session):
         # Do as Keysight does it:
 
         lock_timeout = constants.VI_TMO_IMMEDIATE
-        if self.attrs[ResourceAttribute.lockwait] == constants.VI_TRUE:
+        if self.attrs[ResourceAttribute.lockwait] == constants.VI_TRUE:  # type: ignore[attr-defined]
             # Get the timeout as cleaned up by the upper layers
             lock_timeout = self._io_timeout  # is in ms
             if lock_timeout != constants.VI_TMO_IMMEDIATE:
@@ -944,8 +944,8 @@ class TCPIPInstrVxi11(Session):
         if attribute == constants.VI_ATTR_TCPIP_KEEPALIVE:
             return self.keepalive, StatusCode.success
 
-        if attribute == constants.VI_KTATTR_LOCKWAIT:
-            return self.attrs[ResourceAttribute.lockwait], StatusCode.success
+        if attribute == constants.VI_KTATTR_LOCKWAIT:  # type: ignore[attr-defined]
+            return self.attrs[ResourceAttribute.lockwait], StatusCode.success  # type: ignore[attr-defined]
 
         raise UnknownAttribute(attribute)
 
@@ -985,7 +985,7 @@ class TCPIPInstrVxi11(Session):
                 return StatusCode.error_nonsupported_format
             return StatusCode.success
 
-        if attribute == constants.VI_KTATTR_LOCKWAIT:
+        if attribute == constants.VI_KTATTR_LOCKWAIT:  # type: ignore[attr-defined]
             return StatusCode.success
 
         raise UnknownAttribute(attribute)
