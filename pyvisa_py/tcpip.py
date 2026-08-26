@@ -798,8 +798,7 @@ class TCPIPInstrVxi11(Session):
         if self.attrs[ResourceAttribute.lockwait] == constants.VI_TRUE:  # type: ignore[attr-defined]
             # Get the timeout as cleaned up by the upper layers
             lock_timeout = self._io_timeout  # is in ms
-            if lock_timeout != constants.VI_TMO_IMMEDIATE:
-                flags |= vxi11.OP_FLAG_WAIT_BLOCK
+            flags |= vxi11.OP_FLAG_WAIT_BLOCK
         return flags, lock_timeout
 
     def _read_status_from_reason(
@@ -981,22 +980,23 @@ class TCPIPInstrVxi11(Session):
             Return value of the library call.
 
         """
+        flags, lock_timeout = self._adapt_flags_and_lock_timeout(0)
         if mode in (
             constants.RENLineOperation.asrt_address,
             constants.RENLineOperation.asrt_address_llo,
         ):
             error = self.interface.device_remote(
-                self.link, 0, self.lock_timeout, self._io_timeout
+                self.link, flags, lock_timeout, self._io_timeout
             )
-            return VXI11_ERRORS_TO_VISA[error]
+            return vxi11_error_to_visa(error)
         elif mode in (
             constants.RENLineOperation.address_gtl,
             constants.RENLineOperation.deassert_gtl,
         ):
             error = self.interface.device_local(
-                self.link, 0, self.lock_timeout, self._io_timeout
+                self.link, flags, lock_timeout, self._io_timeout
             )
-            return VXI11_ERRORS_TO_VISA[error]
+            return vxi11_error_to_visa(error)
         else:
             return constants.StatusCode.error_nonsupported_operation
 

@@ -80,7 +80,7 @@ def test_write_sets_device_write_flags_and_lock_timeout(lockwait, expected_flags
             1234,
         )
 
-    session.attrs[constants.ResourceAttribute.lockwait] = lockwait
+    session.attrs[constants.ResourceAttribute.lockwait] = lockwait  # type: ignore[attr-defined]
     if lockwait:
         expected_lock_timeout = session._io_timeout
     else:
