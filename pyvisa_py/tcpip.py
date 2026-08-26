@@ -314,7 +314,7 @@ class TCPIPInstrHiSLIP(Session):
         self.interface.send(data)
 
         return len(data), StatusCode.success
-    
+
     def gpib_control_ren(self, mode: constants.RENLineOperation) -> StatusCode:
         """Controls the state of the GPIB Remote Enable (REN) interface line.
 
@@ -922,13 +922,13 @@ class TCPIPInstrVxi11(Session):
             constants.RENLineOperation.address_gtl,
             constants.RENLineOperation.asrt_address,
             constants.RENLineOperation.asrt_address_llo,
-            constants.RENLineOperation.deassert_gtl
+            constants.RENLineOperation.deassert_gtl,
         ):
             return constants.StatusCode.error_nonsupported_operation
 
         if mode in (
             constants.RENLineOperation.asrt_address,
-            constants.RENLineOperation.asrt_address_llo
+            constants.RENLineOperation.asrt_address_llo,
         ):
             error = self.interface.device_remote(
                 self.link, 0, self.lock_timeout, self._io_timeout
@@ -939,7 +939,6 @@ class TCPIPInstrVxi11(Session):
             )
 
         return VXI11_ERRORS_TO_VISA[error]
-
 
     def _get_attribute(self, attribute: ResourceAttribute) -> Tuple[Any, StatusCode]:
         """Get the value for a given VISA attribute for this session.

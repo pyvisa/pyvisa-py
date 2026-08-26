@@ -69,9 +69,7 @@ def test_vxi11_gpib_control_ren_rejects_unsupported_modes(invalid_mode):
         (constants.RENLineOperation.deassert_gtl, "disableAndGTL"),
     ],
 )
-def test_hislip_gpib_control_ren_calls_expected_interface_method(
-    mode, expected_method
-):
+def test_hislip_gpib_control_ren_calls_expected_interface_method(mode, expected_method):
     session = object.__new__(TCPIPInstrHiSLIP)
     session.interface = MagicMock()
 
@@ -90,5 +88,3 @@ def test_hislip_gpib_control_ren_rejects_unsupported_modes(invalid_mode):
         constants.StatusCode.error_nonsupported_operation
     )
     session.interface.async_remote_local_control.assert_not_called()
-
-
