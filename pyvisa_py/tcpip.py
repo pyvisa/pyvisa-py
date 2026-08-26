@@ -346,7 +346,7 @@ class TCPIPInstrHiSLIP(Session):
         """
         try:
             method = self.REMOTELOCALOPCODE[mode]
-        except Exception:
+        except KeyError:
             # unknown value?
             return StatusCode.error_nonsupported_operation
 
