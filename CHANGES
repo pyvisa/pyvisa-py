@@ -4,7 +4,7 @@ PyVISA-py Changelog
 0.9.0 (unreleased)
 ------------------
 
-- VXI-11 and HiSLIP: add support for remote/local #627 PR #???
+- VXI-11 and HiSLIP: add support for remote/local #627 PR #636
 - A VXI-11 read stopped by both the END indicator and the termination
   character now reports ``VI_SUCCESS`` rather than
   ``VI_SUCCESS_TERM_CHAR``. VPP-4.3 RULE 6.1.1 gives END priority over the
