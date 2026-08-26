@@ -314,6 +314,52 @@ class TCPIPInstrHiSLIP(Session):
         self.interface.send(data)
 
         return len(data), StatusCode.success
+    
+    def gpib_control_ren(self, mode: constants.RENLineOperation) -> StatusCode:
+        """Controls the state of the GPIB Remote Enable (REN) interface line.
+
+        Optionally the remote/local state of the device is also controlled.
+
+        Corresponds to viGpibControlREN function of the VISA library.
+
+        Parameters
+        ----------
+        mode : constants.RENLineOperation
+            Specifies the state of the REN line and optionally the device
+            remote/local state.
+
+        Returns
+        -------
+        StatusCode
+            Return value of the library call.
+
+        """
+        valid_modes = (
+            constants.RENLineOperation.address_gtl,
+            constants.RENLineOperation.asrt,
+            constants.RENLineOperation.asrt_address,
+            constants.RENLineOperation.asrt_address_llo,
+            constants.RENLineOperation.asrt_llo,
+            constants.RENLineOperation.deassert,
+            constants.RENLineOperation.deassert_gtl,
+        )
+        if mode not in valid_modes:
+            return StatusCode.error_nonsupported_operation
+
+        method = {
+            constants.RENLineOperation.address_gtl: "justGTL",
+            constants.RENLineOperation.asrt: "enableRemote",
+            constants.RENLineOperation.asrt_address: "enableAndGotoRemote",
+            constants.RENLineOperation.asrt_address_llo: "enableAndGTRLLO",
+            constants.RENLineOperation.asrt_llo: "enableAndLockoutLocal",
+            constants.RENLineOperation.deassert: "disableRemote",
+            constants.RENLineOperation.deassert_gtl: "disableAndGTL",
+        }[mode]
+
+        interface = cast(hislip.Instrument, self.interface)
+        interface.async_remote_local_control(method)
+
+        return StatusCode.success
 
     def clear(self) -> StatusCode:
         """Clears a device.
