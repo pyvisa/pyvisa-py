@@ -16,7 +16,7 @@ import socket
 import threading
 import time
 import warnings
-from typing import Any, Dict, List, Optional, Tuple, Type, cast
+from typing import Any, Dict, List, Optional, Tuple, Type, cast, Final
 
 from pyvisa import attributes, constants, errors, rname
 from pyvisa.constants import BufferOperation, ResourceAttribute, StatusCode
@@ -112,7 +112,7 @@ class TCPIPInstrHiSLIP(Session):
     # need to define session_type to make the set_attribute machinery work.
     session_type = (constants.InterfaceType.tcpip, "INSTR")
 
-    REMOTELOCALOPCODE: Dict[constants.RENLineOperation, str] = {
+    REMOTELOCALOPCODE: Final[dict[constants.RENLineOperation, str]] = {
         constants.RENLineOperation.address_gtl: "justGTL",
         constants.RENLineOperation.asrt: "enableRemote",
         constants.RENLineOperation.asrt_address: "enableAndGotoRemote",
