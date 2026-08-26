@@ -219,16 +219,18 @@ If you have not locked the instrument, and want to control the behaviour of your
 in case another program or session has locked it, you must choose one of the following methods:
 
 - Request a lock via ``inst.lock_excl()``. This is the most portable. See above.
-- Configure the lock timeout via the PyVISA-Py specific ``rm.visalib.sessions[inst.session].lock_timeout``.  
+- Configure the lock timeout via the Keysight and PyVISA-Py specific attribute ``VI_KTATTR_LOCKWAIT`` (0x0FFF002B)
 
-    When using ``lock_timeout`` on an instrument that is locked by another session:
+    When using ``VI_KTATTR_LOCKWAIT`` on an instrument that is locked by another session:
 
     - If ``0``, operations will fail immediately. 
-    - If set to a positive value, operations will wait for that many milliseconds for the lock to be removed before failing. 
+    - If ``1``, operations will wait for ``inst.timeout`` for the lock to be removed before failing. 
 
-    The default value of ``lock_timeout`` is ``0`` or ``VI_TMO_IMMEDIATE`` (do not wait).
+    The default value of ``VI_KTATTR_LOCKWAIT`` is ``FALSE/0`` (do not wait).
 
-Note that ``open_resource()`` and ``lock_excl()`` use their own timeout values, and do not use ``lock_timeout``.
+Note that ``open_resource()`` and ``lock_excl()`` use their own timeout values, and do not use ``VI_KTATTR_LOCKWAIT``.
+
+``lock_timeout`` from previous PyVISA-Py versions has been removed.
 
 Event handling is not affected by locking. 
 

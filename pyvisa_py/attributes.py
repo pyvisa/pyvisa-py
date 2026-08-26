@@ -9,6 +9,7 @@ For additional information and VISA attributes see pyvisa.constants
 
 from pyvisa import constants
 from pyvisa.attributes import AttrVI_ATTR_TCPIP_KEEPALIVE as former_keepalive
+from pyvisa.attributes import BooleanAttribute
 
 
 class AttrVI_ATTR_TCPIP_KEEPALIVE(former_keepalive):
@@ -29,3 +30,24 @@ class AttrVI_ATTR_TCPIP_KEEPALIVE(former_keepalive):
         (constants.InterfaceType.tcpip, "INSTR"),
         (constants.InterfaceType.vicp, "INSTR"),
     ]
+
+
+# force the definition of the attribute in pyvisa.constants to be able to use it in pyvisa-py
+if not hasattr(constants, "VI_KTATTR_LOCKWAIT"):
+    constants.VI_KTATTR_LOCKWAIT = 0x0FFF002B
+    constants.ResourceAttribute.lockwait = constants.VI_KTATTR_LOCKWAIT
+
+    class AttrVI_KTATTR_LOCKWAIT(BooleanAttribute):
+        resources = [
+            (constants.InterfaceType.tcpip, "INSTR"),
+        ]
+
+        py_name = ""
+
+        visa_name = "VI_KTATTR_LOCKWAIT"
+
+        visa_type = "ViBoolean"
+
+        default = False
+
+        read, write, local = True, True, True

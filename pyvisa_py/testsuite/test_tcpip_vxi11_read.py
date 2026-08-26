@@ -27,6 +27,7 @@ class TestTCPIPInstrVxi11Read:
             ResourceAttribute.termchar_enabled: termchar_enabled,
             ResourceAttribute.termchar: ord("\n"),
             ResourceAttribute.suppress_end_enabled: suppress_end_enabled,
+            ResourceAttribute.lockwait: 0,
         }
         return sess
 

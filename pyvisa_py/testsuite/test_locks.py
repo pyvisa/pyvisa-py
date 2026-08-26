@@ -58,15 +58,13 @@ def test_open_without_exclusive_lock_passes_lock_to_create_link():
 
 
 @pytest.mark.parametrize(
-    "lock_timeout, expected_flags, expected_lock_timeout",
+    "lockwait, expected_flags",
     [
-        (0, 0x8, 0),
-        (1500, 0x9, 1500),
+        (0, 0x8),
+        (1, 0x9),
     ],
 )
-def test_write_sets_device_write_flags_and_lock_timeout(
-    lock_timeout, expected_flags, expected_lock_timeout
-):
+def test_write_sets_device_write_flags_and_lock_timeout(lockwait, expected_flags):
     resource_name = "TCPIP::localhost::INSTR"
     parsed = rname.parse_resource_name(resource_name)
     client = MagicMock()
@@ -82,7 +80,11 @@ def test_write_sets_device_write_flags_and_lock_timeout(
             1234,
         )
 
-    session.lock_timeout = lock_timeout
+    session.attrs[constants.ResourceAttribute.lockwait] = lockwait
+    if lockwait:
+        expected_lock_timeout = session._io_timeout
+    else:
+        expected_lock_timeout = constants.VI_TMO_IMMEDIATE
     status = session.write(b"abc")
 
     assert status == (3, constants.StatusCode.success)

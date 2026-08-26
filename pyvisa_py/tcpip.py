@@ -492,7 +492,7 @@ class TCPIPInstrVxi11(Session):
     # Keysight exposes the Keysight-specific VISA ViBoolean local (per-session) attribute VI_KTATTR_LOCKWAIT
     #   When False, when already locked, immediately returns VI_ERROR_RSRC_LOCKED
     #   When True, uses lock timeout = session timeout interval. When locked and timed out, returns VI_ERROR_TMO
-    lock_timeout: int = 0
+    # lock_timeout: int = 0
 
     #: Unique ID of the client used to authenticate messages.
     client_id: int
@@ -632,6 +632,10 @@ class TCPIPInstrVxi11(Session):
             attribute = getattr(constants, "VI_ATTR_" + name)
             self.attrs[attribute] = attributes.AttributesByID[attribute].default
 
+        # add the Keysight and PyVISA-Py specific lock wait attribute, which is a boolean that
+        # controls whether to wait for the lock or not
+        self.attrs[ResourceAttribute.lockwait] = constants.VI_FALSE
+
     def close(self) -> StatusCode:
         self._stop_event_monitor()
         try:
@@ -748,12 +752,14 @@ class TCPIPInstrVxi11(Session):
                 pass
 
     def _adapt_flags_and_lock_timeout(self, flags: int) -> Tuple[int, int]:
-        # TODO determine how OP_FLAG_WAIT_BLOCK could be set from the outside.
-        # VPP-4.3 does not provide a clear definition for it.
-        # For now, we derive it from self.lock_timeout.
-        lock_timeout = self.lock_timeout
-        if lock_timeout != constants.VI_TMO_IMMEDIATE:
-            flags |= vxi11.OP_FLAG_WAIT_BLOCK
+        # Do as Keysight does it:
+
+        lock_timeout = constants.VI_TMO_IMMEDIATE
+        if self.attrs[ResourceAttribute.lockwait] == constants.VI_TRUE:
+            # Get the timeout as cleaned up by the upper layers
+            lock_timeout = self._io_timeout  # is in ms
+            if lock_timeout != constants.VI_TMO_IMMEDIATE:
+                flags |= vxi11.OP_FLAG_WAIT_BLOCK
         return flags, lock_timeout
 
     def _read_status_from_reason(
@@ -938,6 +944,9 @@ class TCPIPInstrVxi11(Session):
         if attribute == constants.VI_ATTR_TCPIP_KEEPALIVE:
             return self.keepalive, StatusCode.success
 
+        if attribute == constants.VI_KTATTR_LOCKWAIT:
+            return self.attrs[ResourceAttribute.lockwait], StatusCode.success
+
         raise UnknownAttribute(attribute)
 
     def _set_attribute(
@@ -974,6 +983,9 @@ class TCPIPInstrVxi11(Session):
                 self.keepalive = False
             else:
                 return StatusCode.error_nonsupported_format
+            return StatusCode.success
+
+        if attribute == constants.VI_KTATTR_LOCKWAIT:
             return StatusCode.success
 
         raise UnknownAttribute(attribute)
@@ -1114,6 +1126,7 @@ class TCPIPInstrVxi11(Session):
         # value is in milliseconds,
         # and can be VI_TMO_INFINITE (2**32 - 1) or VI_TMO_IMMEDIATE (0)
         self._io_timeout = value
+        # self.timeout comes from the superclass, is in seconds, and can be None (infinite) or 0 (immediate)
         if value == constants.VI_TMO_INFINITE:
             self.timeout = None
         elif value == constants.VI_TMO_IMMEDIATE:

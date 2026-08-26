@@ -6,8 +6,9 @@ PyVISA-py Changelog
 
 - VXI-11 (TCPIP::INSTR):
   Locking compliance improvement. Exclusive locking works now,
-  and forcing `session.lock_timeout = 0` should no longer be needed for instruments
+  Removed `session.lock_timeout`, no longer needed for instruments
   that have flawed VXI-11 implementations like the DM3068.
+  Added attribute VI_KTATTR_LOCKWAIT.
   Corrected error codes.
   Closes #583 PR #633
 - A VXI-11 read stopped by both the END indicator and the termination
