@@ -233,19 +233,18 @@ in case another program or session has locked it, you must choose one of the fol
     that already has a lock: they should reply immediately with ``VI_ERROR_RSRC_LOCKED``.
     However, in practice this is not always the case, and some instruments take quite some liberties with it.    
 
-    ``pyvisa.constants.VI_KTATTR_LOCKWAIT`` may not be available yet in PyVISA. In that case, you could do this:
+    ``VI_KTATTR_LOCKWAIT`` may not be visible in the ``pyvisa/constants.py`` file,
+    but it is set by PyVISA-Py. Just use as follows:
 
     >>> import pyvisa
+    >>> import pyvisa.constants
     >>> rm = pyvisa.ResourceManager('@py')
     >>> inst = rm.open_resource('TCPIP::192.168.1.100::INSTR')
     >>>
-    >>> # Define the raw hex constant for VI_KTATTR_LOCKWAIT
-    >>> VI_KTATTR_LOCKWAIT = 0x0FFF002BL
-    >>>
     >>> # Set lockwait to True (VI_TRUE = 1)
-    >>> inst.set_attribute(VI_KTATTR_LOCKWAIT, 1)
+    >>> inst.set_visa_attribute(pyvisa.constants.VI_KTATTR_LOCKWAIT, 1)  # type: ignore[attr-defined]
     >>> # Read back the attribute value
-    >>> lockwait_val = inst.get_attribute(VI_KTATTR_LOCKWAIT)
+    >>> lockwait_val = inst.get_visa_attribute(pyvisa.constants.VI_KTATTR_LOCKWAIT) # type: ignore[attr-defined]
     >>> print("Lockwait state:", lockwait_val)
     >>>
     >>> # Do your operations
