@@ -524,16 +524,6 @@ class TCPIPInstrVxi11(Session):
     #: Maximum size of a chunk of data in bytes.
     max_recv_size: int
 
-    #: Time to wait in ms before erroring with a timeout when trying to acquire a lock
-    # 0 = immediate, >0 = wait for that many milliseconds
-    # This is used for most operations (mainly except open_resource and lock_excl)
-    #
-    # NI-VISA and R&S VISA do not expose any of this.
-    # Keysight exposes the Keysight-specific VISA ViBoolean local (per-session) attribute VI_KTATTR_LOCKWAIT
-    #   When False, when already locked, immediately returns VI_ERROR_RSRC_LOCKED
-    #   When True, uses lock timeout = session timeout interval. When locked and timed out, returns VI_ERROR_TMO
-    # lock_timeout: int = 0
-
     #: Unique ID of the client used to authenticate messages.
     client_id: int
 
@@ -1084,10 +1074,11 @@ class TCPIPInstrVxi11(Session):
             Return value of the library call.
 
         """
+        # protocol is ignored, VXI-11 doesn't support multiple types
+
         flags = 0
         flags, lock_timeout = self._adapt_flags_and_lock_timeout(flags)
 
-        # XXX make this nicer (either validate protocol or pass it)
         error = self.interface.device_trigger(
             self.link, flags, lock_timeout, self._io_timeout
         )
