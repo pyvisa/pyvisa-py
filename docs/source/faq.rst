@@ -228,7 +228,12 @@ in case another program or session has locked it, you must choose one of the fol
 
     The default value of ``VI_KTATTR_LOCKWAIT`` is ``FALSE/0`` (do not wait).
 
-    ``VI_KTATTR_LOCKWAIT`` may not be available yet in pyvisa. In that case, you could do this:
+    In theory ``VI_KTATTR_LOCKWAIT = False`` should behave the same as 
+    ``inst.timeout = 0`` + ``VI_KTATTR_LOCKWAIT = True`` when applied to an operation on an instrument 
+    that already has a lock: they should reply immediately with ``VI_ERROR_RSRC_LOCKED``.
+    However, in practice this is not always the case, and some instruments take quite some liberties with it.    
+
+    ``VI_KTATTR_LOCKWAIT`` may not be available yet in PyVISA. In that case, you could do this:
 
     >>> import pyvisa
     >>> rm = pyvisa.ResourceManager('@py')
@@ -248,14 +253,15 @@ in case another program or session has locked it, you must choose one of the fol
 
 Note that ``open_resource()`` and ``lock_excl()`` use their own timeout values, and do not use ``VI_KTATTR_LOCKWAIT``.
 
-``lock_timeout`` from previous PyVISA-Py versions has been removed.
+``session.lock_timeout``, from previous PyVISA-Py versions, has been removed, and replaced by the 
+use of ``VI_KTATTR_LOCKWAIT``, as it is easier, more predictable and more portable.
 
 Event handling is not affected by locking. 
 
 
 .. note::
 
-    **Portability:** Use of `lock_excl()` is the most portable and robust way to request a lock.
+    **Portability:** Use of `lock_excl()` is the most portable, robust, and predictable way to handle locking.
     
     Know that some devices (even recent ones from the big brands), and all of the VISA 
     backends, use a certain amount of liberties with regards to the standards. 
@@ -266,7 +272,7 @@ Event handling is not affected by locking.
     - the sequencing: some devices, once already locked, will allow `open_resource`
       to succeed (as they should per VXI-11 spec RULE B.6.6), but others don't.
 
-    Keysight VISA supports the lock timeout attribute ``VI_KTATTR_LOCKWAIT``.
+    Keysight VISA and PyVISA-py both support the lock timeout attribute ``VI_KTATTR_LOCKWAIT``.
 
     NI-VISA and R&S VISA have no known means of controlling the lock timeout, and mostly 
     use the I/O timeout and/or internal timing for lock timeout handling.
