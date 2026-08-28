@@ -5,6 +5,7 @@ PyVISA-py Changelog
 ------------------
 
 - hislip: allow service request events. Closes #625 PR #626
+- VXI-11 and HiSLIP: add support for remote/local #627 PR #636
 - A VXI-11 read stopped by both the END indicator and the termination
   character now reports ``VI_SUCCESS`` rather than
   ``VI_SUCCESS_TERM_CHAR``. VPP-4.3 RULE 6.1.1 gives END priority over the
@@ -18,6 +19,10 @@ PyVISA-py Changelog
   character detection, allowed use of suppress_end_en, corrected timeout handling.
   Closes #608 PR #612
 - Fixed crash on DEVICE_ENABLE_SRQ(off) and accept malformed SRQ packets. Closes #620 PR #621
+- Opening a VXI-11 resource whose instrument is unreachable now fails with a
+  VISA error rather than an OSError. A refused connection makes the socket
+  ready for select, which was taken for a completed connection, so the failure
+  only surfaced on the first send.
 - Set the TCP keepalive probe timers defensively for all TCPIP resources.
   ``VI_ATTR_TCPIP_KEEPALIVE`` raised ``AttributeError`` on platforms without
   ``socket.TCP_KEEPIDLE``, which includes macOS.
