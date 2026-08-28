@@ -233,7 +233,7 @@ in case another program or session has locked it, you must choose one of the fol
     that already has a lock: they should reply immediately with ``VI_ERROR_RSRC_LOCKED``.
     However, in practice this is not always the case, and some instruments take quite some liberties with it.    
 
-    ``VI_KTATTR_LOCKWAIT`` may not be available yet in PyVISA. In that case, you could do this:
+    ``pyvisa.constants.VI_KTATTR_LOCKWAIT`` may not be available yet in PyVISA. In that case, you could do this:
 
     >>> import pyvisa
     >>> rm = pyvisa.ResourceManager('@py')
