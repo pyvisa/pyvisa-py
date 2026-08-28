@@ -3,11 +3,11 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
-from pyvisa import constants
+from pyvisa import constants, rname
 from pyvisa_py.tcpip import TCPIPInstrHiSLIP, TCPIPInstrVxi11
 
 
@@ -21,11 +21,22 @@ from pyvisa_py.tcpip import TCPIPInstrHiSLIP, TCPIPInstrVxi11
     ],
 )
 def test_vxi11_gpib_control_ren_calls_expected_device_method(mode, expected_method):
-    session = object.__new__(TCPIPInstrVxi11)
-    session.interface = MagicMock()
-    session.link = 7
-    session.lock_timeout = 1234
-    session._io_timeout = 5678
+    resource_name = "TCPIP::localhost::INSTR"
+    parsed = rname.parse_resource_name(resource_name)
+    client = MagicMock()
+    client.create_link.return_value = (0, 1, 0, 1024)
+    client.device_write.return_value = (0, 3)
+
+    with patch("pyvisa_py.tcpip.Vxi11CoreClient", return_value=client):
+        session = TCPIPInstrVxi11(
+            1,
+            resource_name,
+            parsed,
+            constants.AccessModes.no_lock,
+            1234,
+        )
+
+    session.attrs[constants.ResourceAttribute.lockwait] = 0  # type: ignore[attr-defined]
 
     session.interface.device_local.return_value = 0
     session.interface.device_remote.return_value = 0
@@ -33,7 +44,7 @@ def test_vxi11_gpib_control_ren_calls_expected_device_method(mode, expected_meth
     assert session.gpib_control_ren(mode) == constants.StatusCode.success
 
     getattr(session.interface, expected_method).assert_called_once_with(
-        session.link, 0, session.lock_timeout, session._io_timeout
+        session.link, 0, 0, session._io_timeout
     )
 
     if expected_method == "device_remote":
@@ -44,11 +55,22 @@ def test_vxi11_gpib_control_ren_calls_expected_device_method(mode, expected_meth
 
 @pytest.mark.parametrize("invalid_mode", [-1, 999, "bogus", None, object()])
 def test_vxi11_gpib_control_ren_rejects_unsupported_modes(invalid_mode):
-    session = object.__new__(TCPIPInstrVxi11)
-    session.interface = MagicMock()
-    session.link = 7
-    session.lock_timeout = 1234
-    session._io_timeout = 5678
+    resource_name = "TCPIP::localhost::INSTR"
+    parsed = rname.parse_resource_name(resource_name)
+    client = MagicMock()
+    client.create_link.return_value = (0, 1, 0, 1024)
+    client.device_write.return_value = (0, 3)
+
+    with patch("pyvisa_py.tcpip.Vxi11CoreClient", return_value=client):
+        session = TCPIPInstrVxi11(
+            1,
+            resource_name,
+            parsed,
+            constants.AccessModes.no_lock,
+            1234,
+        )
+
+    session.attrs[constants.ResourceAttribute.lockwait] = 0  # type: ignore[attr-defined]
 
     assert session.gpib_control_ren(invalid_mode) == (
         constants.StatusCode.error_nonsupported_operation

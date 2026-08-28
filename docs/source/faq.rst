@@ -24,15 +24,15 @@ The blocked read will return with ``VI_ERROR_ABORT``.  The HiSLIP protocol
 state is automatically reset (via a device clear) so the session is ready for
 further I/O immediately::
 
-    import pyvisa
-    rm = pyvisa.ResourceManager('@py')
-    inst = rm.open_resource('TCPIP::192.168.1.100::hislip0::INSTR')
-
-    # From another thread, to cancel a blocked read:
-    inst.visalib.terminate(inst.session, None, None)
-
-    # The blocked read returns VI_ERROR_ABORT.
-    # The session is ready for further I/O — no manual viClear() needed.
+    >>> import pyvisa
+    >>> rm = pyvisa.ResourceManager('@py')
+    >>> inst = rm.open_resource('TCPIP::192.168.1.100::hislip0::INSTR')
+    >>> 
+    >>> # From another thread, to cancel a blocked read:
+    >>> inst.visalib.terminate(inst.session, None, None)
+    >>> 
+    >>> # The blocked read returns VI_ERROR_ABORT.
+    >>> # The session is ready for further I/O — no manual viClear() needed.
 
 ``viTerminate()`` is not yet supported for VXI-11, USBTMC, or serial sessions.
 
@@ -43,7 +43,7 @@ further I/O immediately::
     Libraries' ``viTerminate()`` returns ``VI_SUCCESS`` but does not actually
     cancel a blocked synchronous ``viRead()`` — the read continues until the
     normal timeout expires.  The VISA specification defines ``viTerminate()``
-    primarily for asynchronous operations (``viReadAsync``/``viWriteAsync``),
+    primarily for asynchronous operations (``viReadAsync`` / ``viWriteAsync``),
     and its behavior on synchronous calls is implementation-defined.  Code
     that relies on ``viTerminate()`` cancelling a synchronous read may not
     be portable to other VISA backends.
@@ -63,12 +63,13 @@ Are GBIP secondary addresses supported?
 GPIB secondary addresses are supported in NI-VISA fashion, meaning that the
 secondary address is not 96 to 126 as transmitted on the bus, but 0 to 30.
 
-For expample, `GPIB0::9::1::INSTR` is the address of the first VXI module
-controlled by a GPIB VXI command module set to primary address `9`, while
-the command module itself is found at `GPIB0::9::0::INSTR`, which is distinct
-from a pure primary address like `GPIB0::9::INSTR`.
+For expample, ``GPIB0::9::1::INSTR`` is the address of the first VXI module
+controlled by a GPIB VXI command module set to primary address ``9``, while
+the command module itself is found at ``GPIB0::9::0::INSTR``, which is distinct
+from a pure primary address like ``GPIB0::9::INSTR``.
 
-``ResourceManager.list_resources()`` has become slower as a result,
+``ResourceManager.list_resources()`` can discover both primary and secondary 
+addressable ``GPIB::...::INSTR`` resources. As a result, it can be slow,
 as it now needs to check 992 addresses per GPIB controller instead of just 31.
 
 For every primary address where no listener is detected, all
@@ -78,8 +79,15 @@ VXI modules controlled by an HP E1406A.
 For primary addresses where a listener is detected, no secondary addresses are
 checked as most devices simply ignore secondary addressing.
 
-If you have a device that reacts to the primary address and has different
+If you have an instrument that reacts to the primary address and has different
 functionality on some secondary addresses, please leave a bug report.
+
+If you use a VXI-11.2 (VXI-11 to GPIB) gateway, you can use constructions like 
+``TCPIP::host::gpib0,9,1::INSTR``, where ``gpib0`` is the 'GPIB SICL Interface Name' 
+configured on the gateway, ``9`` is the primary address of the instrument, 
+and ``1`` is the secondary address of that instrument.
+``ResourceManager.list_resources()`` will however not try to discover any resources
+behind a VXI-11.2 gateway, as the SICL Interface Name is not automatically known.
 
 
 Can PyVISA-py be used from a VM?
@@ -99,12 +107,12 @@ As the Windows variant of Docker can forward neither USB ports nor GPIB
 interfaces, the obvious choice would be to connect via TCP/IP. The problem of a
 Docker container is that idle connections are disconnected by the VPN garbage
 collection. For this reason it is reasonable to enable keepalive packets.
-The VISA attribute `VI_ATTR_TCPIP_KEEPALIVE` has been modified to work
+The VISA attribute ``VI_ATTR_TCPIP_KEEPALIVE`` has been modified to work
 for all TCP/IP instruments. Enabling this option can be done with:
 
-    inst.set_visa_attribute(pyvisa.constants.ResourceAttribute.tcpip_keepalive, True)
+    >>> inst.set_visa_attribute(pyvisa.constants.ResourceAttribute.tcpip_keepalive, True)
 
-where `inst` is an active TCP/IP visa session.
+where ``inst`` is an active TCP/IP visa session.
 (see https://tech.xing.com/a-reason-for-unexplained-connection-timeouts-on-kubernetes-docker-abd041cf7e02
 if you want to read more about connection dropping in docker containers)
 
@@ -112,9 +120,8 @@ if you want to read more about connection dropping in docker containers)
 Why not using LibreVISA?
 ------------------------
 
-LibreVISA_ is still young and appears mostly unmaintained at this
-point (latest release is from 2013).
-However, you can already use it with the IVI backend as it has the same API.
+LibreVISA_ is unmaintained at this point (latest release is from 2013).
+However, you can use it with the IVI backend as it has the same API.
 We think that PyVISA-py is easier to hack and we can quickly reach feature parity
 with other IVI-VISA implementation for message-based instruments.
 
@@ -129,21 +136,6 @@ By using PyVISA as a frontend to many backends, we abstract these things
 from higher level applications.
 
 
-Why is my Ethernet instrument not working?
-------------------------------------------
-
-Some instruments, such as the Rigol DM3068 Digital Multimeter,
-expect a non-default parameter in order to communicate successfully over Ethernet.
-In the case of the DM3068, the VXI-11 lock timeout must be set to zero:
-
-    >>> import pyvisa
-    >>> rm = pyvisa.ResourceManager('@py')
-    >>> dm3068 = rm.open_resource('TCPIP::rigol-dm3068-hostname::INSTR')
-    >>> # default lock_timeout is still 10000ms at this point
-    >>> rm.visalib.sessions[dm3068.session].lock_timeout = 0
-    >>> # can now communicate successfully with the DM3068
-
-
 What does ``open_timeout`` control?
 -----------------------------------
 
@@ -156,9 +148,9 @@ establishing the connection::
     >>> # allow 10 s to reach an instrument across a slow link
     >>> inst = rm.open_resource('TCPIP::192.168.1.100::INSTR', open_timeout=10000)
 
-If you do not pass one, the connection attempt is given 2000 ms.  An
-``open_timeout`` of 0 selects that same default rather than meaning "give up
-immediately", since ``ResourceManager.open_resource`` passes 0 whenever you
+If you do not specify ``open_timeout``, the connection attempt is given 2000 ms.  An
+``open_timeout`` of ``0`` selects that same default rather than meaning "give up
+immediately", since ``ResourceManager.open_resource`` passes ``0`` whenever you
 omit the argument.
 
 .. note::
@@ -177,9 +169,117 @@ omit the argument.
         implementation should behave as if the timeout parameter is the VISA
         default timeout value of 2000 milliseconds.
 
-    The trade-off is that ``VI_TMO_IMMEDIATE`` can no longer request "never
-    wait on a lock".  Set ``lock_timeout`` on the session for that, as in the
-    DM3068 example above.
+
+Locking
+-------
+
+**PyVISA-Py only supports exclusive locking, and only on VXI-11. Shared locks and nested locking are not supported.** 
+
+Socket instruments (``TCPIP::SOCKET``) do not support locking.
+HiSLIP instruments (``TCPIP::hislip``) could support locking, but PyVISA-Py does not yet implement this feature.
+
+With exclusive locking, only one session can be used at a time on an instrument.  
+If another session has a lock, another client will not be able to communicate with
+the instrument. Either ``open_resource`` will fail, either ``read`` / ``write`` / ``query`` /... 
+operations will fail. 
+The related error codes in that case are:
+``VI_ERROR_RSRC_LOCKED`` (as it should), or ``VI_ERROR_TMO`` or ``VI_ERROR_RSRC_BUSY`` or ``VI_ERROR_IO``.
+
+There are two ways of using exclusive locking on an instrument session via pyvisa:
+
+- lock on open
+- lock after open
+
+"Lock on open" is done via the ``access_mode`` argument to ``ResourceManager.open_resource``.  The
+default is ``pyvisa.constants.AccessModes.no_lock``, which does not request a lock.
+
+    >>> import pyvisa
+    >>> rm = pyvisa.ResourceManager('@py')
+    >>> # allow 10 s to reach an instrument across a slow link, 
+    >>> # and 10 s to acquire a lock on the instrument
+    >>> inst = rm.open_resource('TCPIP::192.168.1.100::INSTR', open_timeout=10000, 
+    >>>                         access_mode=pyvisa.constants.AccessModes.exclusive_lock)
+
+The connection will be established with the same timeout handling as mentioned above,
+but will then try to open a link with a lock timeout also governed by ``open_timeout``.
+That lock request will succeed if the instrument grants it within this period.
+An ``open_timeout`` of ``0`` or ``VI_TMO_IMMEDIATE`` there means: "give up immediately", 
+while None means "10 seconds", and ``VI_TMO_INFINITE`` means "wait indefinitely".
+
+If you want better control over the different timeout settings, use "lock after open":
+
+    >>> import pyvisa
+    >>> rm = pyvisa.ResourceManager('@py')
+    >>> # allow 3 s to reach the instrument
+    >>> inst = rm.open_resource('TCPIP::192.168.1.100::INSTR', open_timeout=3000)
+    >>> # and then try to acquire a lock on the instrument with a 10 s timeout
+    >>> inst.lock_excl(timeout=10000)
+
+If you have not locked the instrument, and want to control the behaviour of your program
+in case another program or session has locked it, you must choose one of the following methods:
+
+- Request a lock via ``inst.lock_excl()``. This is the most portable. See above.
+- Configure the lock timeout via the Keysight and PyVISA-Py specific attribute ``VI_KTATTR_LOCKWAIT`` (0x0FFF002B)
+
+    When using ``VI_KTATTR_LOCKWAIT`` on an instrument that is locked by another session:
+
+    - If ``0``, operations will fail immediately. 
+    - If ``1``, operations will wait for ``inst.timeout`` for the lock to be removed before failing. 
+
+    The default value of ``VI_KTATTR_LOCKWAIT`` is ``FALSE/0`` (do not wait).
+
+    In theory ``VI_KTATTR_LOCKWAIT = False`` should behave the same as 
+    ``inst.timeout = 0`` + ``VI_KTATTR_LOCKWAIT = True`` when applied to an operation on an instrument 
+    that already has a lock: they should reply immediately with ``VI_ERROR_RSRC_LOCKED``.
+    However, in practice this is not always the case, and some instruments take quite some liberties with it.    
+
+    ``VI_KTATTR_LOCKWAIT`` may not be visible in the ``pyvisa/constants.py`` file,
+    but it is set by PyVISA-Py. Just use as follows:
+
+    >>> import pyvisa
+    >>> import pyvisa.constants
+    >>> rm = pyvisa.ResourceManager('@py')
+    >>> inst = rm.open_resource('TCPIP::192.168.1.100::INSTR')
+    >>>
+    >>> # Set lockwait to True (VI_TRUE = 1)
+    >>> inst.set_visa_attribute(pyvisa.constants.VI_KTATTR_LOCKWAIT, 1)  # type: ignore[attr-defined]
+    >>> # Read back the attribute value
+    >>> lockwait_val = inst.get_visa_attribute(pyvisa.constants.VI_KTATTR_LOCKWAIT) # type: ignore[attr-defined]
+    >>> print("Lockwait state:", lockwait_val)
+    >>>
+    >>> # Do your operations
+
+
+Note that ``open_resource()`` and ``lock_excl()`` use their own timeout values, and do not use ``VI_KTATTR_LOCKWAIT``.
+
+``session.lock_timeout``, from previous PyVISA-Py versions, has been removed, and replaced by the 
+use of ``VI_KTATTR_LOCKWAIT``, as it is easier, more predictable and more portable.
+
+Event handling is not affected by locking. 
+
+
+.. note::
+
+    **Portability:** Use of `lock_excl()` is the most portable, robust, and predictable way to handle locking.
+    
+    Know that some devices (even recent ones from the big brands), and all of the VISA 
+    backends, use a certain amount of liberties with regards to the standards. 
+    Do not expect respect of the following:
+
+    - the prescribed return codes (example: you may see "I/O Timeout" instead of "Resource already locked"),
+    - the length of the timeouts (timeouts may be significantly longer or shorter than specified)
+    - the sequencing: some devices, once already locked, will allow `open_resource`
+      to succeed (as they should per VXI-11 spec RULE B.6.6), but others don't.
+
+    Keysight VISA and PyVISA-py both support the lock timeout attribute ``VI_KTATTR_LOCKWAIT``.
+
+    NI-VISA and R&S VISA have no known means of controlling the lock timeout, and mostly 
+    use the I/O timeout and/or internal timing for lock timeout handling.
+
+    If you are debugging locking issues, note that NI-VISA supports
+    the lock-on-open method, but underneath uses the lock-after-open method, and, 
+    after having established a lock, handles the locking internally without addressing
+    the instrument.
 
 Remote/Local control
 --------------------

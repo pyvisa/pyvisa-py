@@ -301,12 +301,14 @@ class Session(metaclass=abc.ABCMeta):
         resource_manager_session: VISARMSession,
         resource_name: str,
         parsed: Optional[rname.ResourceName] = None,
+        access_mode: constants.AccessModes = constants.AccessModes.no_lock,
         open_timeout: Optional[int] = None,
     ) -> None:
         if parsed is None:
             parsed = rname.parse_resource_name(resource_name)
 
         self.parsed = parsed
+        self.access_mode = access_mode
         self.open_timeout = open_timeout
 
         #: Used as a place holder for the object doing the lowlevel communication.
