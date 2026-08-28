@@ -50,7 +50,7 @@ except ImportError:
 VXI11_ERRORS_TO_VISA = {
     0: StatusCode.success,  # no_error
     1: StatusCode.error_invalid_format,  # syntax_error
-    3: StatusCode.error_connection_lost,  # device_no_accessible
+    3: StatusCode.error_connection_lost,  # device_not_accessible
     4: StatusCode.error_invalid_access_key,  # invalid_link_identifier
     5: StatusCode.error_invalid_parameter,  # parameter_error
     6: StatusCode.error_handler_not_installed,  # channel_not_established
@@ -65,6 +65,15 @@ VXI11_ERRORS_TO_VISA = {
 }
 
 
+def vxi11_error_to_visa(error_code: int) -> StatusCode:
+    """Translate a VXI-11 return code into a VISA status code.
+
+    Unknown VXI-11 error codes are translated to ``VI_ERROR_IO`` because
+    VISA has no standard status code for them.
+    """
+    return VXI11_ERRORS_TO_VISA.get(int(error_code), StatusCode.error_io)
+
+
 @Session.register(constants.InterfaceType.tcpip, "INSTR")
 class TCPIPInstrSession(Session):
     """A class to dispatch to VXI11 or HiSLIP, based on the protocol."""
@@ -74,6 +83,7 @@ class TCPIPInstrSession(Session):
         resource_manager_session: VISARMSession,
         resource_name: str,
         parsed=None,
+        access_mode: constants.AccessModes = constants.AccessModes.no_lock,
         open_timeout: Optional[int] = None,
     ):
         newcls: Type
@@ -87,7 +97,9 @@ class TCPIPInstrSession(Session):
         else:
             newcls = TCPIPInstrVxi11
 
-        return newcls(resource_manager_session, resource_name, parsed, open_timeout)
+        return newcls(
+            resource_manager_session, resource_name, parsed, access_mode, open_timeout
+        )
 
     @staticmethod
     def list_resources(wait_time=1.0) -> List[str]:
@@ -477,7 +489,11 @@ class Vxi11CoreClient(vxi11.CoreClient):
     """
 
     def __init__(
-        self, host: str, port: Optional[int], open_timeout: Optional[int] = None
+        self,
+        host: str,
+        port: Optional[int],
+        access_mode: constants.AccessModes = constants.AccessModes.no_lock,
+        open_timeout: Optional[int] = None,
     ) -> None:
         self._lock = threading.Lock()
         self.packer = vxi11.Vxi11Packer()
@@ -507,9 +523,6 @@ class TCPIPInstrVxi11(Session):
 
     #: Maximum size of a chunk of data in bytes.
     max_recv_size: int
-
-    #: Time to wait in ms before erroring with a timeout when trying to acquire a lock
-    lock_timeout: int = 10000
 
     #: Unique ID of the client used to authenticate messages.
     client_id: int
@@ -587,7 +600,9 @@ class TCPIPInstrVxi11(Session):
         else:
             port = None
         try:
-            self.interface = Vxi11CoreClient(host_address, port, self.open_timeout)
+            self.interface = Vxi11CoreClient(
+                host_address, port, self.access_mode, self.open_timeout
+            )
         except rpc.RPCError:
             LOGGER.exception(
                 f"Failed to open VX11 connection to {host_address} on port {port}"
@@ -599,8 +614,38 @@ class TCPIPInstrVxi11(Session):
         self._srq_server: vxi11.SrqInterruptTCPServer | None = None
         self._srq_lifecycle_lock = threading.Lock()
 
+        # RULE B.6.6:
+        # The operation of create_link SHALL ignore locks if lockDevice is false.
+        # RULE B.6.7:
+        # If lockDevice is true and the lock is not freed after at least lock_timeout milliseconds, create_link
+        # SHALL terminate without creating a link and return with error set to 11, device locked by another link.
+
+        # However, some devices, even from the big brands, once they are locked, will respect nothing of the above.
+        # If there is already a lock, expect some devices to act as if lockDevice is True,
+        # to use arbitrarily longer timeouts, and expect a reply of "timeout" instead of "device locked by another link".
+        # Comparable liberties are likely to be taken on device_lock().
+
+        if self.access_mode & constants.AccessModes.exclusive_lock:
+            lock_device = 1
+            # The below is for lock_timeout, the instrument has been opened already
+            # lock_timeout can be 0 for immediate
+            lock_timeout = self.open_timeout
+            if lock_timeout is None:
+                lock_timeout = (
+                    10000  # default lock timeout in ms. This shouldn't happen
+                )
+            if lock_timeout == constants.VI_TMO_INFINITE:
+                lock_timeout = (
+                    2**32 - 1
+                )  # This is dangerous, but hey, the caller wanted it.
+            if lock_timeout == constants.VI_TMO_IMMEDIATE:
+                lock_timeout = 0  # This is NOP, but makes the code more readable
+        else:
+            lock_device = 0
+            lock_timeout = 0  # time is not used now.
+
         error, link, _abort_port, max_recv_size = self.interface.create_link(
-            self.client_id, 0, self.lock_timeout, self.parsed.lan_device_name
+            self.client_id, lock_device, lock_timeout, self.parsed.lan_device_name
         )
 
         if error:
@@ -616,6 +661,10 @@ class TCPIPInstrVxi11(Session):
         for name in ("SEND_END_EN", "TERMCHAR", "TERMCHAR_EN", "SUPPRESS_END_EN"):
             attribute = getattr(constants, "VI_ATTR_" + name)
             self.attrs[attribute] = attributes.AttributesByID[attribute].default
+
+        # add the Keysight and PyVISA-Py specific lock wait attribute, which is a boolean that
+        # controls whether to wait for the lock or not
+        self.attrs[ResourceAttribute.lockwait] = constants.VI_FALSE  # type: ignore[attr-defined]
 
     def close(self) -> StatusCode:
         self._stop_event_monitor()
@@ -668,7 +717,7 @@ class TCPIPInstrVxi11(Session):
                     server.sock.close()
                 except Exception:
                     pass
-                return StatusCode.error_nonsupported_operation
+                return vxi11_error_to_visa(error)
 
             error = self.interface.device_enable_srq(self.link, True, b"srq")
             if error:
@@ -681,7 +730,7 @@ class TCPIPInstrVxi11(Session):
                     server.sock.close()
                 except Exception:
                     pass
-                return StatusCode.error_io
+                return vxi11_error_to_visa(error)
 
             with self._event_state._lock:
                 if (
@@ -732,6 +781,16 @@ class TCPIPInstrVxi11(Session):
             except Exception:
                 pass
 
+    def _adapt_flags_and_lock_timeout(self, flags: int) -> Tuple[int, int]:
+        # Do as Keysight does it:
+
+        lock_timeout = constants.VI_TMO_IMMEDIATE
+        if self.attrs[ResourceAttribute.lockwait] == constants.VI_TRUE:  # type: ignore[attr-defined]
+            # Get the timeout as cleaned up by the upper layers
+            lock_timeout = self._io_timeout  # is in ms
+            flags |= vxi11.OP_FLAG_WAIT_BLOCK
+        return flags, lock_timeout
+
     def _read_status_from_reason(
         self, reason: int, suppress_end_en: bool, termchar_en: bool
     ) -> StatusCode:
@@ -781,6 +840,8 @@ class TCPIPInstrVxi11(Session):
         else:
             term_char = flags = 0
 
+        flags, lock_timeout = self._adapt_flags_and_lock_timeout(flags)
+
         suppress_end_en, _ = self.get_attribute(ResourceAttribute.suppress_end_enabled)
 
         read_data = bytearray()
@@ -820,15 +881,13 @@ class TCPIPInstrVxi11(Session):
                 self.link,
                 chunk_length,
                 chunk_timeout,
-                self.lock_timeout,
+                lock_timeout,
                 flags,
                 term_char,
             )
 
-            if error == vxi11.ErrorCodes.io_timeout:
-                return bytes(read_data), StatusCode.error_timeout
-            elif error:
-                return bytes(read_data), StatusCode.error_io
+            if error:
+                return bytes(read_data), vxi11_error_to_visa(error)
 
             read_data.extend(data)
             count -= len(data)
@@ -869,6 +928,8 @@ class TCPIPInstrVxi11(Session):
             num = len(data)
             offset = 0
 
+            flags, lock_timeout = self._adapt_flags_and_lock_timeout(flags)
+
             while num > 0:
                 if num <= self.max_recv_size:
                     flags |= vxi11.OP_FLAG_END
@@ -876,14 +937,11 @@ class TCPIPInstrVxi11(Session):
                 block = data[offset : offset + self.max_recv_size]
 
                 error, size = self.interface.device_write(
-                    self.link, self._io_timeout, self.lock_timeout, flags, block
+                    self.link, self._io_timeout, lock_timeout, flags, block
                 )
 
-                if error == vxi11.ErrorCodes.io_timeout:
-                    return offset, StatusCode.error_timeout
-
-                elif error or size < len(block):
-                    return offset, StatusCode.error_io
+                if error or size < len(block):
+                    return offset, vxi11_error_to_visa(error)
 
                 offset += size
                 num -= size
@@ -912,22 +970,23 @@ class TCPIPInstrVxi11(Session):
             Return value of the library call.
 
         """
+        flags, lock_timeout = self._adapt_flags_and_lock_timeout(0)
         if mode in (
             constants.RENLineOperation.asrt_address,
             constants.RENLineOperation.asrt_address_llo,
         ):
             error = self.interface.device_remote(
-                self.link, 0, self.lock_timeout, self._io_timeout
+                self.link, flags, lock_timeout, self._io_timeout
             )
-            return VXI11_ERRORS_TO_VISA[error]
+            return vxi11_error_to_visa(error)
         elif mode in (
             constants.RENLineOperation.address_gtl,
             constants.RENLineOperation.deassert_gtl,
         ):
             error = self.interface.device_local(
-                self.link, 0, self.lock_timeout, self._io_timeout
+                self.link, flags, lock_timeout, self._io_timeout
             )
-            return VXI11_ERRORS_TO_VISA[error]
+            return vxi11_error_to_visa(error)
         else:
             return constants.StatusCode.error_nonsupported_operation
 
@@ -952,6 +1011,9 @@ class TCPIPInstrVxi11(Session):
         # This is an abuse of the VISA standard
         if attribute == constants.VI_ATTR_TCPIP_KEEPALIVE:
             return self.keepalive, StatusCode.success
+
+        if attribute == constants.VI_KTATTR_LOCKWAIT:  # type: ignore[attr-defined]
+            return self.attrs[ResourceAttribute.lockwait], StatusCode.success  # type: ignore[attr-defined]
 
         raise UnknownAttribute(attribute)
 
@@ -991,6 +1053,9 @@ class TCPIPInstrVxi11(Session):
                 return StatusCode.error_nonsupported_format
             return StatusCode.success
 
+        if attribute == constants.VI_KTATTR_LOCKWAIT:  # type: ignore[attr-defined]
+            return StatusCode.success
+
         raise UnknownAttribute(attribute)
 
     def assert_trigger(self, protocol: constants.TriggerProtocol):
@@ -1009,12 +1074,16 @@ class TCPIPInstrVxi11(Session):
             Return value of the library call.
 
         """
-        # XXX make this nicer (either validate protocol or pass it)
+        # protocol is ignored, VXI-11 doesn't support multiple types
+
+        flags = 0
+        flags, lock_timeout = self._adapt_flags_and_lock_timeout(flags)
+
         error = self.interface.device_trigger(
-            self.link, 0, self.lock_timeout, self._io_timeout
+            self.link, flags, lock_timeout, self._io_timeout
         )
 
-        return VXI11_ERRORS_TO_VISA[error]
+        return vxi11_error_to_visa(error)
 
     def clear(self) -> StatusCode:
         """Clears a device.
@@ -1022,11 +1091,14 @@ class TCPIPInstrVxi11(Session):
         Corresponds to viClear function of the VISA library.
 
         """
+        flags = 0
+        flags, lock_timeout = self._adapt_flags_and_lock_timeout(flags)
+
         error = self.interface.device_clear(
-            self.link, 0, self.lock_timeout, self._io_timeout
+            self.link, flags, lock_timeout, self._io_timeout
         )
 
-        return VXI11_ERRORS_TO_VISA[error]
+        return vxi11_error_to_visa(error)
 
     def read_stb(self) -> Tuple[int, StatusCode]:
         """Reads a status byte of the service request.
@@ -1041,11 +1113,14 @@ class TCPIPInstrVxi11(Session):
             Return value of the library call.
 
         """
+        flags = 0
+        flags, lock_timeout = self._adapt_flags_and_lock_timeout(flags)
+
         error, stb = self.interface.device_read_stb(
-            self.link, 0, self.lock_timeout, self._io_timeout
+            self.link, flags, lock_timeout, self._io_timeout
         )
 
-        return stb, VXI11_ERRORS_TO_VISA[error]
+        return stb, vxi11_error_to_visa(error)
 
     def lock(
         self,
@@ -1079,12 +1154,26 @@ class TCPIPInstrVxi11(Session):
             Return value of the library call.
 
         """
-        #  TODO: lock type not implemented
+        # TODO: shared lock is not implemented
+        if lock_type == constants.Lock.shared:
+            return "", StatusCode.error_nonsupported_operation
+
+        # The only remaining lock type is exclusive lock
+
+        # RULE B.6.74:
+        # If some other link has the lock, device_lock SHALL examine the waitlock
+        # flag in flags. If the flag is set, device_lock SHALL block until the
+        # lock is free. If the flag is not set, device_lock SHALL terminate with
+        # error set to 11, device locked by another link.
+
         flags = 0
+        # The waitlock flag is the only flag used here
+        if timeout != constants.VI_TMO_IMMEDIATE:
+            flags = vxi11.OP_FLAG_WAIT_BLOCK
 
-        error = self.interface.device_lock(self.link, flags, self.lock_timeout)
+        error = self.interface.device_lock(self.link, flags, timeout)
 
-        return "", VXI11_ERRORS_TO_VISA[error]
+        return "", vxi11_error_to_visa(error)
 
     def unlock(self) -> constants.StatusCode:
         """Relinquish a lock for the specified resource.
@@ -1099,13 +1188,14 @@ class TCPIPInstrVxi11(Session):
         """
         error = self.interface.device_unlock(self.link)
 
-        return VXI11_ERRORS_TO_VISA[error]
+        return vxi11_error_to_visa(error)
 
     def _set_timeout(self, attribute: ResourceAttribute, value: int) -> StatusCode:
         """Sets timeout calculated value from python way to VI_ way"""
         # value is in milliseconds,
         # and can be VI_TMO_INFINITE (2**32 - 1) or VI_TMO_IMMEDIATE (0)
         self._io_timeout = value
+        # self.timeout comes from the superclass, is in seconds, and can be None (infinite) or 0 (immediate)
         if value == constants.VI_TMO_INFINITE:
             self.timeout = None
         elif value == constants.VI_TMO_IMMEDIATE:
