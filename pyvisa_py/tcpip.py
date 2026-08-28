@@ -114,7 +114,7 @@ class TCPIPInstrHiSLIP(Session):
     session_type = (constants.InterfaceType.tcpip, "INSTR")
 
     _supported_event_types = {constants.EventType.service_request}
-    
+
     REMOTELOCALOPCODE: Final[dict[constants.RENLineOperation, str]] = {
         constants.RENLineOperation.address_gtl: "justGTL",
         constants.RENLineOperation.asrt: "enableRemote",
