@@ -86,14 +86,11 @@ def test_serial_and_socket_assert_trigger(protocol, io_prot, session_class):
     session.attrs = {constants.ResourceAttribute.io_prot: io_prot}
     session.write = MagicMock(return_value=(5, constants.StatusCode.success))
 
-    expected_status = (
-        constants.StatusCode.success
-        if (
-            protocol == constants.TriggerProtocol.default
-            and io_prot == constants.VI_PROT_4882_STRS
-        )
-        else constants.StatusCode.error_nonsupported_operation
-    )
+    expected_status = constants.StatusCode.success
+    if protocol != constants.TriggerProtocol.default:
+        expected_status = constants.StatusCode.error_nonsupported_operation
+    elif io_prot != constants.VI_PROT_4882_STRS:
+        expected_status = constants.StatusCode.error_invalid_setup
 
     assert session.assert_trigger(protocol) == expected_status
 

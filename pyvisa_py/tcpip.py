@@ -1765,11 +1765,10 @@ class TCPIPSocketSession(Session):
             Return value of the library call.
 
         """
-        if (
-            protocol != constants.TriggerProtocol.default
-            or self.attrs[ResourceAttribute.io_prot] != constants.VI_PROT_4882_STRS
-        ):
+        if protocol != constants.TriggerProtocol.default:
             return StatusCode.error_nonsupported_operation
+        if self.attrs[ResourceAttribute.io_prot] != constants.VI_PROT_4882_STRS:
+            return StatusCode.error_invalid_setup
 
         _n, status = self.write(b"*TRG\n")
         return status
