@@ -317,7 +317,10 @@ USB and USBTMC resources that support it.
 In addition, for Prologix resources: ``inst.assert_trigger()`` will send ``++trg\n``
 
 Triggers are however not supported for Serial devices or TCP/IP sockets. 
-Just send the string ``*TRG\n`` if needed.
+Just send the string ``*TRG\n`` if needed. 
+(Know that they would only be able to accept a trigger if you set ``VI_ATTR_IO_PROT``
+to the right value, and even then, that would just mean that ``*TRG\n`` is to be sent.)
+
 
 
 .. _PySerial: https://pythonhosted.org/pyserial/
