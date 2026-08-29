@@ -73,6 +73,7 @@ class SerialSession(Session):
             timeout=self.timeout,
             write_timeout=self.timeout,
         )
+        self.attrs[ResourceAttribute.io_prot] = constants.VI_PROT_NORMAL
 
         for name in (
             "ASRL_END_IN",
@@ -232,6 +233,28 @@ class SerialSession(Session):
             self.interface.reset_output_buffer()
 
         return StatusCode.success
+
+    def assert_trigger(self, protocol: constants.TriggerProtocol) -> StatusCode:
+        """Asserts hardware trigger.
+
+        Parameters
+        ----------
+        protocol : constants.TriggerProtocol
+            Triggering protocol to use.
+            Only supports constants.TriggerProtocol.default
+
+        Returns
+        -------
+        StatusCode
+            Return value of the library call.
+
+        """
+        if protocol != constants.TriggerProtocol.default or \
+        self.attrs[ResourceAttribute.io_prot] != constants.VI_PROT_4882_STRS:
+            return StatusCode.error_nonsupported_operation
+
+        _n, status = self.write(b"*TRG\n")
+        return status
 
     def _get_attribute(  # noqa: C901
         self, attribute: constants.ResourceAttribute

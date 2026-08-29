@@ -314,13 +314,11 @@ The trigger functionality in PyVISA-Py is almost feature complete.
 Triggers are supported on GPIB, VXI-11 and HiSLIP resources, and on the 
 USB and USBTMC resources that support it.
 
+Triggers are also supported for Serial devices or TCP/IP sockets, but, 
+in accordance to VPP-4.3, only if you set ``VI_ATTR_IO_PROT`` (``ResourceAttribute.io_prot``)
+to ``VI_PROT_4882_STRS``. This will result in a write of ``*TRG\n``.
+
 In addition, for Prologix resources: ``inst.assert_trigger()`` will send ``++trg\n``
-
-Triggers are however not supported for Serial devices or TCP/IP sockets. 
-Just send the string ``*TRG\n`` if needed. 
-(Know that they would only be able to accept a trigger if you set ``VI_ATTR_IO_PROT``
-to ``VI_PROT_4882_STRS``, and even then, that would just mean that ``*TRG\n`` is to be sent.)
-
 
 
 .. _PySerial: https://pythonhosted.org/pyserial/

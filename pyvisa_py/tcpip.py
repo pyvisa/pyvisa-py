@@ -1525,6 +1525,7 @@ class TCPIPSocketSession(Session):
         )
         # to use default as ni visa driver (NI-VISA 15.0)
         self.attrs[ResourceAttribute.suppress_end_enabled] = True
+        self.attrs[ResourceAttribute.io_prot] = constants.VI_PROT_NORMAL
 
         for name in ("TERMCHAR", "TERMCHAR_EN"):
             attribute = getattr(constants, "VI_ATTR_" + name)
@@ -1748,6 +1749,28 @@ class TCPIPSocketSession(Session):
             pass
 
         return StatusCode.success
+
+    def assert_trigger(self, protocol: constants.TriggerProtocol) -> StatusCode:
+        """Asserts hardware trigger.
+
+        Parameters
+        ----------
+        protocol : constants.TriggerProtocol
+            Triggering protocol to use.
+            Only supports constants.TriggerProtocol.default
+
+        Returns
+        -------
+        StatusCode
+            Return value of the library call.
+
+        """
+        if protocol != constants.TriggerProtocol.default or \
+        self.attrs[ResourceAttribute.io_prot] != constants.VI_PROT_4882_STRS:
+            return StatusCode.error_nonsupported_operation
+
+        _n, status = self.write(b"*TRG\n")
+        return status
 
     def _get_tcpip_nodelay(
         self, attribute: ResourceAttribute
