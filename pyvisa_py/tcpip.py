@@ -136,6 +136,13 @@ class TCPIPInstrHiSLIP(Session):
         constants.RENLineOperation.deassert: "disableRemote",
         constants.RENLineOperation.deassert_gtl: "disableAndGTL",
     }
+    
+    LOCKRESPONSE_TO_STATUSCODE: Final[dict[str, constants.StatusCode]] = {
+        hislip.LOCKRESPONSE[0]: constants.StatusCode.error_resource_locked,
+        hislip.LOCKRESPONSE[1]: constants.StatusCode.success,
+        hislip.LOCKRESPONSE[2]: constants.StatusCode.success,
+        hislip.LOCKRESPONSE[3]: constants.StatusCode.error_nonsupported_operation,
+    }
 
     # Override parsed to take into account the fact that this class is only used
     # for a specific kind of resource
@@ -193,7 +200,7 @@ class TCPIPInstrHiSLIP(Session):
                 f"on port {port} with lan device name {sub_address}"
             )
             raise OpenError() from e
-
+        
         # initialize the constant attributes
         self.attrs[ResourceAttribute.dma_allow_enabled] = constants.VI_FALSE
         self.attrs[ResourceAttribute.file_append_enabled] = constants.VI_FALSE
@@ -229,6 +236,18 @@ class TCPIPInstrHiSLIP(Session):
             self.get_keepalive,
             self.set_keepalive,
         )
+        
+        # and now handle the lock
+        if self.access_mode & constants.AccessModes.exclusive_lock:
+            # It wouldn't be too hard to implement shared locking, since
+            # the interface likely supports it, but for now we only handle exclusive locks.
+            
+            # about the timeout: Found nothing in the spec that says how to handle this.
+            if self.timeout is None:
+                self.timeout = 10.0  # default timeout in seconds
+            k, rv = self.lock(constants.Lock.exclusive, int(1e3 * self.timeout), "")
+            if rv != StatusCode.success:
+                raise RuntimeError("Failed to acquire exclusive lock")
 
     def _handle_async_service_request(self, status_byte: int) -> None:
         ctx = EventContext(
@@ -415,6 +434,67 @@ class TCPIPInstrHiSLIP(Session):
         errorcode = StatusCode.success
 
         return stb, errorcode
+    
+    def lock(
+        self,
+        lock_type: constants.Lock,
+        timeout: int,
+        requested_key: Optional[str] = None,
+    ) -> Tuple[str, constants.StatusCode]:
+        """Establishes an access mode to the specified resources.
+
+        Corresponds to viLock function of the VISA library.
+
+        Parameters
+        ----------
+        session : VISASession
+            Unique logical identifier to a session.
+        lock_type : constants.Lock
+            Specifies the type of lock requested.
+        timeout : int
+            Absolute time period (in milliseconds) that a resource waits to get
+            unlocked by the locking session before returning an error.
+        requested_key : Optional[str], optional
+            Requested locking key in the case of a shared lock. For an exclusive
+            lock it should be None.
+
+        Returns
+        -------
+        Optional[str]
+            Key that can then be passed to other sessions to share the lock, or
+            None for an exclusive lock.
+        StatusCode
+            Return value of the library call.
+
+        """
+        # For now, we only handle exclusive locks.
+        # It could be possible to handle shared locks in the future
+        if lock_type != constants.Lock.exclusive:
+            return "", StatusCode.error_nonsupported_operation
+
+        # requested_key is ignored for exclusive locks.
+        # Note to future: requested_key None is invalid: make it an empty string
+        rv = self.interface.async_lock_request(timeout, "")
+        # rv is from LOCKRESPONSE
+        
+        # TODO: look how to maintain self.attrs[ResourceAttribute.resource_lock_state]
+        return "", self.LOCKRESPONSE_TO_STATUSCODE.get(rv, StatusCode.error_nonsupported_operation)
+
+    def unlock(self) -> constants.StatusCode:
+        """Relinquish a lock for the specified resource.
+
+        Corresponds to viUnlock function of the VISA library.
+
+        Returns
+        -------
+        StatusCode
+            Return value of the library call.
+
+        """
+        rv = self.interface.async_lock_release("")
+        # rv is from LOCKRESPONSE
+        # TODO: look how to maintain self.attrs[ResourceAttribute.resource_lock_state]        
+        return self.LOCKRESPONSE_TO_STATUSCODE.get(rv, StatusCode.error_nonsupported_operation)
 
     def terminate(self, job_id: VISAJobID | None = None) -> StatusCode:
         """Cancel a pending I/O operation on this session.
