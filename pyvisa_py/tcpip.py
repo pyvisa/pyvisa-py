@@ -362,8 +362,7 @@ class TCPIPInstrHiSLIP(Session):
             # unknown value?
             return StatusCode.error_nonsupported_operation
 
-        interface = cast(hislip.Instrument, self.interface)
-        interface.async_remote_local_control(method)
+        self.interface.async_remote_local_control(method)
 
         return StatusCode.success
 
@@ -375,6 +374,28 @@ class TCPIPInstrHiSLIP(Session):
         """
         self.interface.device_clear()
 
+        return StatusCode.success
+    
+    def assert_trigger(self, protocol: constants.TriggerProtocol):
+        """Asserts software or hardware trigger.
+
+        Corresponds to viAssertTrigger function of the VISA library.
+
+        Parameters
+        ----------
+        protocol : constants.TriggerProtocol
+            Trigger protocol to use during assertion. Only default is supported.
+
+        Returns
+        -------
+        StatusCode
+            Return value of the library call.
+
+        """
+        if protocol != constants.TriggerProtocol.default:
+            return StatusCode.error_nonsupported_operation
+
+        self.interface.trigger()
         return StatusCode.success
 
     def read_stb(self) -> Tuple[int, StatusCode]:
@@ -391,9 +412,8 @@ class TCPIPInstrHiSLIP(Session):
 
         """
 
-        interface = cast(hislip.Instrument, self.interface)
         # According to IVI-6.1 Rev.2 status query corresponds to viReadSTB.
-        stb = interface.async_status_query()
+        stb = self.interface.async_status_query()
         errorcode = StatusCode.success
 
         return stb, errorcode
@@ -431,8 +451,7 @@ class TCPIPInstrHiSLIP(Session):
             Return value of the library call.
 
         """
-        interface = cast(hislip.Instrument, self.interface)
-        interface.terminate()
+        self.interface.terminate()
         return StatusCode.success
 
     def _get_attribute(self, attribute: ResourceAttribute) -> Tuple[Any, StatusCode]:
@@ -1074,7 +1093,8 @@ class TCPIPInstrVxi11(Session):
             Return value of the library call.
 
         """
-        # protocol is ignored, VXI-11 doesn't support multiple types
+        if protocol != constants.TriggerProtocol.default:
+            return StatusCode.error_nonsupported_operation
 
         flags = 0
         flags, lock_timeout = self._adapt_flags_and_lock_timeout(flags)

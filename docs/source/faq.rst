@@ -307,6 +307,18 @@ and what NI-VISA does, so this should be fully portable.
 GPIB has functionality comparable to HiSLIP, but may behave differently than NI-VISA, 
 depending on the type of interface.
 
+Triggers
+--------
+
+The trigger functionality in PyVISA-Py is almost feature complete. 
+Triggers are supported on GPIB, VXI-11 and HiSLIP resources, and on the 
+USB and USBTMC resources that support it.
+
+In addition, for Prologix resources: ``inst.assert_trigger()`` will send ``++trg\n``
+
+Triggers are however not supported for Serial devices or TCP/IP sockets. 
+Just send the string ``*TRG\n`` if needed.
+
 
 .. _PySerial: https://pythonhosted.org/pyserial/
 .. _PyVISA: http://pyvisa.readthedocs.org/
