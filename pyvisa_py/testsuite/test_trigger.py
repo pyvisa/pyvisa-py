@@ -82,7 +82,10 @@ def test_serial_and_socket_assert_trigger(protocol, io_prot, session_class):
 
     expected_status = (
         constants.StatusCode.success
-        if (protocol == constants.TriggerProtocol.default and io_prot == constants.VI_PROT_4882_STRS)
+        if (
+            protocol == constants.TriggerProtocol.default
+            and io_prot == constants.VI_PROT_4882_STRS
+        )
         else constants.StatusCode.error_nonsupported_operation
     )
 
