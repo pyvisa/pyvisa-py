@@ -6,11 +6,13 @@ import pytest
 
 from pyvisa import constants
 
+have_serial = True
 try:
     from pyvisa_py.serial import SerialSession
 except ImportError:
-    SerialSession = None
-from pyvisa_py.tcpip import (
+    have_serial = False
+
+from pyvisa_py.tcpip import (  # noqa: E402
     TCPIPInstrHiSLIP,
     TCPIPInstrVxi11,
     TCPIPSocketSession,
@@ -69,7 +71,7 @@ def test_vxi11_assert_trigger(protocol, expected_status, should_trigger):
 
 @pytest.mark.parametrize(
     "session_class",
-    [SerialSession, TCPIPSocketSession],
+    [SerialSession, TCPIPSocketSession] if have_serial else [TCPIPSocketSession],
 )
 @pytest.mark.parametrize(
     "io_prot",
@@ -80,8 +82,6 @@ def test_vxi11_assert_trigger(protocol, expected_status, should_trigger):
     [constants.TriggerProtocol.default, constants.TriggerProtocol.on],
 )
 def test_serial_and_socket_assert_trigger(protocol, io_prot, session_class):
-    if session_class is None:
-        pytest.skip("SerialSession is not available")
     session = object.__new__(session_class)
     session.attrs = {constants.ResourceAttribute.io_prot: io_prot}
     session.write = MagicMock(return_value=(5, constants.StatusCode.success))
