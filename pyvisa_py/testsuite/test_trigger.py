@@ -5,7 +5,10 @@ from unittest.mock import MagicMock
 import pytest
 
 from pyvisa import constants
-from pyvisa_py.serial import SerialSession
+try:
+    from pyvisa_py.serial import SerialSession
+except ImportError:
+    SerialSession = None
 from pyvisa_py.tcpip import (
     TCPIPInstrHiSLIP,
     TCPIPInstrVxi11,
@@ -76,6 +79,8 @@ def test_vxi11_assert_trigger(protocol, expected_status, should_trigger):
     [constants.TriggerProtocol.default, constants.TriggerProtocol.on],
 )
 def test_serial_and_socket_assert_trigger(protocol, io_prot, session_class):
+    if session_class is None:
+        pytest.skip("SerialSession is not available")
     session = object.__new__(session_class)
     session.attrs = {constants.ResourceAttribute.io_prot: io_prot}
     session.write = MagicMock(return_value=(5, constants.StatusCode.success))
