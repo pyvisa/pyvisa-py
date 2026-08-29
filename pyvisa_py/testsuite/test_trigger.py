@@ -5,6 +5,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from pyvisa import constants
+
 try:
     from pyvisa_py.serial import SerialSession
 except ImportError:
