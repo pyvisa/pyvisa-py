@@ -16,7 +16,7 @@ import socket
 import threading
 import time
 import warnings
-from typing import Any, Dict, Final, List, Optional, Tuple, Type, cast
+from typing import Any, Dict, Final, List, Optional, Tuple, Type
 
 from pyvisa import attributes, constants, errors, rname
 from pyvisa.constants import BufferOperation, ResourceAttribute, StatusCode
@@ -375,7 +375,7 @@ class TCPIPInstrHiSLIP(Session):
         self.interface.device_clear()
 
         return StatusCode.success
-    
+
     def assert_trigger(self, protocol: constants.TriggerProtocol):
         """Asserts software or hardware trigger.
 
