@@ -165,7 +165,7 @@ class TCPIPInstrHiSLIP(Session):
     def after_parsing(self) -> None:
         # TODO: board_number not handled
 
-        parsed = cast(rname.TCPIPInstr, self.parsed)
+        parsed = self.parsed
 
         if "," in parsed.lan_device_name:
             sub_address, port_str = parsed.lan_device_name.split(",")

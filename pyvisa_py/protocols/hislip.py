@@ -339,8 +339,15 @@ class AsyncInitializeResponse(RxHeader):
         super().__init__(sock, "AsyncInitializeResponse")
         assert self.control_code == 0
         assert self.payload_length == 0
-        self.vendor_id = struct.unpack("!4x4s8x", self.header)[0]
-
+        # Read the Message Parameter, it starts 4 bytes into the header and is 4 bytes long.
+        # Followed by 8 bytes of padding, since payload_length == 0
+        message_param = struct.unpack("!4x2s2s8x", self.header)
+        self.server_capabilities = message_param[0]
+        self.vendor_id = message_param[1]
+        # Server capabilities: 
+        # "If bit 0 is set the secure connection capability is supported."
+        # but we do not support secure connection (yet). So this is unused for now.
+        
 
 class AsyncMaxMsgSizeResponse(RxHeader):
     def __init__(self, sock: socket.socket) -> None:
