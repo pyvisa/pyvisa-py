@@ -1,4 +1,4 @@
-"""Tests for opening VXI-11 resources."""
+"""Tests for locking resources."""
 
 from unittest.mock import ANY, MagicMock, patch
 
@@ -6,7 +6,7 @@ import pytest
 
 from pyvisa import constants, errors, rname
 from pyvisa_py import highlevel
-from pyvisa_py.tcpip import TCPIPInstrVxi11
+from pyvisa_py.tcpip import TCPIPInstrHiSLIP, TCPIPInstrVxi11
 
 
 @pytest.mark.parametrize(
@@ -132,8 +132,57 @@ def test_highlevel_lock_sets_vxi11_device_lock_flags_and_timeout(
         client.device_lock.assert_not_called()
         return
 
+    state, status = library.get_attribute(1, constants.VI_ATTR_RSRC_LOCK_STATE)
+    assert (state, status) == (constants.VI_NO_LOCK, constants.StatusCode.success)
+
     key, status = library.lock(1, lock_type, timeout)
 
     assert key == ""
     assert status == constants.StatusCode.success
     client.device_lock.assert_called_once_with(session.link, expected_flags, timeout)
+
+    state, status = library.get_attribute(1, constants.VI_ATTR_RSRC_LOCK_STATE)
+    assert (state, status) == (
+        constants.VI_EXCLUSIVE_LOCK,
+        constants.StatusCode.success,
+    )
+
+    client.device_unlock.return_value = 0
+    assert library.unlock(1) == constants.StatusCode.success
+    client.device_unlock.assert_called_once_with(session.link)
+
+    state, status = library.get_attribute(1, constants.VI_ATTR_RSRC_LOCK_STATE)
+    assert (state, status) == (constants.VI_NO_LOCK, constants.StatusCode.success)
+
+
+def test_hislip_lock_updates_resource_lock_state():
+    session = object.__new__(TCPIPInstrHiSLIP)
+    session.attrs = {}
+    session.interface = MagicMock()
+    session.interface.async_lock_info.side_effect = [0, 1, 0]
+    session.interface.async_lock_request.return_value = "success"
+    session.interface.async_lock_release.return_value = "success"
+
+    library = highlevel.PyVisaLibrary()
+    library.sessions = {1: session}
+
+    state, status = library.get_attribute(1, constants.VI_ATTR_RSRC_LOCK_STATE)
+    assert (state, status) == (constants.VI_NO_LOCK, constants.StatusCode.success)
+
+    key, status = library.lock(1, constants.Lock.exclusive, 1000)
+    assert (key, status) == ("", constants.StatusCode.success)
+    session.interface.async_lock_request.assert_called_once_with(1000, "")
+
+    state, status = library.get_attribute(1, constants.VI_ATTR_RSRC_LOCK_STATE)
+    assert (state, status) == (
+        constants.VI_EXCLUSIVE_LOCK,
+        constants.StatusCode.success,
+    )
+
+    assert library.unlock(1) == constants.StatusCode.success
+    session.interface.async_lock_release.assert_called_once_with("")
+
+    state, status = library.get_attribute(1, constants.VI_ATTR_RSRC_LOCK_STATE)
+    assert (state, status) == (constants.VI_NO_LOCK, constants.StatusCode.success)
+
+

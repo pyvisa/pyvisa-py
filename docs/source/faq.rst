@@ -173,10 +173,9 @@ omit the argument.
 Locking
 -------
 
-**PyVISA-Py only supports exclusive locking, and only on VXI-11. Shared locks and nested locking are not supported.** 
+**PyVISA-Py only supports exclusive locking on VXI-11 and HiSLIP. Shared locks and nested locking are not supported.** 
 
-Socket instruments (``TCPIP::SOCKET``) do not support locking.
-HiSLIP instruments (``TCPIP::hislip``) could support locking, but PyVISA-Py does not yet implement this feature.
+Serial and TCPIP::SOCKET instruments do not support locking.
 
 With exclusive locking, only one session can be used at a time on an instrument.  
 If another session has a lock, another client will not be able to communicate with
@@ -219,7 +218,7 @@ If you have not locked the instrument, and want to control the behaviour of your
 in case another program or session has locked it, you must choose one of the following methods:
 
 - Request a lock via ``inst.lock_excl()``. This is the most portable. See above.
-- Configure the lock timeout via the Keysight and PyVISA-Py specific attribute ``VI_KTATTR_LOCKWAIT`` (0x0FFF002B)
+- Only for VXI-11: Configure the lock timeout via the Keysight and PyVISA-Py specific attribute ``VI_KTATTR_LOCKWAIT`` (0x0FFF002B)
 
     When using ``VI_KTATTR_LOCKWAIT`` on an instrument that is locked by another session:
 
@@ -250,10 +249,14 @@ in case another program or session has locked it, you must choose one of the fol
     >>> # Do your operations
 
 
-Note that ``open_resource()`` and ``lock_excl()`` use their own timeout values, and do not use ``VI_KTATTR_LOCKWAIT``.
+    Note that ``open_resource()`` and ``lock_excl()`` use their own timeout values, and do not use ``VI_KTATTR_LOCKWAIT``.
 
-``session.lock_timeout``, from previous PyVISA-Py versions, has been removed, and replaced by the 
-use of ``VI_KTATTR_LOCKWAIT``, as it is easier, more predictable and more portable.
+    ``session.lock_timeout``, from previous PyVISA-Py versions, has been removed, and replaced by the 
+    use of ``VI_KTATTR_LOCKWAIT``, as it is easier, more predictable and more portable.
+
+The ``VI_ATTR_RSRC_LOCK_STATE`` attribute is fully supported on HiSLIP: it reflects the current lock state of the resource accurately.
+On VXI-11, it represents the lock state of the session, so it may not accurately reflect the lock state of the underlying resource itself.
+
 
 Event handling is not affected by locking. 
 

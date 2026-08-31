@@ -16,7 +16,7 @@ import socket
 import threading
 import time
 import warnings
-from typing import Any, Dict, Final, List, Optional, Tuple, Type, cast
+from typing import Any, Dict, Final, List, Optional, Tuple, Type
 
 from pyvisa import attributes, constants, errors, rname
 from pyvisa.constants import BufferOperation, ResourceAttribute, StatusCode
@@ -73,6 +73,22 @@ def vxi11_error_to_visa(error_code: int) -> StatusCode:
     VISA has no standard status code for them.
     """
     return VXI11_ERRORS_TO_VISA.get(int(error_code), StatusCode.error_io)
+
+
+def calculate_lock_timeout_from_open_timeout(open_timeout: Optional[int]) -> int:
+    # lock_timeout can be 0 for immediate
+    lock_timeout = open_timeout
+    if lock_timeout is None:
+        lock_timeout = (
+            10000  # default lock timeout in ms. This shouldn't happen
+        )
+    if lock_timeout == constants.VI_TMO_INFINITE:
+        lock_timeout = (
+            2**32 - 1
+        )  # This is dangerous, but hey, the caller wanted it.
+    if lock_timeout == constants.VI_TMO_IMMEDIATE:
+        lock_timeout = 0  # This is NOP, but makes the code more readable
+    return lock_timeout
 
 
 @Session.register(constants.InterfaceType.tcpip, "INSTR")
@@ -210,7 +226,8 @@ class TCPIPInstrHiSLIP(Session):
         self.attrs[ResourceAttribute.read_buffer_operation_mode] = (
             constants.VI_FLUSH_DISABLE
         )
-        self.attrs[ResourceAttribute.resource_lock_state] = constants.VI_NO_LOCK
+        # do NOT set the resource lock state manually; it will be managed by the remote locking mechanism.
+        # self.attrs[ResourceAttribute.resource_lock_state] = constants.VI_NO_LOCK
         self.attrs[ResourceAttribute.send_end_enabled] = constants.VI_TRUE
         self.attrs[ResourceAttribute.suppress_end_enabled] = constants.VI_FALSE
         self.attrs[ResourceAttribute.tcpip_address] = parsed.host_address
@@ -243,9 +260,9 @@ class TCPIPInstrHiSLIP(Session):
             # the interface likely supports it, but for now we only handle exclusive locks.
             
             # about the timeout: Found nothing in the spec that says how to handle this.
-            if self.timeout is None:
-                self.timeout = 10.0  # default timeout in seconds
-            k, rv = self.lock(constants.Lock.exclusive, int(1e3 * self.timeout), "")
+            # Do what is done by VXI-11
+            lock_timeout = calculate_lock_timeout_from_open_timeout(self.open_timeout)
+            k, rv = self.lock(constants.Lock.exclusive, lock_timeout, "")
             if rv != StatusCode.success:
                 raise RuntimeError("Failed to acquire exclusive lock")
 
@@ -399,8 +416,7 @@ class TCPIPInstrHiSLIP(Session):
             # unknown value?
             return StatusCode.error_nonsupported_operation
 
-        interface = cast(hislip.Instrument, self.interface)
-        interface.async_remote_local_control(method)
+        self.interface.async_remote_local_control(method)
 
         return StatusCode.success
 
@@ -428,9 +444,8 @@ class TCPIPInstrHiSLIP(Session):
 
         """
 
-        interface = cast(hislip.Instrument, self.interface)
         # According to IVI-6.1 Rev.2 status query corresponds to viReadSTB.
-        stb = interface.async_status_query()
+        stb = self.interface.async_status_query()
         errorcode = StatusCode.success
 
         return stb, errorcode
@@ -477,7 +492,6 @@ class TCPIPInstrHiSLIP(Session):
         rv = self.interface.async_lock_request(timeout, "")
         # rv is from LOCKRESPONSE
         
-        # TODO: look how to maintain self.attrs[ResourceAttribute.resource_lock_state]
         return "", self.LOCKRESPONSE_TO_STATUSCODE.get(rv, StatusCode.error_nonsupported_operation)
 
     def unlock(self) -> constants.StatusCode:
@@ -493,7 +507,6 @@ class TCPIPInstrHiSLIP(Session):
         """
         rv = self.interface.async_lock_release("")
         # rv is from LOCKRESPONSE
-        # TODO: look how to maintain self.attrs[ResourceAttribute.resource_lock_state]        
         return self.LOCKRESPONSE_TO_STATUSCODE.get(rv, StatusCode.error_nonsupported_operation)
 
     def terminate(self, job_id: VISAJobID | None = None) -> StatusCode:
@@ -529,8 +542,7 @@ class TCPIPInstrHiSLIP(Session):
             Return value of the library call.
 
         """
-        interface = cast(hislip.Instrument, self.interface)
-        interface.terminate()
+        self.interface.terminate()
         return StatusCode.success
 
     def _get_attribute(self, attribute: ResourceAttribute) -> Tuple[Any, StatusCode]:
@@ -551,6 +563,22 @@ class TCPIPInstrHiSLIP(Session):
             Return value of the library call.
 
         """
+        # get the lock state from the instrument itself:
+        # RULE 3.6.6
+        # IF a session uses HiSLIP, THEN a VISA implementation SHALL return the HiSLIP remote lock state
+        # for VI_ATTR_RSRC_LOCK_STATE.
+        if attribute == constants.VI_ATTR_RSRC_LOCK_STATE:
+            exclusive_lock = self.interface.async_lock_info()
+            # exclusive_lock: 0 – No exclusive lock granted
+            #                 1 – Exclusive lock granted
+            # we do not do shared locks (yet)
+            if exclusive_lock not in (0, 1):
+                raise ValueError(f"Unexpected exclusive_lock value: {exclusive_lock}")
+            else:
+                if exclusive_lock == 0:
+                    return constants.VI_NO_LOCK, StatusCode.success
+                else:
+                    return constants.VI_EXCLUSIVE_LOCK, StatusCode.success
         raise UnknownAttribute(attribute)
 
     def _set_attribute(
@@ -725,19 +753,7 @@ class TCPIPInstrVxi11(Session):
 
         if self.access_mode & constants.AccessModes.exclusive_lock:
             lock_device = 1
-            # The below is for lock_timeout, the instrument has been opened already
-            # lock_timeout can be 0 for immediate
-            lock_timeout = self.open_timeout
-            if lock_timeout is None:
-                lock_timeout = (
-                    10000  # default lock timeout in ms. This shouldn't happen
-                )
-            if lock_timeout == constants.VI_TMO_INFINITE:
-                lock_timeout = (
-                    2**32 - 1
-                )  # This is dangerous, but hey, the caller wanted it.
-            if lock_timeout == constants.VI_TMO_IMMEDIATE:
-                lock_timeout = 0  # This is NOP, but makes the code more readable
+            lock_timeout = calculate_lock_timeout_from_open_timeout(self.open_timeout)
         else:
             lock_device = 0
             lock_timeout = 0  # time is not used now.
@@ -759,6 +775,11 @@ class TCPIPInstrVxi11(Session):
         for name in ("SEND_END_EN", "TERMCHAR", "TERMCHAR_EN", "SUPPRESS_END_EN"):
             attribute = getattr(constants, "VI_ATTR_" + name)
             self.attrs[attribute] = attributes.AttributesByID[attribute].default
+
+        if lock_device:
+            self.attrs[ResourceAttribute.resource_lock_state] = constants.VI_EXCLUSIVE_LOCK
+        else:
+            self.attrs[ResourceAttribute.resource_lock_state] = constants.VI_NO_LOCK
 
         # add the Keysight and PyVISA-Py specific lock wait attribute, which is a boolean that
         # controls whether to wait for the lock or not
@@ -1270,8 +1291,11 @@ class TCPIPInstrVxi11(Session):
             flags = vxi11.OP_FLAG_WAIT_BLOCK
 
         error = self.interface.device_lock(self.link, flags, timeout)
+        error = vxi11_error_to_visa(error)
+        if error == StatusCode.success:
+            self.attrs[ResourceAttribute.resource_lock_state] = constants.VI_EXCLUSIVE_LOCK
 
-        return "", vxi11_error_to_visa(error)
+        return "", error
 
     def unlock(self) -> constants.StatusCode:
         """Relinquish a lock for the specified resource.
@@ -1285,8 +1309,11 @@ class TCPIPInstrVxi11(Session):
 
         """
         error = self.interface.device_unlock(self.link)
+        error = vxi11_error_to_visa(error)
+        if error == StatusCode.success:
+            self.attrs[ResourceAttribute.resource_lock_state] = constants.VI_NO_LOCK
 
-        return vxi11_error_to_visa(error)
+        return error
 
     def _set_timeout(self, attribute: ResourceAttribute, value: int) -> StatusCode:
         """Sets timeout calculated value from python way to VI_ way"""
