@@ -1719,7 +1719,7 @@ class TCPIPSocketSession(Session):
 
         """
         self._clear_buff()
-        
+
         # Send the *CLS command to clear the device if using the 488.2 STRS protocol
         # VPP-4.3 Permission 6.14
         if self.attrs[ResourceAttribute.io_prot] == constants.VI_PROT_4882_STRS:
@@ -1758,7 +1758,7 @@ class TCPIPSocketSession(Session):
             pass
 
         return StatusCode.success
-    
+
     def read_stb(self) -> Tuple[int, StatusCode]:
         """Reads a status byte of the service request.
 

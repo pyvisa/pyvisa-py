@@ -16,8 +16,8 @@ try:
     from pyvisa_py.serial import SerialSession
 except ImportError:
     pass
-    
-from pyvisa.testsuite import BaseTestCase # noqa: E402
+
+from pyvisa.testsuite import BaseTestCase
 
 
 class TestSerial(BaseTestCase):

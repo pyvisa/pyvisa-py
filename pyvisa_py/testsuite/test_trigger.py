@@ -11,7 +11,7 @@ try:
 except ImportError:
     pass
 
-from pyvisa_py.tcpip import (  # noqa: E402
+from pyvisa_py.tcpip import (
     TCPIPInstrHiSLIP,
     TCPIPInstrVxi11,
     TCPIPSocketSession,
