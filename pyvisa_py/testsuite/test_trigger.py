@@ -76,7 +76,9 @@ def test_vxi11_assert_trigger(protocol, expected_status, should_trigger):
     "protocol",
     [constants.TriggerProtocol.default, constants.TriggerProtocol.on],
 )
-@pytest.mark.skipif("SerialSession" not in globals(), reason="PySerial is not installed")
+@pytest.mark.skipif(
+    "SerialSession" not in globals(), reason="PySerial is not installed"
+)
 def test_serial_assert_trigger(protocol, io_prot):
     session = object.__new__(SerialSession)
     session.attrs = {constants.ResourceAttribute.io_prot: io_prot}

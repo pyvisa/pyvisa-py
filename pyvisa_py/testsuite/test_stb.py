@@ -29,7 +29,9 @@ class TestSTB:
             (constants.VI_PROT_4882_STRS, (42, constants.StatusCode.success)),
         ],
     )
-    @pytest.mark.skipif("SerialSession" not in globals(), reason="PySerial is not installed")
+    @pytest.mark.skipif(
+        "SerialSession" not in globals(), reason="PySerial is not installed"
+    )
     def test_serial_read_stb(self, io_protocol, expected_result):
         """Read a serial status byte only with the 488.2 protocol."""
         session = object.__new__(SerialSession)
@@ -95,4 +97,3 @@ class TestSTB:
         else:
             session.write.assert_not_called()
             session.read.assert_not_called()
-
