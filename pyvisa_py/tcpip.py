@@ -1703,18 +1703,27 @@ class TCPIPSocketSession(Session):
 
         return offset, StatusCode.success
 
-    def clear(self) -> StatusCode:
-        """Clears a device.
-
-        Corresponds to viClear function of the VISA library.
-
-        """
+    def _clear_buff(self) -> None:
+        # used by flush and clear operations
         self._pending_buffer.clear()
         while True:
             r, _w, _x = select.select([self.interface], [], [], 0.1)
             if not r:
                 break
             r[0].recv(4096)
+
+    def clear(self) -> StatusCode:
+        """Clears a device.
+
+        Corresponds to viClear function of the VISA library.
+
+        """
+        self._clear_buff()
+        
+        # Send the *CLS command to clear the device if using the 488.2 STRS protocol
+        # VPP-4.3 Permission 6.14
+        if self.attrs[ResourceAttribute.io_prot] == constants.VI_PROT_4882_STRS:
+            self.write(b"*CLS\n")
 
         return StatusCode.success
 
@@ -1733,7 +1742,7 @@ class TCPIPSocketSession(Session):
             Return value of the library call.
         """
         if mask & BufferOperation.discard_read_buffer:
-            self.clear()
+            self._clear_buff()
         if (
             mask & BufferOperation.discard_read_buffer_no_io
             or mask & BufferOperation.discard_receive_buffer
@@ -1749,6 +1758,35 @@ class TCPIPSocketSession(Session):
             pass
 
         return StatusCode.success
+    
+    def read_stb(self) -> Tuple[int, StatusCode]:
+        """Reads a status byte of the service request.
+
+        Corresponds to viReadSTB function of the VISA library.
+
+        Returns
+        -------
+        int
+            Service request status byte
+        StatusCode
+            Return value of the library call.
+
+        """
+        if self.attrs[ResourceAttribute.io_prot] != constants.VI_PROT_4882_STRS:
+            return 0, StatusCode.error_invalid_setup
+
+        # Read the status byte from the device
+        _n, status = self.write(b"*STB?\n")
+        if status != StatusCode.success:
+            return 0, status
+        stbs, status = self.read(100)
+        if status != StatusCode.success:
+            return 0, status
+        try:
+            stb = int(stbs)
+            return stb, StatusCode.success
+        except ValueError:
+            return 0, StatusCode.error_nonsupported_operation
 
     def assert_trigger(self, protocol: constants.TriggerProtocol) -> StatusCode:
         """Asserts hardware trigger.

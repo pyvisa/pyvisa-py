@@ -198,6 +198,26 @@ class SerialSession(Session):
         except serial.SerialTimeoutException:
             return 0, StatusCode.error_timeout
 
+    def clear(self) -> StatusCode:
+        """Clears a device.
+
+        Corresponds to viClear function of the VISA library.
+
+        """
+        # VPP 4.3: 
+        # For Serial INSTR sessions, VISA must flush (discard) the I/O output buffer, send a
+        # break, and then flush (discard) the I/O input buffer.
+        self.interface.reset_output_buffer()
+        self.interface.sendBreak()
+        self.interface.reset_input_buffer()
+        
+        # Send the *CLS command to clear the device if using the 488.2 STRS protocol
+        # VPP-4.3 Permission 6.14
+        if self.attrs[ResourceAttribute.io_prot] == constants.VI_PROT_4882_STRS:
+            self.write(b"*CLS\n")
+
+        return StatusCode.success
+
     def flush(self, mask: BufferOperation) -> StatusCode:
         """Flush the specified buffers.
 
@@ -233,6 +253,35 @@ class SerialSession(Session):
             self.interface.reset_output_buffer()
 
         return StatusCode.success
+    
+    def read_stb(self) -> Tuple[int, StatusCode]:
+        """Reads a status byte of the service request.
+
+        Corresponds to viReadSTB function of the VISA library.
+
+        Returns
+        -------
+        int
+            Service request status byte
+        StatusCode
+            Return value of the library call.
+
+        """
+        if self.attrs[ResourceAttribute.io_prot] != constants.VI_PROT_4882_STRS:
+            return 0, StatusCode.error_invalid_setup
+
+        # Read the status byte from the device
+        _n, status = self.write(b"*STB?\n")
+        if status != StatusCode.success:
+            return 0, status
+        stbs, status = self.read(100)
+        if status != StatusCode.success:
+            return 0, status
+        try:
+            stb = int(stbs)
+            return stb, StatusCode.success
+        except ValueError:
+            return 0, StatusCode.error_nonsupported_operation    
 
     def assert_trigger(self, protocol: constants.TriggerProtocol) -> StatusCode:
         """Asserts hardware trigger.

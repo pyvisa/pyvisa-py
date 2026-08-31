@@ -271,10 +271,10 @@ Event handling is not affected by locking.
     - the sequencing: some devices, once already locked, will allow `open_resource`
       to succeed (as they should per VXI-11 spec RULE B.6.6), but others don't.
 
-    Keysight VISA and PyVISA-py both support the lock timeout attribute ``VI_KTATTR_LOCKWAIT``.
+    Keysight VISA and PyVISA-py both support the lock timeout attribute ``VI_KTATTR_LOCKWAIT`` for VXI-11.
 
-    NI-VISA and R&S VISA have no known means of controlling the lock timeout, and mostly 
-    use the I/O timeout and/or internal timing for lock timeout handling.
+    NI-VISA and R&S VISA have no known means of controlling the lock timeout for VXI-11, 
+    and mostly use the I/O timeout and/or internal timing for lock timeout handling.
 
     If you are debugging locking issues, note that NI-VISA supports
     the lock-on-open method, but underneath uses the lock-after-open method, and, 
@@ -312,13 +312,28 @@ Triggers
 
 The trigger functionality in PyVISA-Py is almost feature complete. 
 Triggers are supported on GPIB, VXI-11 and HiSLIP resources, and on the 
-USB and USBTMC resources that support it.
-
-Triggers are also supported for Serial devices or TCP/IP sockets, but, 
-in accordance to VPP-4.3, only if you set ``VI_ATTR_IO_PROT`` (``ResourceAttribute.io_prot``)
-to ``VI_PROT_4882_STRS``. This will result in a write of ``*TRG\n``.
+USB and USBTMC resources that support it. They are also supported on 
+Serial devices and TCP/IP sockets, via ``VI_ATTR_IO_PROT``. See the `Attributes` 
+section below for more details.
 
 In addition, for Prologix resources: ``inst.assert_trigger()`` will send ``++trg\n``
+
+Attributes
+----------
+
+VI_ATTR_IO_PROT (``ResourceAttribute.io_prot``)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Conform to VPP-4.3, when set to ``VI_PROT_4882_STRS``, 
+on Serial and TCPIP socket resources, it will have the following effect:
+
+- Triggers will be sent using the ``*TRG\n`` command.
+- Clear will be sent using the ``*CLS\n`` command.
+- Read STB will be done using the ``*STB?\n`` query command.
+
+Any other value will not be recognized and may result in an error.
+
+For GPIB resources, this attribute is not (yet) supported.
 
 
 .. _PySerial: https://pythonhosted.org/pyserial/

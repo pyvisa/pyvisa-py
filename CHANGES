@@ -4,8 +4,11 @@ PyVISA-py Changelog
 0.9.0 (unreleased)
 ------------------
 
-- VXI-11 and HiSLIP: added filtering on trigger,
+- VI_ATTR_IO_PROT, and triggering:
+  VXI-11 and HiSLIP: added filtering on trigger,
   added trigger to HiSLIP, serial and socket,
+  added or completed clear to serial and socket,
+  added readstb to serial and socket,
   and documented. #634 PR #639
 - VXI-11 (TCPIP::INSTR):
   Locking compliance improvement. Exclusive locking works now,

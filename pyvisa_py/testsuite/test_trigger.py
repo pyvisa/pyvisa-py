@@ -6,11 +6,10 @@ import pytest
 
 from pyvisa import constants
 
-have_serial = True
 try:
     from pyvisa_py.serial import SerialSession
 except ImportError:
-    have_serial = False
+    pass
 
 from pyvisa_py.tcpip import (  # noqa: E402
     TCPIPInstrHiSLIP,
@@ -70,9 +69,33 @@ def test_vxi11_assert_trigger(protocol, expected_status, should_trigger):
 
 
 @pytest.mark.parametrize(
-    "session_class",
-    [SerialSession, TCPIPSocketSession] if have_serial else [TCPIPSocketSession],
+    "io_prot",
+    [constants.VI_PROT_NORMAL, constants.VI_PROT_4882_STRS],
 )
+@pytest.mark.parametrize(
+    "protocol",
+    [constants.TriggerProtocol.default, constants.TriggerProtocol.on],
+)
+@pytest.mark.skipif("SerialSession" not in globals(), reason="PySerial is not installed")
+def test_serial_assert_trigger(protocol, io_prot):
+    session = object.__new__(SerialSession)
+    session.attrs = {constants.ResourceAttribute.io_prot: io_prot}
+    session.write = MagicMock(return_value=(5, constants.StatusCode.success))
+
+    expected_status = constants.StatusCode.success
+    if protocol != constants.TriggerProtocol.default:
+        expected_status = constants.StatusCode.error_nonsupported_operation
+    elif io_prot != constants.VI_PROT_4882_STRS:
+        expected_status = constants.StatusCode.error_invalid_setup
+
+    assert session.assert_trigger(protocol) == expected_status
+
+    if expected_status == constants.StatusCode.success:
+        session.write.assert_called_once_with(b"*TRG\n")
+    else:
+        session.write.assert_not_called()
+
+
 @pytest.mark.parametrize(
     "io_prot",
     [constants.VI_PROT_NORMAL, constants.VI_PROT_4882_STRS],
@@ -81,8 +104,8 @@ def test_vxi11_assert_trigger(protocol, expected_status, should_trigger):
     "protocol",
     [constants.TriggerProtocol.default, constants.TriggerProtocol.on],
 )
-def test_serial_and_socket_assert_trigger(protocol, io_prot, session_class):
-    session = object.__new__(session_class)
+def test_socket_assert_trigger(protocol, io_prot):
+    session = object.__new__(TCPIPSocketSession)
     session.attrs = {constants.ResourceAttribute.io_prot: io_prot}
     session.write = MagicMock(return_value=(5, constants.StatusCode.success))
 
