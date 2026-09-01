@@ -569,8 +569,8 @@ class TCPIPInstrHiSLIP(Session):
         # for VI_ATTR_RSRC_LOCK_STATE.
         if attribute == constants.VI_ATTR_RSRC_LOCK_STATE:
             exclusive_lock = self.interface.async_lock_info()
-            # exclusive_lock: 0 – No exclusive lock granted
-            #                 1 – Exclusive lock granted
+            # exclusive_lock: 0: No exclusive lock granted
+            #                 1: Exclusive lock granted
             # we do not do shared locks (yet)
             if exclusive_lock not in (0, 1):
                 raise ValueError(f"Unexpected exclusive_lock value: {exclusive_lock}")
