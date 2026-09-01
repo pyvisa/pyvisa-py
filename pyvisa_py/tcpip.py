@@ -79,13 +79,9 @@ def calculate_lock_timeout_from_open_timeout(open_timeout: Optional[int]) -> int
     # lock_timeout can be 0 for immediate
     lock_timeout = open_timeout
     if lock_timeout is None:
-        lock_timeout = (
-            10000  # default lock timeout in ms. This shouldn't happen
-        )
+        lock_timeout = 10000  # default lock timeout in ms. This shouldn't happen
     if lock_timeout == constants.VI_TMO_INFINITE:
-        lock_timeout = (
-            2**32 - 1
-        )  # This is dangerous, but hey, the caller wanted it.
+        lock_timeout = 2**32 - 1  # This is dangerous, but hey, the caller wanted it.
     if lock_timeout == constants.VI_TMO_IMMEDIATE:
         lock_timeout = 0  # This is NOP, but makes the code more readable
     return lock_timeout
@@ -152,7 +148,7 @@ class TCPIPInstrHiSLIP(Session):
         constants.RENLineOperation.deassert: "disableRemote",
         constants.RENLineOperation.deassert_gtl: "disableAndGTL",
     }
-    
+
     LOCKRESPONSE_TO_STATUSCODE: Final[dict[str, constants.StatusCode]] = {
         hislip.LOCKRESPONSE[0]: constants.StatusCode.error_resource_locked,
         hislip.LOCKRESPONSE[1]: constants.StatusCode.success,
@@ -216,7 +212,7 @@ class TCPIPInstrHiSLIP(Session):
                 f"on port {port} with lan device name {sub_address}"
             )
             raise OpenError() from e
-        
+
         # initialize the constant attributes
         self.attrs[ResourceAttribute.dma_allow_enabled] = constants.VI_FALSE
         self.attrs[ResourceAttribute.file_append_enabled] = constants.VI_FALSE
@@ -253,12 +249,12 @@ class TCPIPInstrHiSLIP(Session):
             self.get_keepalive,
             self.set_keepalive,
         )
-        
+
         # and now handle the lock
         if self.access_mode & constants.AccessModes.exclusive_lock:
             # It wouldn't be too hard to implement shared locking, since
             # the interface likely supports it, but for now we only handle exclusive locks.
-            
+
             # about the timeout: Found nothing in the spec that says how to handle this.
             # Do what is done by VXI-11
             lock_timeout = calculate_lock_timeout_from_open_timeout(self.open_timeout)
@@ -449,7 +445,7 @@ class TCPIPInstrHiSLIP(Session):
         errorcode = StatusCode.success
 
         return stb, errorcode
-    
+
     def lock(
         self,
         lock_type: constants.Lock,
@@ -491,8 +487,10 @@ class TCPIPInstrHiSLIP(Session):
         # Note to future: requested_key None is invalid: make it an empty string
         rv = self.interface.async_lock_request(timeout, "")
         # rv is from LOCKRESPONSE
-        
-        return "", self.LOCKRESPONSE_TO_STATUSCODE.get(rv, StatusCode.error_nonsupported_operation)
+
+        return "", self.LOCKRESPONSE_TO_STATUSCODE.get(
+            rv, StatusCode.error_nonsupported_operation
+        )
 
     def unlock(self) -> constants.StatusCode:
         """Relinquish a lock for the specified resource.
@@ -507,7 +505,9 @@ class TCPIPInstrHiSLIP(Session):
         """
         rv = self.interface.async_lock_release("")
         # rv is from LOCKRESPONSE
-        return self.LOCKRESPONSE_TO_STATUSCODE.get(rv, StatusCode.error_nonsupported_operation)
+        return self.LOCKRESPONSE_TO_STATUSCODE.get(
+            rv, StatusCode.error_nonsupported_operation
+        )
 
     def terminate(self, job_id: VISAJobID | None = None) -> StatusCode:
         """Cancel a pending I/O operation on this session.
@@ -777,7 +777,9 @@ class TCPIPInstrVxi11(Session):
             self.attrs[attribute] = attributes.AttributesByID[attribute].default
 
         if lock_device:
-            self.attrs[ResourceAttribute.resource_lock_state] = constants.VI_EXCLUSIVE_LOCK
+            self.attrs[ResourceAttribute.resource_lock_state] = (
+                constants.VI_EXCLUSIVE_LOCK
+            )
         else:
             self.attrs[ResourceAttribute.resource_lock_state] = constants.VI_NO_LOCK
 
@@ -1293,7 +1295,9 @@ class TCPIPInstrVxi11(Session):
         error = self.interface.device_lock(self.link, flags, timeout)
         error = vxi11_error_to_visa(error)
         if error == StatusCode.success:
-            self.attrs[ResourceAttribute.resource_lock_state] = constants.VI_EXCLUSIVE_LOCK
+            self.attrs[ResourceAttribute.resource_lock_state] = (
+                constants.VI_EXCLUSIVE_LOCK
+            )
 
         return "", error
 
