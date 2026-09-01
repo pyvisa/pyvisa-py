@@ -216,6 +216,11 @@ class SerialSession(Session):
         if self.attrs[ResourceAttribute.io_prot] == constants.VI_PROT_4882_STRS:
             self.write(b"*CLS\n")
 
+        # Contrary to trigger and readstb, there is no further check on io_prot:
+        # VPP-4.3 OBSERVATION 6.1.23
+        # The viClear() operation will no longer return an error for a Serial INSTR resource or a TCP/IP
+        # SOCKET resource when the attribute VI_ATTR_IO_PROT is set to VI_PROT_NORMAL.
+
         return StatusCode.success
 
     def flush(self, mask: BufferOperation) -> StatusCode:

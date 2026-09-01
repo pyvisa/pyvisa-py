@@ -395,6 +395,8 @@ class TCPIPInstrHiSLIP(Session):
         if protocol != constants.TriggerProtocol.default:
             return StatusCode.error_nonsupported_operation
 
+        # Contrary to serial and socket, io_prot is not used, because VPP-4.3 does not explicitly demands it.
+
         self.interface.trigger()
         return StatusCode.success
 
@@ -1095,6 +1097,8 @@ class TCPIPInstrVxi11(Session):
         """
         if protocol != constants.TriggerProtocol.default:
             return StatusCode.error_nonsupported_operation
+
+        # Contrary to serial and socket, io_prot is not used, because VPP-4.3 does not explicitly demands it.
 
         flags = 0
         flags, lock_timeout = self._adapt_flags_and_lock_timeout(flags)

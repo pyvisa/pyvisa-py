@@ -324,16 +324,7 @@ Attributes
 VI_ATTR_IO_PROT (``ResourceAttribute.io_prot``)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-On Serial and TCPIP socket resources, when set to ``VI_PROT_4882_STRS``,
-it will have the following effect:
-
-- Triggers will be sent using the ``*TRG\n`` command.
-- Clear will be sent using the ``*CLS\n`` command.
-- Read STB will be done using the ``*STB?\n`` query command.
-
-Any other value will not be recognized and may result in an error.
-
-This is conform to VPP-4.3 and should therefore be portable.
+Is supported on Serial and TCPIP socket resources (when set to ``VI_PROT_4882_STRS``).
 
 For GPIB resources, this attribute is not (yet) supported.
 

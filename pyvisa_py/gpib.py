@@ -890,8 +890,11 @@ class GPIBSession(_GPIBCommon):  # type: ignore[no-redef]
             except gpib.GpibError:
                 return StatusCode.error_nonsupported_attribute_state
         elif attribute == constants.VI_ATTR_IO_PROT:
-            # io_prot is not (yet) supported, namely VI_PROT_HS488
-            return StatusCode.error_nonsupported_attribute_state
+            if attribute_state == constants.VI_PROT_NORMAL:
+                return StatusCode.success
+            else:
+                # io_prot is not (yet) supported, namely VI_PROT_HS488
+                return StatusCode.error_nonsupported_attribute_state
 
         return super(GPIBSession, self)._set_attribute(attribute, attribute_state)
 
