@@ -258,7 +258,7 @@ class TCPIPInstrHiSLIP(Session):
             # about the timeout: Found nothing in the spec that says how to handle this.
             # Do what is done by VXI-11
             lock_timeout = calculate_lock_timeout_from_open_timeout(self.open_timeout)
-            k, rv = self.lock(constants.Lock.exclusive, lock_timeout, "")
+            _k, rv = self.lock(constants.Lock.exclusive, lock_timeout, "")
             if rv != StatusCode.success:
                 raise RuntimeError("Failed to acquire exclusive lock")
 
