@@ -742,7 +742,7 @@ class Session(metaclass=abc.ABCMeta):
         try:
             return self._get_attribute(attribute)
         except UnknownAttribute as e:
-            LOGGER.exception(str(e))
+            # LOGGER.exception(str(e))
             return 0, StatusCode.error_nonsupported_attribute
 
     def set_attribute(
@@ -805,10 +805,10 @@ class Session(metaclass=abc.ABCMeta):
             return StatusCode.error_nonsupported_attribute_state
         except NotImplementedError:
             e = UnknownAttribute(attribute)
-            LOGGER.exception(str(e))
+            # LOGGER.exception(str(e))
             return StatusCode.error_nonsupported_attribute
         except UnknownAttribute as e:
-            LOGGER.exception(str(e))
+            # LOGGER.exception(str(e))
             return StatusCode.error_nonsupported_attribute
 
     def _read(
