@@ -23,6 +23,7 @@ from pyvisa.constants import BufferOperation, ResourceAttribute, StatusCode
 from pyvisa.typing import VISAJobID
 
 from .common import LOGGER, connect_timeout, int_to_byte, set_keepalive
+from .events import EventContext
 from .protocols import hislip, rpc, vxi11
 from .sessions import OpenError, Session, UnknownAttribute, VISARMSession
 
@@ -124,6 +125,8 @@ class TCPIPInstrHiSLIP(Session):
     # need to define session_type to make the set_attribute machinery work.
     session_type = (constants.InterfaceType.tcpip, "INSTR")
 
+    _supported_event_types = {constants.EventType.service_request}
+
     REMOTELOCALOPCODE: Final[dict[constants.RENLineOperation, str]] = {
         constants.RENLineOperation.address_gtl: "justGTL",
         constants.RENLineOperation.asrt: "enableRemote",
@@ -162,26 +165,31 @@ class TCPIPInstrHiSLIP(Session):
     def after_parsing(self) -> None:
         # TODO: board_number not handled
 
-        if "," in self.parsed.lan_device_name:
-            sub_address, port_str = self.parsed.lan_device_name.split(",")
+        parsed = self.parsed
+
+        if "," in parsed.lan_device_name:
+            sub_address, port_str = parsed.lan_device_name.split(",")
             port = int(port_str)
         else:
-            sub_address = self.parsed.lan_device_name
+            sub_address = parsed.lan_device_name
             port = self.default_tcpip_port
 
         try:
+            self._async_interrupted_message_id: Optional[int] = None
             self.interface = hislip.Instrument(
-                self.parsed.host_address,
+                parsed.host_address,
                 # ``open_timeout`` is already in milliseconds, which is what
                 # hislip.Instrument expects.
                 open_timeout=self.open_timeout,
                 timeout=self.timeout,
                 port=port,
                 sub_address=sub_address,
+                event_callback=self._handle_async_service_request,
+                interrupt_callback=self._handle_async_interrupted,
             )
         except Exception as e:
             LOGGER.exception(
-                f"Failed to open HiSLIP connection to {self.parsed.host_address} "
+                f"Failed to open HiSLIP connection to {parsed.host_address} "
                 f"on port {port} with lan device name {sub_address}"
             )
             raise OpenError() from e
@@ -198,11 +206,11 @@ class TCPIPInstrHiSLIP(Session):
         self.attrs[ResourceAttribute.resource_lock_state] = constants.VI_NO_LOCK
         self.attrs[ResourceAttribute.send_end_enabled] = constants.VI_TRUE
         self.attrs[ResourceAttribute.suppress_end_enabled] = constants.VI_FALSE
-        self.attrs[ResourceAttribute.tcpip_address] = self.parsed.host_address
-        self.attrs[ResourceAttribute.tcpip_device_name] = self.parsed.lan_device_name
+        self.attrs[ResourceAttribute.tcpip_address] = parsed.host_address
+        self.attrs[ResourceAttribute.tcpip_device_name] = parsed.lan_device_name
         self.attrs[ResourceAttribute.tcpip_hislip_overlap_enable] = constants.VI_FALSE
         self.attrs[ResourceAttribute.tcpip_hislip_version] = 0x0010_0000
-        self.attrs[ResourceAttribute.tcpip_hostname] = self.parsed.host_address
+        self.attrs[ResourceAttribute.tcpip_hostname] = parsed.host_address
         self.attrs[ResourceAttribute.tcpip_is_hislip] = constants.VI_TRUE
         self.attrs[ResourceAttribute.tcpip_nodelay] = constants.VI_TRUE
         self.attrs[ResourceAttribute.tcpip_port] = port
@@ -221,6 +229,16 @@ class TCPIPInstrHiSLIP(Session):
             self.get_keepalive,
             self.set_keepalive,
         )
+
+    def _handle_async_service_request(self, status_byte: int) -> None:
+        ctx = EventContext(
+            event_type=constants.EventType.service_request,
+            context_id=status_byte,
+        )
+        self._fire_event(constants.EventType.service_request, ctx)
+
+    def _handle_async_interrupted(self, message_id: int) -> None:
+        self._async_interrupted_message_id = message_id
 
         # TODO: additional attributes (someday)
         # self.attrs[ResourceAttribute.manufacturer_id] = 16711
