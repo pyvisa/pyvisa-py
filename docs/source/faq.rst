@@ -271,10 +271,10 @@ Event handling is not affected by locking.
     - the sequencing: some devices, once already locked, will allow `open_resource`
       to succeed (as they should per VXI-11 spec RULE B.6.6), but others don't.
 
-    Keysight VISA and PyVISA-py both support the lock timeout attribute ``VI_KTATTR_LOCKWAIT``.
+    Keysight VISA and PyVISA-py both support the lock timeout attribute ``VI_KTATTR_LOCKWAIT`` for VXI-11.
 
-    NI-VISA and R&S VISA have no known means of controlling the lock timeout, and mostly 
-    use the I/O timeout and/or internal timing for lock timeout handling.
+    NI-VISA and R&S VISA have no known means of controlling the lock timeout for VXI-11, 
+    and mostly use the I/O timeout and/or internal timing for lock timeout handling.
 
     If you are debugging locking issues, note that NI-VISA supports
     the lock-on-open method, but underneath uses the lock-after-open method, and, 
@@ -306,6 +306,27 @@ and what NI-VISA does, so this should be fully portable.
 
 GPIB has functionality comparable to HiSLIP, but may behave differently than NI-VISA, 
 depending on the type of interface.
+
+Triggers
+--------
+
+The trigger functionality in PyVISA-Py is almost feature complete. 
+Triggers are supported on GPIB, VXI-11 and HiSLIP resources, and on the 
+USB and USBTMC resources that support it. They are also supported on 
+Serial devices and TCP/IP sockets, via ``VI_ATTR_IO_PROT``. See the `Attributes` 
+section below for more details.
+
+In addition, for Prologix resources: ``inst.assert_trigger()`` will send ``++trg\n``
+
+Attributes
+----------
+
+VI_ATTR_IO_PROT (``ResourceAttribute.io_prot``)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Is supported on Serial and TCPIP socket resources (when set to ``VI_PROT_4882_STRS``).
+
+For GPIB resources, this attribute is not (yet) supported.
 
 
 .. _PySerial: https://pythonhosted.org/pyserial/
