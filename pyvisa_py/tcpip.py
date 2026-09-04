@@ -16,7 +16,7 @@ import socket
 import threading
 import time
 import warnings
-from typing import Any, Dict, Final, List, Optional, Tuple, Type, cast
+from typing import Any, Dict, Final, List, Optional, Tuple, Type
 
 from pyvisa import attributes, constants, errors, rname
 from pyvisa.constants import BufferOperation, ResourceAttribute, StatusCode
@@ -380,8 +380,7 @@ class TCPIPInstrHiSLIP(Session):
             # unknown value?
             return StatusCode.error_nonsupported_operation
 
-        interface = cast(hislip.Instrument, self.interface)
-        interface.async_remote_local_control(method)
+        self.interface.async_remote_local_control(method)
 
         return StatusCode.success
 
@@ -393,6 +392,30 @@ class TCPIPInstrHiSLIP(Session):
         """
         self.interface.device_clear()
 
+        return StatusCode.success
+
+    def assert_trigger(self, protocol: constants.TriggerProtocol):
+        """Asserts software or hardware trigger.
+
+        Corresponds to viAssertTrigger function of the VISA library.
+
+        Parameters
+        ----------
+        protocol : constants.TriggerProtocol
+            Trigger protocol to use during assertion. Only default is supported.
+
+        Returns
+        -------
+        StatusCode
+            Return value of the library call.
+
+        """
+        if protocol != constants.TriggerProtocol.default:
+            return StatusCode.error_nonsupported_operation
+
+        # Contrary to serial and socket, io_prot is not used, because VPP-4.3 does not explicitly demands it.
+
+        self.interface.trigger()
         return StatusCode.success
 
     def read_stb(self) -> Tuple[int, StatusCode]:
@@ -409,9 +432,8 @@ class TCPIPInstrHiSLIP(Session):
 
         """
 
-        interface = cast(hislip.Instrument, self.interface)
         # According to IVI-6.1 Rev.2 status query corresponds to viReadSTB.
-        stb = interface.async_status_query()
+        stb = self.interface.async_status_query()
         errorcode = StatusCode.success
 
         return stb, errorcode
@@ -449,8 +471,7 @@ class TCPIPInstrHiSLIP(Session):
             Return value of the library call.
 
         """
-        interface = cast(hislip.Instrument, self.interface)
-        interface.terminate()
+        self.interface.terminate()
         return StatusCode.success
 
     def _get_attribute(self, attribute: ResourceAttribute) -> Tuple[Any, StatusCode]:
@@ -1092,7 +1113,10 @@ class TCPIPInstrVxi11(Session):
             Return value of the library call.
 
         """
-        # protocol is ignored, VXI-11 doesn't support multiple types
+        if protocol != constants.TriggerProtocol.default:
+            return StatusCode.error_nonsupported_operation
+
+        # Contrary to serial and socket, io_prot is not used, because VPP-4.3 does not explicitly demands it.
 
         flags = 0
         flags, lock_timeout = self._adapt_flags_and_lock_timeout(flags)
@@ -1523,6 +1547,7 @@ class TCPIPSocketSession(Session):
         )
         # to use default as ni visa driver (NI-VISA 15.0)
         self.attrs[ResourceAttribute.suppress_end_enabled] = True
+        self.attrs[ResourceAttribute.io_prot] = constants.VI_PROT_NORMAL
 
         for name in ("TERMCHAR", "TERMCHAR_EN"):
             attribute = getattr(constants, "VI_ATTR_" + name)
@@ -1700,18 +1725,27 @@ class TCPIPSocketSession(Session):
 
         return offset, StatusCode.success
 
-    def clear(self) -> StatusCode:
-        """Clears a device.
-
-        Corresponds to viClear function of the VISA library.
-
-        """
+    def _clear_buff(self) -> None:
+        # used by flush and clear operations
         self._pending_buffer.clear()
         while True:
             r, _w, _x = select.select([self.interface], [], [], 0.1)
             if not r:
                 break
             r[0].recv(4096)
+
+    def clear(self) -> StatusCode:
+        """Clears a device.
+
+        Corresponds to viClear function of the VISA library.
+
+        """
+        self._clear_buff()
+
+        # Send the *CLS command to clear the device if using the 488.2 STRS protocol
+        # VPP-4.3 Permission 6.14
+        if self.attrs[ResourceAttribute.io_prot] == constants.VI_PROT_4882_STRS:
+            self.write(b"*CLS\n")
 
         return StatusCode.success
 
@@ -1730,7 +1764,7 @@ class TCPIPSocketSession(Session):
             Return value of the library call.
         """
         if mask & BufferOperation.discard_read_buffer:
-            self.clear()
+            self._clear_buff()
         if (
             mask & BufferOperation.discard_read_buffer_no_io
             or mask & BufferOperation.discard_receive_buffer
@@ -1746,6 +1780,58 @@ class TCPIPSocketSession(Session):
             pass
 
         return StatusCode.success
+
+    def read_stb(self) -> Tuple[int, StatusCode]:
+        """Reads a status byte of the service request.
+
+        Corresponds to viReadSTB function of the VISA library.
+
+        Returns
+        -------
+        int
+            Service request status byte
+        StatusCode
+            Return value of the library call.
+
+        """
+        if self.attrs[ResourceAttribute.io_prot] != constants.VI_PROT_4882_STRS:
+            return 0, StatusCode.error_invalid_setup
+
+        # Read the status byte from the device
+        _n, status = self.write(b"*STB?\n")
+        if status != StatusCode.success:
+            return 0, status
+        stbs, status = self.read(100)
+        if status != StatusCode.success:
+            return 0, status
+        try:
+            stb = int(stbs)
+            return stb, StatusCode.success
+        except ValueError:
+            return 0, StatusCode.error_nonsupported_operation
+
+    def assert_trigger(self, protocol: constants.TriggerProtocol) -> StatusCode:
+        """Asserts hardware trigger.
+
+        Parameters
+        ----------
+        protocol : constants.TriggerProtocol
+            Triggering protocol to use.
+            Only supports constants.TriggerProtocol.default
+
+        Returns
+        -------
+        StatusCode
+            Return value of the library call.
+
+        """
+        if protocol != constants.TriggerProtocol.default:
+            return StatusCode.error_nonsupported_operation
+        if self.attrs[ResourceAttribute.io_prot] != constants.VI_PROT_4882_STRS:
+            return StatusCode.error_invalid_setup
+
+        _n, status = self.write(b"*TRG\n")
+        return status
 
     def _get_tcpip_nodelay(
         self, attribute: ResourceAttribute
