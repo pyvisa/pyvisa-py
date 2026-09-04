@@ -324,6 +324,8 @@ class Session(metaclass=abc.ABCMeta):
             ResourceAttribute.resource_class: parsed.resource_class,
             ResourceAttribute.interface_type: parsed.interface_type_const,
             ResourceAttribute.timeout_value: (self._get_timeout, self._set_timeout),
+            ResourceAttribute.resource_manufacturer_name: "PyVISA-Py",
+            # TODO: VI_ATTR_RSRC_MANF_ID, VI_ATTR_RSRC_SPEC_VERSION
         }
 
         #: Timeout expressed in second or None for the absence of a timeout.
