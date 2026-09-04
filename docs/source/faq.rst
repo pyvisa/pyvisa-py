@@ -273,11 +273,14 @@ Event handling is not affected by locking.
     - the length of the timeouts (timeouts may be significantly longer or shorter than specified)
     - the sequencing: some devices, once already locked, will allow `open_resource`
       to succeed (as they should per VXI-11 spec RULE B.6.6), but others don't.
+    
+    Worse, some instruments do not clean up locks after the connection is closed. 
+    That is not only a violation of the expected behavior according to the standards, 
+    but can also lead to unexpected locking issues in subsequent connections, requiring an instrument reboot.
 
-    Keysight VISA and PyVISA-py both support the lock timeout attribute ``VI_KTATTR_LOCKWAIT``.
-
-    NI-VISA and R&S VISA have no known means of controlling the lock timeout, and mostly 
-    use the I/O timeout and/or internal timing for lock timeout handling.
+    About the lock timeout handling: Keysight VISA and PyVISA-py both support the lock timeout 
+    attribute ``VI_KTATTR_LOCKWAIT``. NI-VISA and R&S VISA have no known means of controlling 
+    the lock timeout, and mostly use the I/O timeout and/or internal timing for lock timeout handling.
 
     If you are debugging locking issues, note that NI-VISA supports
     the lock-on-open method, but underneath uses the lock-after-open method, and, 
