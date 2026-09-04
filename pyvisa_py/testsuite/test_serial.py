@@ -6,9 +6,17 @@
 
 """
 
+from unittest.mock import MagicMock
+
 import pytest
 
-from pyvisa import ResourceManager
+from pyvisa import ResourceManager, constants
+
+try:
+    from pyvisa_py.serial import SerialSession
+except ImportError:
+    pass
+
 from pyvisa.testsuite import BaseTestCase
 
 
@@ -43,3 +51,27 @@ class TestSerial(BaseTestCase):
 
         assert sorted(available) == sorted(expected)
         assert sorted(missing) == sorted(exp_missing)
+
+    @pytest.mark.parametrize(
+        "io_protocol, expected_command",
+        [
+            (constants.VI_PROT_NORMAL, None),
+            (constants.VI_PROT_4882_STRS, b"*CLS\n"),
+        ],
+    )
+    def test_clear(self, io_protocol, expected_command):
+        """Clear serial buffers and send *CLS only with the 488.2 protocol."""
+        session = object.__new__(SerialSession)
+        session.attrs = {constants.ResourceAttribute.io_prot: io_protocol}
+        session.interface = MagicMock()
+        session.write = MagicMock()
+
+        assert session.clear() == constants.StatusCode.success
+
+        session.interface.reset_output_buffer.assert_called_once_with()
+        session.interface.sendBreak.assert_called_once_with()
+        session.interface.reset_input_buffer.assert_called_once_with()
+        if expected_command is None:
+            session.write.assert_not_called()
+        else:
+            session.write.assert_called_once_with(expected_command)

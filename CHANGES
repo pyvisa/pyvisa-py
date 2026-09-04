@@ -6,6 +6,14 @@ PyVISA-py Changelog
 
 - HiSLIP: allow locking. Closes #635 PR #643
 - HiSLIP: allow service request events. Closes #625 PR #626
+- Triggers:
+  Added trigger to HiSLIP, serial and socket
+  Added filtering to VXI-11 triggers
+  Closes #634 PR #639
+- VI_ATTR_IO_PROT:
+  added or completed clear to serial and socket,
+  added readstb to serial and socket,
+  and documented. Closes #634 PR #639
 - VXI-11 (TCPIP::INSTR):
   Locking compliance improvement. Exclusive locking works now,
   Removed `session.lock_timeout`, no longer needed for instruments
