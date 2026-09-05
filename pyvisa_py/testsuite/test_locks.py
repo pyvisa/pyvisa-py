@@ -206,4 +206,3 @@ def test_open_hislip_with_exclusive_lock_failure_closes_connection():
 
     mock_instrument.async_lock_request.assert_called_once()
     mock_instrument.close.assert_called_once()
-
