@@ -192,6 +192,104 @@ class TestHiSLIPInterruptedInHeader:
         assert header.message_parameter == 0xFFFF_FF00
 
 
+class TestAsyncChannelDispatcher:
+    """Test the background async reader and request dispatcher."""
+
+    def _make_hislip_header(
+        self,
+        msg_type: str,
+        control_code: int,
+        message_parameter: int,
+        payload_length: int,
+    ) -> bytes:
+        return struct.pack(
+            HEADER_FORMAT,
+            b"HS",
+            MESSAGETYPE[msg_type],
+            control_code,
+            message_parameter,
+            payload_length,
+        )
+
+    def test_async_service_request_fires_callback(self):
+        from pyvisa_py.protocols.hislip import AsyncChannel
+
+        server, client_raw = socket.socketpair()
+        events = []
+        channel = AsyncChannel(client_raw, event_callback=events.append)
+        channel.start()
+
+        server.sendall(self._make_hislip_header("AsyncServiceRequest", 0x42, 0, 0))
+
+        deadline = time.time() + 2.0
+        while not events and time.time() < deadline:
+            time.sleep(0.01)
+
+        assert events == [0x42]
+
+        channel.close()
+        server.close()
+
+    def test_async_request_gets_dispatcher_response(self):
+        from pyvisa_py.protocols.hislip import AsyncChannel
+
+        server, client_raw = socket.socketpair()
+        channel = AsyncChannel(client_raw)
+        channel.start()
+
+        result = {}
+
+        def responder():
+            request_header = server.recv(1024)
+            assert request_header
+            response_header = self._make_hislip_header(
+                "AsyncStatusResponse", 0x5A, 0, 0
+            )
+            server.sendall(response_header)
+
+        responder_thread = threading.Thread(target=responder)
+        responder_thread.start()
+
+        result["response"] = channel.request(
+            "AsyncStatusQuery", 0, 0, expected_response="AsyncStatusResponse"
+        )
+
+        responder_thread.join(timeout=2.0)
+        assert not responder_thread.is_alive()
+        assert result["response"].msg_type == "AsyncStatusResponse"
+        assert result["response"].control_code == 0x5A
+
+        channel.close()
+        server.close()
+
+    def test_async_interrupted_aborts_pending_request(self):
+        from pyvisa_py.protocols.hislip import AsyncChannel
+
+        server, client_raw = socket.socketpair()
+        channel = AsyncChannel(client_raw)
+        channel.start()
+
+        def responder():
+            request_header = server.recv(1024)
+            assert request_header
+            server.sendall(self._make_hislip_header("AsyncInterrupted", 0, 0xBEEF, 0))
+
+        responder_thread = threading.Thread(target=responder)
+        responder_thread.start()
+
+        with pytest.raises(HiSLIPInterruptedError) as excinfo:
+            channel.request(
+                "AsyncStatusQuery", 0, 0, expected_response="AsyncStatusResponse"
+            )
+
+        responder_thread.join(timeout=2.0)
+        assert not responder_thread.is_alive()
+        assert excinfo.value.message_id == 0xBEEF
+
+        channel.close()
+        server.close()
+
+
 class TestInstrumentTerminate:
     """Test Instrument.terminate() and complete_terminate() via mocking."""
 
@@ -385,6 +483,30 @@ class TestTCPIPInstrHiSLIPTerminate:
         data, status = sess.read(4)
         assert data == b"abcd"
         assert status == StatusCode.success_max_count_read
+
+    def test_async_service_request_callback_fires_event(self):
+        from pyvisa import constants
+        from pyvisa_py.events import EventContext
+        from pyvisa_py.tcpip import TCPIPInstrHiSLIP
+
+        sess = object.__new__(TCPIPInstrHiSLIP)
+        sess._fire_event = MagicMock()
+
+        TCPIPInstrHiSLIP._handle_async_service_request(sess, 0x44)
+
+        sess._fire_event.assert_called_once()
+        event_type, ctx = sess._fire_event.call_args.args
+        assert event_type == constants.EventType.service_request
+        assert isinstance(ctx, EventContext)
+        assert ctx.context_id == 0x44
+
+    def test_async_interrupted_callback_stores_message_id(self):
+        from pyvisa_py.tcpip import TCPIPInstrHiSLIP
+
+        sess = object.__new__(TCPIPInstrHiSLIP)
+        sess._handle_async_interrupted(0x1234)
+
+        assert sess._async_interrupted_message_id == 0x1234
 
 
 class TestHighlevelTerminate:
