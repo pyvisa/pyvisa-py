@@ -260,6 +260,7 @@ class TCPIPInstrHiSLIP(Session):
             lock_timeout = calculate_lock_timeout_from_open_timeout(self.open_timeout)
             _k, rv = self.lock(constants.Lock.exclusive, lock_timeout, "")
             if rv != StatusCode.success:
+                self.close()  # the operation was open_with_lock. If the lock fails, the open should also be reversed.
                 raise RuntimeError("Failed to acquire exclusive lock")
 
     def _handle_async_service_request(self, status_byte: int) -> None:

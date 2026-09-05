@@ -5,6 +5,7 @@ from unittest.mock import ANY, MagicMock, patch
 import pytest
 
 from pyvisa import constants, errors, rname
+from pyvisa.typing import VISARMSession
 from pyvisa_py import highlevel
 from pyvisa_py.tcpip import TCPIPInstrHiSLIP, TCPIPInstrVxi11
 
@@ -184,3 +185,25 @@ def test_hislip_lock_updates_resource_lock_state():
 
     state, status = library.get_attribute(1, constants.VI_ATTR_RSRC_LOCK_STATE)
     assert (state, status) == (constants.VI_NO_LOCK, constants.StatusCode.success)
+
+
+def test_open_hislip_with_exclusive_lock_failure_closes_connection():
+    resource_name = "TCPIP::localhost::hislip0::INSTR"
+    parsed = rname.parse_resource_name(resource_name)
+    mock_instrument = MagicMock()
+    # Return a response that indicates lock request failure
+    mock_instrument.async_lock_request.return_value = "failure"
+
+    with patch("pyvisa_py.tcpip.hislip.Instrument", return_value=mock_instrument):
+        with pytest.raises(RuntimeError, match="Failed to acquire exclusive lock"):
+            TCPIPInstrHiSLIP(
+                VISARMSession(1),
+                resource_name,
+                parsed,
+                access_mode=constants.AccessModes.exclusive_lock,
+                open_timeout=1000,
+            )
+
+    mock_instrument.async_lock_request.assert_called_once()
+    mock_instrument.close.assert_called_once()
+
