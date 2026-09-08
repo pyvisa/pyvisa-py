@@ -217,7 +217,6 @@ class TestAsyncChannelDispatcher:
         server, client_raw = socket.socketpair()
         events = []
         channel = AsyncChannel(client_raw, event_callback=events.append)
-        channel.start()
 
         server.sendall(self._make_hislip_header("AsyncServiceRequest", 0x42, 0, 0))
 
@@ -235,7 +234,6 @@ class TestAsyncChannelDispatcher:
 
         server, client_raw = socket.socketpair()
         channel = AsyncChannel(client_raw)
-        channel.start()
 
         result = {}
 
@@ -267,7 +265,6 @@ class TestAsyncChannelDispatcher:
 
         server, client_raw = socket.socketpair()
         channel = AsyncChannel(client_raw)
-        channel.start()
 
         def responder():
             request_header = server.recv(1024)

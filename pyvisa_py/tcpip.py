@@ -284,6 +284,17 @@ class TCPIPInstrHiSLIP(Session):
         # self.attrs[ResourceAttribute.user_data] = 0
         # self.attrs[ResourceAttribute.write_buffer_size] = 4096
 
+    def _handle_async_service_request(self, status_byte: int) -> None:
+        ctx = EventContext(
+            event_type=constants.EventType.service_request,
+            context_id=status_byte,
+        )
+        self._fire_event(constants.EventType.service_request, ctx)
+
+    def _handle_async_interrupted(self, message_id: int) -> None:
+        self._async_interrupted_message_id = message_id
+        # TODO: fire an event for this, but there is no INTR event type for HiSLIP in VPP-4.3
+
     def get_max_message_kb(
         self, attribute: ResourceAttribute
     ) -> Tuple[int, StatusCode]:
