@@ -415,7 +415,7 @@ class AsyncStatusResponse(RxHeader):
         assert self.payload_length == 0
 
 
-@dataclass
+@dataclass(frozen=True, slots=True)
 class AsyncMessage:
     msg_type: str
     control_code: int
@@ -440,8 +440,7 @@ class AsyncChannel:
         self._pending_request: Optional[dict] = None
         self._stop = threading.Event()
         self._thread = threading.Thread(target=self._run, daemon=True)
-
-    def start(self) -> None:
+        # And start the thread
         if not self._thread.is_alive():
             self._thread.start()
 
@@ -607,6 +606,12 @@ class AsyncChannel:
                 break
 
             if message.msg_type == "AsyncInterrupted":
+                # When the client receives Interrupted or AsyncInterrupted, it shall clear any whole or partial server messages
+                # that have been validated per rules 1 and 2.
+                # If the client initially detects AsyncInterrupted, it shall also discard any further Data or DataEND messages
+                # from the server until Interrupted is encountered.
+                # If the client detects Interrupted before it detects AsyncInterrupted, the client shall not send any further
+                # messages until AsyncInterrupted is received.
                 with self._state_lock:
                     pending = self._pending_request
                     if pending is not None and not pending["done"]:
@@ -719,7 +724,8 @@ class Instrument:
             event_callback=event_callback,
             interrupt_callback=interrupt_callback,
         )
-        self._async_channel.start()
+        # The thread is started in the AsyncChannel constructor,
+        # so we don't need to start it here.
 
         # initialize variables
         self.max_msg_size = DEFAULT_MAX_MSG_SIZE
