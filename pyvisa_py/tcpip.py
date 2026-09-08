@@ -274,7 +274,6 @@ class TCPIPInstrHiSLIP(Session):
         # self.attrs[ResourceAttribute.user_data] = 0
         # self.attrs[ResourceAttribute.write_buffer_size] = 4096
 
-
     def _handle_async_service_request(self, status_byte: int) -> None:
         ctx = EventContext(
             event_type=constants.EventType.service_request,
