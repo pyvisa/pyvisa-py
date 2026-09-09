@@ -130,10 +130,11 @@ The following features are not or not fully supported:
 ^^^^^^^^^^^^^^^^^^^^^^^^^
 
 If you have a VXI-11.2 (VXI-11 to GPIB) gateway, you may want to use the VXI-11 ``device_docmd()`` 
-command to deal with legacy devices. 
-However, there is no official provision in the VISA standards to do that.
+command to deal with legacy devices or to perform low-level GPIB operations manually. 
 
-PyVISA-Py does provide a way to use this command via a lower end method::
+Unfortunately, there is no official provision in the VISA standards to do that.
+
+PyVISA-Py does provide a way to execute this command via a low level method::
 
     import pyvisa
 
@@ -165,7 +166,7 @@ PyVISA-Py does provide a way to use this command via a lower end method::
         Raises
         ------
         ValueError
-            If command_bytes is empty of the wrong type or longer than 128 bytes.
+            If command_bytes is empty, of the wrong type, or longer than 128 bytes.
         Vxi11DocmdError
             If the server returns a nonzero VXI-11 error code.
         """
@@ -202,6 +203,10 @@ PyVISA-Py does provide a way to use this command via a lower end method::
 
 
 Note that this is PyVISA-Py specific, and that some gateways may not support this feature.
+
+You can also use the same mechanism to execute other commands via `interface.device_docmd()`. 
+See the documentation of VXI-11 and potentially the documentation of your gateway for details. 
+Some gateways even support parallel polling via this.
 
 As mentioned in the code, only use this on VXI-11, on the SICL address (typically ``gpib0``).
 
