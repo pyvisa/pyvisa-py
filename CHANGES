@@ -5,7 +5,8 @@ PyVISA-py Changelog
 ------------------
 
 - Suppress exception logs in case of unknown attribute #644
-- hislip: allow service request events. Closes #625 PR #626
+- HiSLIP: allow locking. Closes #635 PR #643
+- HiSLIP: allow service request events. Closes #625 PR #626
 - Triggers:
   Added trigger to HiSLIP, serial and socket
   Added filtering to VXI-11 triggers

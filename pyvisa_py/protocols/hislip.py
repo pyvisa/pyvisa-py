@@ -1077,9 +1077,11 @@ class Instrument:
             0,
             expected_response="AsyncLockInfoResponse",
         )
+        # TODO if you want to support shared locks, you may need to
+        # interpret `clients_holding_locks `
         return response.control_code
 
-    def async_lock_request(self, timeout: float, lock_string: str = "") -> str:
+    def async_lock_request(self, timeout_ms: int, lock_string: str = "") -> str:
         """
         perform an AsyncLock request transaction.
         returns the lock_response from the AsyncLockResponse packet.
@@ -1088,7 +1090,6 @@ class Instrument:
         #     C->S: AsyncLock
         #     S->C: AsyncLockResponse
         ctrl_code = LOCKCONTROLCODE["request"]
-        timeout_ms = int(1e3 * timeout)
         response = self._async_channel.request(
             "AsyncLock",
             ctrl_code,
