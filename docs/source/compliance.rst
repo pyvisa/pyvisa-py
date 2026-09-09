@@ -1,28 +1,99 @@
+Supported VISA resources
+========================
+
+The following table shows the supported VISA resource classes and the grammar for the address string. 
+Optional string segments are shown in square brackets ([ ]).
+
+=================  ========================================================================================
+Interface          Syntax
+=================  ========================================================================================
+ASRL INSTR         ASRL[board]::INSTR
+-----------------  ----------------------------------------------------------------------------------------
+GPIB INSTR         GPIB[board]::primary_address[::secondary_address][::INSTR]
+GPIB INTFC         GPIB[board]::INTFC
+-----------------  ----------------------------------------------------------------------------------------
+PRLGX ASRL         PRLGX-ASRL[board]::serial device::INTFC
+PRLGX TCPIP        PRLGX-TCPIP[board]::host address[::port]::INTFC
+-----------------  ----------------------------------------------------------------------------------------
+TCPIP INSTR        TCPIP[board]::host address[::LAN device name][::INSTR]
+TCPIP SOCKET       TCPIP[board]::host address[::port]::SOCKET
+-----------------  ----------------------------------------------------------------------------------------
+VICP INSTR         VICP::host address[::INSTR]
+-----------------  ----------------------------------------------------------------------------------------
+USB INSTR          USB[board]::manufacturer ID::model code::serial number[::USB interface number][::INSTR]
+USB RAW            USB[board]::manufacturer ID::model code::serial number[::USB interface number]::RAW
+=================  ========================================================================================
+
+Notes:
+
+* TCPIP INSTR: 
+    * Supports both VXI-11 and HiSLIP protocols, as determined by `LAN device name` (``inst...`` or ``hislip...``), VXI-11 by default.
+    * For HiSLIP, the port number can be specified the standard way by appending it to the `LAN device name`, separated by a comma. Example: ``hislip0,4880``
+    * For VXI-11, the port number is normally provided by a port mapper, but can also be provided explicitly by appending it to the `host address`, separated by a comma. Example: ``192.168.1.101,1024``. Not all VISA backends support this feature.
+* PRLGX / Prologix:
+    * This is PyVISA-Py specific. See the Prologix section for details.
+* All TCP-IP based resources:
+    * Board is ignored, and presumed to be 0 (the default network interface).
+
+
+Prologix
+========
+
+Controlling GPIB resources via a prologix adapter is possible. There are 2 main methods:
+
+* via a `ASRL INSTR` or `TCPIP SOCKET` resource. 
+  Be sure to set read- and write termination, and to use the correct prologix  ``++`` commands mixed in with the SCPI commands.
+* via the PyVISA-Py specific `PRLGX ASRL` or `PRLGX TCPIP` resources, and the `GPIB` resources. 
+  This will allow you to treat the gateway and the connected instruments as separate resources, and makes it easier to interact with the instruments directly. 
+  
+  This goes in 2 steps:
+
+  1. Open the gateway resource using the appropriate Prologix-specific resource string.
+  2. Open the connected instrument as a GPIB resource.
+
+    Example::
+
+        import pyvisa
+
+        # force the PyVISA-Py backend, in case you have installed others.
+        rm = pyvisa.ResourceManager("@py")
+
+        # Open the gateway.
+        # It will then propose itself as a native GPIB interface.
+        # You can't also have a GPIB card in your system.
+        # Port 1234 is by default. You can also specify it the standard way.
+        prlgx = rm.open_resource("PRLGX-TCPIP::192.168.1.110::INTFC")
+
+        # Open the various connected instruments via the GPIB interface just created.
+        inst1 = rm.open_resource("GPIB::1::INSTR")  # instrument at address 1
+        inst2 = rm.open_resource("GPIB::2::INSTR")  # etc
+        inst18 = rm.open_resource("GPIB::18::INSTR")
+
+        # and now you can talk to the instruments (one at a time please):
+        print(inst1.query("*IDN?"))
+        print(inst2.query("*IDN?"))
+        print(inst18.query("*ID?"))
+
+    If you use this method, be aware that it tries to be intelligent, and emits the ``++read eoi`` command by itself 
+    when you do a query. But you can no longer emit that yourself. That means that you can no longer call 
+    ``read_raw`` or other standalone read methods. Only use ``query`` and ``write`` methods.
+
 Functions: VPP-4.3 Compliance
 =============================
 
-# TODO: 
-- list what instruments are supported
-- no shared nor nested locks
-- no async read/write
-- no terminate except HiSLIP
+The following features are not supported:
 
+* Shared locks and nested locks are not supported.
+* Asynchronous read/write operations are not supported.
+* Termination is only supported for HiSLIP.
 
-Functions: PyVISA-Py Additions
-==============================
-
-# TODO: 
-- add prologix
-- show how docmd can be done
-
+VXI-11 fully supports ``gpib_command()``, for use with VXI-11.2 compliant VXI-11 to GPIB gateways. Note that not all VISA backends nor all Gateways support that. 
 
 Attributes: VPP-4.3 Compliance
 ==============================
 
 This document assesses the VPP-4.3 attributes applicable to PyVISA-py's
-implemented resource types: ``GPIB::INSTR``, ``GPIB::INTFC``, ``ASRL::INSTR``,
-``TCPIP::INSTR`` over VXI-11 and HiSLIP, ``TCPIP::SOCKET``, and ``USB::INSTR``. 
-
+implemented resource types.
 Resource classes not listed in a section cannot use that attribute under VPP-4.3.
 
 # TODO: add prologix
@@ -309,6 +380,7 @@ ASRL, VXI-11, and USB Missing.
 
 Proposition: distribute everywhere except GPIB: `interface_number = self.parsed.board`.
 While we're there, correct `VI_ATTR_INTF_INST_NAME` (`interface_instrument_name`): include board in it, for VXI-11 and HiSLIP.
+For VXI-11 and HiSLIP, interface_number corresponds to the network interface of the client PC.
 Add tests about this.
 
 
@@ -649,7 +721,7 @@ Coverage: Full.
 
 
 ``VI_ATTR_USER_DATA`` / ``VI_ATTR_USER_DATA_32`` / ``VI_ATTR_USER_DATA_64``
------------------------------------------------------------------------
+---------------------------------------------------------------------------
 Usable by all resources.
 
 Coverage: Missing.
