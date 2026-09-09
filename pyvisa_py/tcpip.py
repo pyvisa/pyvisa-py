@@ -222,8 +222,7 @@ class TCPIPInstrHiSLIP(Session):
         self.attrs[ResourceAttribute.read_buffer_operation_mode] = (
             constants.VI_FLUSH_DISABLE
         )
-        # do NOT set the resource lock state manually; it will be managed by the remote locking mechanism.
-        # self.attrs[ResourceAttribute.resource_lock_state] = constants.VI_NO_LOCK
+        # do NOT set the resource_lock_state manually; it will be managed by the remote locking mechanism.
         self.attrs[ResourceAttribute.send_end_enabled] = constants.VI_TRUE
         self.attrs[ResourceAttribute.suppress_end_enabled] = constants.VI_FALSE
         self.attrs[ResourceAttribute.tcpip_address] = parsed.host_address
