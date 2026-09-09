@@ -30,7 +30,7 @@ PRLGX TCPIP        PRLGX-TCPIP[board]::host address[::port]::INTFC
 Notes:
 
 * TCPIP INSTR: 
-    * Supports both VXI-11 and HiSLIP protocols, as determined by `LAN device name` (``inst...`` or ``hislip...``), VXI-11 by default.
+    * Supports both VXI-11 and HiSLIP protocols, as determined by `LAN device name` (``hislip...`` for HiSLIP, anything else goes to VXI-11), with VXI-11 as the default.
     * For HiSLIP, the port number can be specified the standard way by appending it to the `LAN device name`, separated by a comma. Example: ``hislip0,4880``
     * For VXI-11, the port number is normally provided by a port mapper, but can also be provided explicitly by appending it to the `host address`, separated by a comma. Example: ``192.168.1.101,1024``. Not all VISA backends support this feature.
 * PRLGX / Prologix:
