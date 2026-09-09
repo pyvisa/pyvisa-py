@@ -87,23 +87,92 @@ The following features are not supported:
 * Asynchronous read/write operations are not supported.
 * Termination is only supported for HiSLIP.
 
-``gpib_command()``
-^^^^^^^^^^^^^^^^^^
+``VXI-11 device_docmd()``
+-------------------------
 
-VXI-11 fully supports ``gpib_command()``, for use with VXI-11.2 compliant VXI-11 to GPIB gateways. 
+If you have a VXI-11.2 (VXI-11 to GPIB) gateway, you may want to use the VXI-11 ``device_docmd()`` command. 
+However, there is no official provision in the VISA standards to do that.
 
-Note that not all VISA backends nor all Gateways support that. 
+PyVISA-Py does provide a way to use this command via a lower end method::
 
-Only use this on the SICL address (typically ``gpib0``), not on the individual instrument addresses.
+    import pyvisa
+
+    # VXI-11.2 Table B.1
+    VXI11_DOCMD_SEND_COMMAND = 0x020000
+    SEND_COMMAND_DATASIZE = 1  # Table B.1: Send Command's datasize is 1 (byte-granular)
+    SEND_COMMAND_MAX_BYTES = 128  # Table B.1: data_in.data_in_len is 0-128 for Send Command
+
+    def vxi11_send_command(inst, command_bytes, io_timeout_ms=5000):
+        """Send raw GPIB command bytes via the VXI-11.2 B.5.1 "Send Command" doCmd.
+
+        Parameters
+        ----------
+        inst : pyvisa resource
+            Must be opened against the *interface itself* (e.g. "TCPIP::<ip>::gpib0::INSTR"),
+            not a specific device link - see RULE B.5.2 above.
+        command_bytes : bytes | bytearray | list[int] | tuple[int, ...]
+            0-128 raw GPIB command bytes to put on the bus with ATN asserted (IEEE 488.2, 16.2.1).
+            This is where you'd put addressing/handshake bytes (UNL, UNT, MLA, MTA, secondary
+            addresses, ...) if you're doing your own bus addressing by hand.
+        io_timeout_ms : int
+            I/O timeout for this call, in milliseconds.
+
+        Returns
+        -------
+        bytes
+            data_out from the server. Per RULE B.5.5 this SHALL be an exact echo of the bytes sent.
+
+        Raises
+        ------
+        ValueError
+            If command_bytes is empty of the wrong type or longer than 128 bytes.
+        Vxi11DocmdError
+            If the server returns a nonzero VXI-11 error code.
+        """
+        data_in = bytes(command_bytes)
+        if len(data_in) > SEND_COMMAND_MAX_BYTES:
+            raise ValueError(
+                f"Send Command accepts at most {SEND_COMMAND_MAX_BYTES} bytes "
+                f"(Table B.1), got {len(data_in)}"
+            )
+
+        session = inst.visalib.sessions[inst.session]
+
+        error, data_out = session.interface.device_docmd(
+            session.link,
+            0,  # flags
+            io_timeout_ms,
+            1000,  # lock timeout
+            VXI11_DOCMD_SEND_COMMAND,
+            False,  # network_order - irrelevant here, data_in/data_out are raw byte arrays already
+            SEND_COMMAND_DATASIZE,
+            data_in,
+        )
+
+        if error:
+            raise Exception(f"VXI-11 Send Command error: {error}")
+
+        return data_out
+
+
+    rm = pyvisa.ResourceManager("@py")
+    inst = rm.open_resource("TCPIP::192.168.3.2::gpib0::INSTR")
+    echoed = vxi11_send_command(inst, [0x3F, 0x5F])  # UNL, UNT
+    inst.close()
+
+
+Note that this is PyVISA-Py specific, and not all gateways support this command (although they should).
+
+As mentioned in the code, only use this only on VXI-11, on the SICL address (typically ``gpib0``).
 
 Attributes: VPP-4.3 Compliance
 ==============================
 
-This document assesses the VPP-4.3 attributes applicable to PyVISA-py's
+This document assesses the VPP-4.3 attributes applicable to PyVISA-Py's
 implemented resource types.
 Resource classes not listed in a section cannot use that attribute under VPP-4.3.
 
-# TODO: add prologix
+# TODO: add prologix to the supported types, and check prologix specific attributes.
 
 ``VI_ATTR_4882_COMPLIANT``
 --------------------------
