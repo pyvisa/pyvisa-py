@@ -13,42 +13,6 @@ needed. We would like to reach feature parity. If there is something that you
 need, let us know.
 
 
-How do I cancel a pending I/O operation (viTerminate)?
-------------------------------------------------------
-
-For HiSLIP sessions (``TCPIP::host::hislip0::INSTR``), ``viTerminate()`` is
-supported.  This allows one thread to cancel a blocking read that is running
-in another thread, without destroying the session.
-
-The blocked read will return with ``VI_ERROR_ABORT``.  The HiSLIP protocol
-state is automatically reset (via a device clear) so the session is ready for
-further I/O immediately::
-
-    >>> import pyvisa
-    >>> rm = pyvisa.ResourceManager('@py')
-    >>> inst = rm.open_resource('TCPIP::192.168.1.100::hislip0::INSTR')
-    >>> 
-    >>> # From another thread, to cancel a blocked read:
-    >>> inst.visalib.terminate(inst.session, None, None)
-    >>> 
-    >>> # The blocked read returns VI_ERROR_ABORT.
-    >>> # The session is ready for further I/O — no manual viClear() needed.
-
-``viTerminate()`` is not yet supported for VXI-11, USBTMC, or serial sessions.
-
-.. note::
-
-    **Portability:** This implementation goes beyond what mainstream VISA
-    libraries provide for synchronous operations.  For example, Keysight IO
-    Libraries' ``viTerminate()`` returns ``VI_SUCCESS`` but does not actually
-    cancel a blocked synchronous ``viRead()`` — the read continues until the
-    normal timeout expires.  The VISA specification defines ``viTerminate()``
-    primarily for asynchronous operations (``viReadAsync`` / ``viWriteAsync``),
-    and its behavior on synchronous calls is implementation-defined.  Code
-    that relies on ``viTerminate()`` cancelling a synchronous read may not
-    be portable to other VISA backends.
-
-
 Why are you developing this?
 ----------------------------
 
@@ -277,6 +241,7 @@ Event handling is not affected by locking.
     Worse, some instruments do not clean up locks after the connection is closed. 
     That is not only a violation of the expected behavior according to the standards, 
     but can also lead to unexpected locking issues in subsequent connections, requiring an instrument reboot.
+    The DMM6500 is especially lacking in this aspect.
 
     About the lock timeout handling: Keysight VISA and PyVISA-py both support the lock timeout 
     attribute ``VI_KTATTR_LOCKWAIT``. NI-VISA and R&S VISA have no known means of controlling 
@@ -318,21 +283,47 @@ Triggers
 
 The trigger functionality in PyVISA-Py is almost feature complete. 
 Triggers are supported on GPIB, VXI-11 and HiSLIP resources, and on the 
-USB and USBTMC resources that support it. They are also supported on 
-Serial devices and TCP/IP sockets, via ``VI_ATTR_IO_PROT``. See the `Attributes` 
-section below for more details.
+USB and USBTMC resources that support it. 
 
-In addition, for Prologix resources: ``inst.assert_trigger()`` will send ``++trg\n``
+They are also supported on 
+Serial devices and TCP/IP sockets, via ``VI_ATTR_IO_PROT``.
 
-Attributes
-----------
+In addition, for Prologix resources, ``inst.assert_trigger()`` will send ``++trg\n``
 
-VI_ATTR_IO_PROT (``ResourceAttribute.io_prot``)
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+How do I cancel a pending I/O operation (viTerminate)?
+------------------------------------------------------
 
-Is supported on Serial and TCPIP socket resources (when set to ``VI_PROT_4882_STRS``).
+For HiSLIP sessions (``TCPIP::host::hislip0::INSTR``), ``viTerminate()`` is
+supported.  This allows one thread to cancel a blocking read that is running
+in another thread, without destroying the session.
 
-For GPIB resources, this attribute is not (yet) supported.
+The blocked read will return with ``VI_ERROR_ABORT``.  The HiSLIP protocol
+state is automatically reset (via a device clear) so the session is ready for
+further I/O immediately::
+
+    >>> import pyvisa
+    >>> rm = pyvisa.ResourceManager('@py')
+    >>> inst = rm.open_resource('TCPIP::192.168.1.100::hislip0::INSTR')
+    >>> 
+    >>> # From another thread, to cancel a blocked read:
+    >>> inst.visalib.terminate(inst.session, None, None)
+    >>> 
+    >>> # The blocked read returns VI_ERROR_ABORT.
+    >>> # The session is ready for further I/O — no manual viClear() needed.
+
+``viTerminate()`` is not yet supported for VXI-11, USBTMC, or serial sessions.
+
+.. note::
+
+    **Portability:** This implementation goes beyond what mainstream VISA
+    libraries provide for synchronous operations.  For example, Keysight IO
+    Libraries' ``viTerminate()`` returns ``VI_SUCCESS`` but does not actually
+    cancel a blocked synchronous ``viRead()`` — the read continues until the
+    normal timeout expires.  The VISA specification defines ``viTerminate()``
+    primarily for asynchronous operations (``viReadAsync`` / ``viWriteAsync``),
+    and its behavior on synchronous calls is implementation-defined.  Code
+    that relies on ``viTerminate()`` cancelling a synchronous read may not
+    be portable to other VISA backends.
 
 
 .. _PySerial: https://pythonhosted.org/pyserial/

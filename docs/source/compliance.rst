@@ -1,5 +1,8 @@
+Compatibility and specific features of PyVISA-Py
+================================================
+
 Supported VISA resources
-========================
+------------------------
 
 The following table shows the supported VISA resource classes and the grammar for the address string. 
 Optional string segments are shown in square brackets ([ ]).
@@ -12,9 +15,6 @@ ASRL INSTR         ASRL[board]::INSTR
 GPIB INSTR         GPIB[board]::primary_address[::secondary_address][::INSTR]
 GPIB INTFC         GPIB[board]::INTFC
 -----------------  ----------------------------------------------------------------------------------------
-PRLGX ASRL         PRLGX-ASRL[board]::serial device::INTFC
-PRLGX TCPIP        PRLGX-TCPIP[board]::host address[::port]::INTFC
------------------  ----------------------------------------------------------------------------------------
 TCPIP INSTR        TCPIP[board]::host address[::LAN device name][::INSTR]
 TCPIP SOCKET       TCPIP[board]::host address[::port]::SOCKET
 -----------------  ----------------------------------------------------------------------------------------
@@ -22,6 +22,9 @@ VICP INSTR         VICP::host address[::INSTR]
 -----------------  ----------------------------------------------------------------------------------------
 USB INSTR          USB[board]::manufacturer ID::model code::serial number[::USB interface number][::INSTR]
 USB RAW            USB[board]::manufacturer ID::model code::serial number[::USB interface number]::RAW
+-----------------  ----------------------------------------------------------------------------------------
+PRLGX ASRL         PRLGX-ASRL[board]::serial device::INTFC
+PRLGX TCPIP        PRLGX-TCPIP[board]::host address[::port]::INTFC
 =================  ========================================================================================
 
 Notes:
@@ -32,65 +35,95 @@ Notes:
     * For VXI-11, the port number is normally provided by a port mapper, but can also be provided explicitly by appending it to the `host address`, separated by a comma. Example: ``192.168.1.101,1024``. Not all VISA backends support this feature.
 * PRLGX / Prologix:
     * This is PyVISA-Py specific. See the Prologix section for details.
-* All TCP-IP based resources:
+* All TCP-IP based resources (except PRLGX-TCPIP):
     * Board is ignored, and presumed to be 0 (the default network interface).
 
 
 Prologix
-========
+--------
 
-Controlling GPIB resources via a prologix adapter is possible. There are 2 main methods:
+Controlling GPIB resources via a prologix adapter is possible. Historically, you can do this 
+via a `ASRL INSTR` or `TCPIP SOCKET` resource. In that case, be sure to set read- and write termination, 
+and to use the correct prologix  ``++`` commands mixed in with the SCPI commands.
 
-* via a `ASRL INSTR` or `TCPIP SOCKET` resource. 
-  Be sure to set read- and write termination, and to use the correct prologix  ``++`` commands mixed in with the SCPI commands.
-* via the PyVISA-Py specific `PRLGX ASRL` or `PRLGX TCPIP` resources, and the `GPIB` resources. 
-  This will allow you to treat the gateway and the connected instruments as separate resources, and makes it easier to interact with the instruments directly. 
-  
-  This goes in 2 steps:
+This is still the most versatile and portable method. It is however complicated to set up, as it requires 
+special care when working with multiple instruments, the code is not easily transposable to other setups.
 
-  1. Open the gateway resource using the appropriate Prologix-specific resource string.
-  2. Open the connected instrument as a GPIB resource.
+There is an easier method available: using the PyVISA-Py specific `PRLGX ASRL` or `PRLGX TCPIP` resource, and the `GPIB` resources.
 
-    Example::
+This will allow you to treat the gateway and the connected instruments as separate resources, and makes it easier to interact with the instruments directly. 
 
-        import pyvisa
+How to use
+^^^^^^^^^^
 
-        # force the PyVISA-Py backend, in case you have installed others.
-        rm = pyvisa.ResourceManager("@py")
+This goes in 2 steps:
 
-        # Open the gateway.
-        # It will then propose itself as a native GPIB interface.
-        # You can't also have a GPIB card in your system.
-        # Port 1234 is by default. You can also specify it the standard way.
-        prlgx = rm.open_resource("PRLGX-TCPIP::192.168.1.110::INTFC")
+1. Open the gateway resource using the appropriate Prologix-specific resource string.
+2. Open the connected instrument as a GPIB resource.
 
-        # Open the various connected instruments via the GPIB interface just created.
-        inst1 = rm.open_resource("GPIB::1::INSTR")  # instrument at address 1
-        inst2 = rm.open_resource("GPIB::2::INSTR")  # etc
-        inst18 = rm.open_resource("GPIB::18::INSTR")
+Example::
 
-        # and now you can talk to the instruments (one at a time please):
-        print(inst1.query("*IDN?"))
-        print(inst2.query("*IDN?"))
-        print(inst18.query("*ID?"))
+    import pyvisa
 
-    If you use this method, be aware that it tries to be intelligent, and emits the ``++read eoi`` command by itself 
-    when you do a query. But you can no longer emit that yourself. That means that you can no longer call 
-    ``read_raw`` or other standalone read methods. Only use ``query`` and ``write`` methods.
+    # force the PyVISA-Py backend, in case you have installed others.
+    rm = pyvisa.ResourceManager("@py")
 
-Functions: VPP-4.3 Compliance
-=============================
+    # Open the gateway.
+    # It will then propose itself as a native GPIB interface.
+    # On TCP-IP, port 1234 is the default. This example makes it explicit.
+    # You can also use serial, like so: "PRLGX-ASRL::/dev/cu.usbserialXXX::INTFC"
+    prlgx = rm.open_resource("PRLGX-TCPIP::192.168.1.110::1234::INTFC")
+    
+    # Open the various connected instruments via the GPIB interface just created.
+    inst1 = rm.open_resource("GPIB::1::INSTR")  # instrument at address 1
+    inst2 = rm.open_resource("GPIB::2::INSTR")  # etc
+    inst18 = rm.open_resource("GPIB::18::INSTR")
 
-The following features are not supported:
+    # and now you can talk to the instruments (one at a time please, there is no locking mechanism):
+    print(inst1.query("*IDN?"))
+    print(inst2.query("*IDN?"))
+    print(inst18.query("*ID?"))
+
+Apart from the standard read/write functions, the ``read_stb``, 
+``assert_trigger``, and ``clear`` methods are also supported on the instruments.
+
+When using attributes with prologix: few attributes are supported, and they must 
+go through the INTFC resource. 
+The device-specific attributes are generally ignored or not accessible.
+
+GPIB secondary addresses are supported.
+
+Attention with read operations
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+If you use this method, be aware that it tries to be intelligent, and emits the ``++read eoi`` by itself
+when you do a ``read`` after a ``write`` command. 
+It will also emit that sequence between the write and read of a ``query``.
+You can however no longer emit ``++`` commands yourself.
+That means that you may be limited if you want to do ``read_raw`` or other standalone read methods. 
+Best is to only use ``query`` and ``write`` methods.
+
+Cohabitation with other adapters or GPIB interfaces
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Multiple GPIB interfaces and Prologix interfaces can coexist, 
+just make sure that you specify a board on the prologix interface, 
+and specify the same board for the connected instruments.
+    
+Functions
+---------
+
+The following features are not or not fully supported:
 
 * Shared locks and nested locks are not supported.
 * Asynchronous read/write operations are not supported.
 * Termination is only supported for HiSLIP.
 
 ``VXI-11 device_docmd()``
--------------------------
+^^^^^^^^^^^^^^^^^^^^^^^^^
 
-If you have a VXI-11.2 (VXI-11 to GPIB) gateway, you may want to use the VXI-11 ``device_docmd()`` command. 
+If you have a VXI-11.2 (VXI-11 to GPIB) gateway, you may want to use the VXI-11 ``device_docmd()`` 
+command to deal with legacy devices. 
 However, there is no official provision in the VISA standards to do that.
 
 PyVISA-Py does provide a way to use this command via a lower end method::
@@ -161,21 +194,21 @@ PyVISA-Py does provide a way to use this command via a lower end method::
     inst.close()
 
 
-Note that this is PyVISA-Py specific, and not all gateways support this command (although they should).
+Note that this is PyVISA-Py specific, and that some gateways may not support this feature.
 
-As mentioned in the code, only use this only on VXI-11, on the SICL address (typically ``gpib0``).
+As mentioned in the code, only use this on VXI-11, on the SICL address (typically ``gpib0``).
 
-Attributes: VPP-4.3 Compliance
-==============================
+Attributes
+----------
 
-This document assesses the VPP-4.3 attributes applicable to PyVISA-Py's
-implemented resource types.
+This document assesses the VPP-4.3 attributes applicable to PyVISA-Py's implemented resource types.
 Resource classes not listed in a section cannot use that attribute under VPP-4.3.
 
-# TODO: add prologix to the supported types, and check prologix specific attributes.
+This chapter does not cover attributes for the PRLGX interface and device resources, as they are very limited.
+
 
 ``VI_ATTR_4882_COMPLIANT``
---------------------------
+^^^^^^^^^^^^^^^^^^^^^^^^^^
 Usable by USB INSTR.
 
 Coverage: Missing.
@@ -184,35 +217,36 @@ Proposition: later
 
 
 ``VI_ATTR_ASRL_AVAIL_NUM``
---------------------------
+^^^^^^^^^^^^^^^^^^^^^^^^^^
 Usable by ASRL INSTR.
 
 Coverage: Full.
 
 
 ``VI_ATTR_ASRL_BAUD``
----------------------
+^^^^^^^^^^^^^^^^^^^^^
 Usable by ASRL INSTR.
 
 Coverage: Full.
 
 
 ``VI_ATTR_ASRL_CTS_STATE``
---------------------------
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+
 Usable by ASRL INSTR.
 
 Coverage: Full.
 
 
 ``VI_ATTR_ASRL_DATA_BITS``
---------------------------
+^^^^^^^^^^^^^^^^^^^^^^^^^^
 Usable by ASRL INSTR.
 
 Coverage: Full.
 
 
 ``VI_ATTR_ASRL_DCD_STATE``
---------------------------
+^^^^^^^^^^^^^^^^^^^^^^^^^^
 Usable by ASRL INSTR.
 
 Coverage: Missing.
@@ -221,14 +255,14 @@ Proposition: later
 
 
 ``VI_ATTR_ASRL_DSR_STATE``
---------------------------
+^^^^^^^^^^^^^^^^^^^^^^^^^^
 Usable by ASRL INSTR.
 
 Coverage: Full.
 
 
 ``VI_ATTR_ASRL_DTR_STATE``
---------------------------
+^^^^^^^^^^^^^^^^^^^^^^^^^^
 Usable by ASRL INSTR.
 
 Coverage: Missing.
@@ -236,35 +270,35 @@ Coverage: Missing.
 Proposition: later
 
 ``VI_ATTR_ASRL_END_IN``
------------------------
+^^^^^^^^^^^^^^^^^^^^^^^
 Usable by ASRL INSTR.
 
 Coverage: Full.
 
 
 ``VI_ATTR_ASRL_END_OUT``
-------------------------
+^^^^^^^^^^^^^^^^^^^^^^^^
 Usable by ASRL INSTR.
 
 Coverage: Full.
 
 
 ``VI_ATTR_ASRL_FLOW_CNTRL``
----------------------------
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Usable by ASRL INSTR.
 
 Coverage: Full.
 
 
 ``VI_ATTR_ASRL_PARITY``
------------------------
+^^^^^^^^^^^^^^^^^^^^^^^
 Usable by ASRL INSTR.
 
 Coverage: Full.
 
 
 ``VI_ATTR_ASRL_REPLACE_CHAR``
------------------------------
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Usable by ASRL INSTR.
 
 Coverage: Missing.
@@ -273,7 +307,7 @@ Proposition: later
 
 
 ``VI_ATTR_ASRL_RI_STATE``
--------------------------
+^^^^^^^^^^^^^^^^^^^^^^^^^
 Usable by ASRL INSTR.
 
 Coverage: Missing.
@@ -282,7 +316,7 @@ Proposition: later
 
 
 ``VI_ATTR_ASRL_RTS_STATE``
---------------------------
+^^^^^^^^^^^^^^^^^^^^^^^^^^
 Usable by ASRL INSTR.
 
 Coverage: Missing.
@@ -291,14 +325,14 @@ Proposition: later
 
 
 ``VI_ATTR_ASRL_STOP_BITS``
---------------------------
+^^^^^^^^^^^^^^^^^^^^^^^^^^
 Usable by ASRL INSTR.
 
 Coverage: Full.
 
 
 ``VI_ATTR_ASRL_XOFF_CHAR``
---------------------------
+^^^^^^^^^^^^^^^^^^^^^^^^^^
 Usable by ASRL INSTR.
 
 Coverage: Missing.
@@ -307,7 +341,7 @@ Proposition: later
 
 
 ``VI_ATTR_ASRL_XON_CHAR``
--------------------------
+^^^^^^^^^^^^^^^^^^^^^^^^^
 Usable by ASRL INSTR.
 
 Coverage: Missing.
@@ -316,7 +350,7 @@ Proposition: later
 
 
 ``VI_ATTR_DEV_STATUS_BYTE``
----------------------------
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Usable by GPIB INTFC.
 
 Coverage: Missing.
@@ -325,7 +359,7 @@ Proposition: later
 
 
 ``VI_ATTR_DMA_ALLOW_EN``
-------------------------
+^^^^^^^^^^^^^^^^^^^^^^^^
 Usable by all resources.
 
 Coverage: HiSLIP Partial; all others Missing. 
@@ -337,7 +371,7 @@ Proposition: add to all (`dma_allow_enabled`), in faked RW (force to False, unsu
 
 
 ``VI_ATTR_FILE_APPEND_EN``
---------------------------
+^^^^^^^^^^^^^^^^^^^^^^^^^^
 Usable by all resources.
 
 Coverage: HiSLIP Partial; all others Missing. 
@@ -349,7 +383,7 @@ Proposition: add to all (`file_append_enabled`), in faked RW (force to False, un
 
 
 ``VI_ATTR_GPIB_ADDR_STATE``
----------------------------
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Usable by GPIB INTFC.
 
 Coverage: Missing.
@@ -358,21 +392,21 @@ Proposition: later
 
 
 ``VI_ATTR_GPIB_ATN_STATE``
---------------------------
+^^^^^^^^^^^^^^^^^^^^^^^^^^
 Usable by GPIB INTFC.
 
 Coverage: Full.
 
 
 ``VI_ATTR_GPIB_CIC_STATE``
---------------------------
+^^^^^^^^^^^^^^^^^^^^^^^^^^
 Usable by GPIB INTFC.
 
 Coverage: Full.
 
 
 ``VI_ATTR_GPIB_HS488_CBL_LEN``
--------------------------------
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Usable by GPIB INTFC.
 
 Coverage: Missing.
@@ -381,49 +415,49 @@ Proposition: later
 
 
 ``VI_ATTR_GPIB_NDAC_STATE``
----------------------------
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Usable by GPIB INTFC.
 
 Coverage: Full.
 
 
 ``VI_ATTR_GPIB_PRIMARY_ADDR``
------------------------------
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Usable by GPIB INSTR and GPIB INTFC.
 
 Coverage: Full.
 
 
 ``VI_ATTR_GPIB_READDR_EN``
---------------------------
+^^^^^^^^^^^^^^^^^^^^^^^^^^
 Usable by GPIB INSTR.
 
 Coverage: Full.
 
 
 ``VI_ATTR_GPIB_REN_STATE``
---------------------------
+^^^^^^^^^^^^^^^^^^^^^^^^^^
 Usable by GPIB INSTR and GPIB INTFC.
 
 Coverage: Full.
 
 
 ``VI_ATTR_GPIB_SECONDARY_ADDR``
--------------------------------
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Usable by GPIB INSTR and GPIB INTFC.
 
 Coverage: Full.
 
 
 ``VI_ATTR_GPIB_SRQ_STATE``
---------------------------
+^^^^^^^^^^^^^^^^^^^^^^^^^^
 Usable by GPIB INTFC.
 
 Coverage: Full.
 
 
 ``VI_ATTR_GPIB_SYS_CNTRL_STATE``
---------------------------------
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Usable by GPIB INTFC.
 
 Coverage: Missing.
@@ -432,14 +466,14 @@ Proposition: later
 
 
 ``VI_ATTR_GPIB_UNADDR_EN``
---------------------------
+^^^^^^^^^^^^^^^^^^^^^^^^^^
 Usable by GPIB INSTR.
 
 Coverage: Full.
 
 
 ``VI_ATTR_INTF_INST_NAME``
---------------------------
+^^^^^^^^^^^^^^^^^^^^^^^^^^
 Usable by all resources.
 
 Coverage: HiSLIP Full; all others Missing.
@@ -448,7 +482,7 @@ Proposition: add to all (`interface_instrument_name`).
 
 
 ``VI_ATTR_INTF_NUM``
---------------------
+^^^^^^^^^^^^^^^^^^^^
 Usable by all resources.
 
 Coverage: GPIB INSTR, GPIB INTFC, HiSLIP, and TCPIP SOCKET Full; 
@@ -461,14 +495,14 @@ Add tests about this.
 
 
 ``VI_ATTR_INTF_TYPE``
----------------------
+^^^^^^^^^^^^^^^^^^^^^
 Usable by all resources.
 
 Coverage: Full.
 
 
 ``VI_ATTR_IO_PROT``
--------------------
+^^^^^^^^^^^^^^^^^^^
 Usable by GPIB INSTR, ASRL INSTR, TCPIP SOCKET, and USB INSTR.
 
 Coverage: 
@@ -481,14 +515,14 @@ Could probably easily be added for GPIB, mark that in the code.
 
 
 ``VI_ATTR_MANF_ID``
--------------------
+^^^^^^^^^^^^^^^^^^^
 Usable by USB INSTR.
 
 Coverage: Full.
 
 
 ``VI_ATTR_MANF_NAME``
----------------------
+^^^^^^^^^^^^^^^^^^^^^^^^
 Usable by USB INSTR.
 
 Coverage: Missing.
@@ -497,7 +531,7 @@ Proposition: later
 
 
 ``VI_ATTR_MAX_QUEUE_LENGTH``
-----------------------------
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Usable by all resources.
 
 Coverage: Missing.
@@ -508,14 +542,14 @@ See VPP-4.3 Rules 3.2.5, 3.2.6, 3.7.3, 3.7.4, 3.7.5.
 NI-VISA has 50 by default.
 
 ``VI_ATTR_MODEL_CODE``
-----------------------
+^^^^^^^^^^^^^^^^^^^^^^^^
 Usable by USB INSTR.
 
 Coverage: Full.
 
 
 ``VI_ATTR_MODEL_NAME``
-----------------------
+^^^^^^^^^^^^^^^^^^^^^^^^
 Usable by USB INSTR.
 
 Coverage: Missing.
@@ -524,7 +558,7 @@ Proposition: later
 
 
 ``VI_ATTR_RD_BUF_OPER_MODE``
-----------------------------
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Usable by all resources.
 
 Coverage: HiSLIP Partial; all others Missing. 
@@ -536,7 +570,7 @@ Proposition: add to all (`read_buffer_operation_mode`), in faked RW (force to VI
 
 
 ``VI_ATTR_RD_BUF_SIZE``
------------------------
+^^^^^^^^^^^^^^^^^^^^^^^^
 Usable by all resources.
 
 Coverage: Missing.
@@ -545,21 +579,21 @@ Proposition: together with ``VI_ATTR_WR_BUF_SIZE``. Not sure how to do that, as 
 
 
 ``VI_ATTR_RM_SESSION``
-----------------------
+^^^^^^^^^^^^^^^^^^^^^^^^
 Usable by all resources.
 
 Coverage: Full.
 
 
 ``VI_ATTR_RSRC_CLASS``
-----------------------
+^^^^^^^^^^^^^^^^^^^^^^^^
 Usable by all resources.
 
 Coverage: Full.
 
 
 ``VI_ATTR_RSRC_IMPL_VERSION``
------------------------------
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Usable by all resources.
 
 Coverage: Missing.
@@ -568,7 +602,7 @@ Proposition: later
 
 
 ``VI_ATTR_RSRC_LOCK_STATE``
----------------------------
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Usable by all resources.
 
 Coverage: HiSLIP and VXI-11 Partial; Does not implement VISA lock sharing nor nesting.
@@ -577,7 +611,7 @@ All others Missing.
 Proposition: add to all others (`resource_lock_state`), in faked RW (force to VI_NO_LOCK, unsupported-state otherwise).
 
 ``VI_ATTR_RSRC_MANF_ID``
-------------------------
+^^^^^^^^^^^^^^^^^^^^^^^^
 Usable by all resources.
 
 Coverage: Missing.
@@ -586,21 +620,21 @@ Proposition: PyVISA-Py does not have a VXI manufacturer ID (although it might be
 NI-Visa = 0x0FF6
 
 ``VI_ATTR_RSRC_MANF_NAME``
---------------------------
+^^^^^^^^^^^^^^^^^^^^^^^^^^
 Usable by all resources.
 
 Coverage: full.
 
 
 ``VI_ATTR_RSRC_NAME``
----------------------
+^^^^^^^^^^^^^^^^^^^^^
 Usable by all resources. 
 
 Coverage: Full.
 
 
 ``VI_ATTR_RSRC_SPEC_VERSION``
------------------------------
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Usable by all resources. 
 
 Coverage: Missing.
@@ -614,11 +648,11 @@ Covered by berg's test.
 
 
 ``VI_ATTR_SEND_END_EN``
------------------------
+^^^^^^^^^^^^^^^^^^^^^^^^
 Usable by all resources.
 
-Coverage: GPIB INSTR and GPIB INTFC Full; 
-ASRL, VXI-11, HiSLIP, and USB Partial; 
+Coverage: GPIB INSTR, GPIB INTFC Full; 
+ASRL, VXI-11, HiSLIP, USB Partial; 
 SOCKET Missing. 
 
 The partial implementations expose or read the setting but do not consistently apply it to
@@ -628,11 +662,11 @@ Proposition: to be tackled together with ``VI_ATTR_SUPPRESS_END_EN``.
 
 
 ``VI_ATTR_SUPPRESS_END_EN``
----------------------------
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Usable by GPIB INSTR, ASRL INSTR, TCPIP INSTR (VXI-11 and HiSLIP), TCPIP
 SOCKET, and USB INSTR. 
 
-Coverage: ASRL, VXI-11, SOCKET, and USB Full; 
+Coverage: ASRL, VXI-11, SOCKET, USB Full; 
 HiSLIP Partial; 
 GPIB Missing. 
 
@@ -642,28 +676,28 @@ Proposition: to be tackled together with ``VI_ATTR_SEND_END_EN``.
 
 
 ``VI_ATTR_TCPIP_ADDR``
-----------------------
+^^^^^^^^^^^^^^^^^^^^^^^^
 Usable by TCPIP INSTR (VXI-11 and HiSLIP) and TCPIP SOCKET. 
 
 Coverage: Full.
 
 
 ``VI_ATTR_TCPIP_DEVICE_NAME``
------------------------------
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Usable by TCPIP INSTR (VXI-11 and HiSLIP).
 
 Coverage: Full.
 
 
 ``VI_ATTR_TCPIP_HISLIP_MAX_MESSAGE_KB``
-----------------------------------------
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Usable by TCPIP INSTR (HiSLIP).
 
 Coverage: Full.
 
 
 ``VI_ATTR_TCPIP_HISLIP_OVERLAP_EN``
-------------------------------------
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Usable by TCPIP INSTR (HiSLIP).
 
 Coverage: Partial. 
@@ -676,35 +710,35 @@ For now: Fake RW (force to VI_FALSE, unsupported-state otherwise).
 
 
 ``VI_ATTR_TCPIP_HISLIP_VERSION``
----------------------------------
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Usable by TCPIP INSTR (HiSLIP).
 
 Coverage: Full.
 
 
 ``VI_ATTR_TCPIP_HOSTNAME``
---------------------------
+^^^^^^^^^^^^^^^^^^^^^^^^^^
 Usable by TCPIP INSTR (VXI-11 and HiSLIP) and TCPIP SOCKET. 
 
 Coverage: Full.
 
 
 ``VI_ATTR_TCPIP_IS_HISLIP``
----------------------------
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Usable by TCPIP INSTR (VXI-11 and HiSLIP).
 
 Coverage: Full.
 
 
 ``VI_ATTR_TCPIP_KEEPALIVE``
----------------------------
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Usable by TCPIP INSTR (HiSLIP) and TCPIP SOCKET.
 
 Coverage: Full.
 
 
 ``VI_ATTR_TCPIP_NODELAY``
--------------------------
+^^^^^^^^^^^^^^^^^^^^^^^^^
 Usable by TCPIP INSTR (HiSLIP) and TCPIP SOCKET.
 
 Coverage: SOCKET Full; 
@@ -716,14 +750,14 @@ Proposition: do like SOCKET
 
 
 ``VI_ATTR_TCPIP_PORT``
-----------------------
+^^^^^^^^^^^^^^^^^^^^^^
 Usable by TCPIP INSTR (HiSLIP) and TCPIP SOCKET.
 
 Coverage: Full.
 
 
 ``VI_ATTR_TERMCHAR``
---------------------
+^^^^^^^^^^^^^^^^^^^^
 Usable by all resources.
 
 Coverage: all Full except HiSLIP: Partial. 
@@ -734,7 +768,7 @@ Proposition: to be tackled together with ``VI_ATTR_TERMCHAR_EN``.
 
 
 ``VI_ATTR_TERMCHAR_EN``
------------------------
+^^^^^^^^^^^^^^^^^^^^^^^
 Usable by all resources.
 
 Coverage: all Full except HiSLIP: Partial. 
@@ -745,14 +779,14 @@ Proposition: to be tackled together with ``VI_ATTR_TERMCHAR``.
 
 
 ``VI_ATTR_TMO_VALUE``
----------------------
+^^^^^^^^^^^^^^^^^^^^^
 Usable by all resources.
 
 Coverage: Full.
 
 
 ``VI_ATTR_TRIG_ID``
--------------------
+^^^^^^^^^^^^^^^^^^^
 Usable by GPIB INSTR, ASRL INSTR, TCPIP INSTR (VXI-11 and HiSLIP), and USB
 INSTR.
 
@@ -765,14 +799,14 @@ NI-VISA and R&S VISA do not support it in VXI-11 nor HiSLIP.
 NI-VISA claims it is fixed to VI_TRIG_SW for GPIB, Serial, TCPIP.
 
 ``VI_ATTR_USB_INTFC_NUM``
--------------------------
+^^^^^^^^^^^^^^^^^^^^^^^^^
 Usable by USB INSTR.
 
 Coverage: Full.
 
 
 ``VI_ATTR_USB_MAX_INTR_SIZE``
-------------------------------
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Usable by USB INSTR.
 
 Coverage: Missing.
@@ -781,7 +815,7 @@ Proposition: later
 
 
 ``VI_ATTR_USB_PROTOCOL``
-------------------------
+^^^^^^^^^^^^^^^^^^^^^^^^
 Usable by USB INSTR.
 
 Coverage: Missing.
@@ -790,14 +824,14 @@ Proposition: later
 
 
 ``VI_ATTR_USB_SERIAL_NUM``
---------------------------
+^^^^^^^^^^^^^^^^^^^^^^^^^^
 Usable by USB INSTR.
 
 Coverage: Full.
 
 
 ``VI_ATTR_USER_DATA`` / ``VI_ATTR_USER_DATA_32`` / ``VI_ATTR_USER_DATA_64``
----------------------------------------------------------------------------
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Usable by all resources.
 
 Coverage: Missing.
@@ -806,7 +840,7 @@ Proposition: Can be implemented as a simple session-local storage attribute.
 
 
 ``VI_ATTR_WR_BUF_OPER_MODE``
-----------------------------
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Usable by all resources.
 
 Coverage: HiSLIP Partial; 
@@ -817,7 +851,7 @@ See ``VI_ATTR_RD_BUF_OPER_MODE`` for more details.
 
 
 ``VI_ATTR_WR_BUF_SIZE``
------------------------
+^^^^^^^^^^^^^^^^^^^^^^^
 Usable by all resources.
 
 Coverage: Missing.
@@ -825,11 +859,8 @@ Coverage: Missing.
 Proposition: together with ``VI_ATTR_RD_BUF_SIZE``. Not sure how to do that, as we don't have ``viSetBuf()``
 
 
-Attributes: PyVISA-Py Additions
-===============================
-
 ``VI_KTATTR_LOCKWAIT``
-----------------------
+^^^^^^^^^^^^^^^^^^^^^^
 Usable by VXI-11 INSTR.
 
 This is a PyVISA-Py and Keysight specific attribute.
