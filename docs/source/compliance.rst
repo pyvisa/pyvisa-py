@@ -113,11 +113,18 @@ and specify the same board for the connected instruments.
 Functions
 ---------
 
+Most functions are supported. See the FAQ page and the pyvisa documentation for more details.
+
+Not or partially supported features
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
 The following features are not or not fully supported:
 
 * Shared locks and nested locks are not supported.
 * Asynchronous read/write operations are not supported.
-* Termination is only supported for HiSLIP.
+* Secured/Encrypted (SSL/TLS) and Authenticated connections are not supported.
+* Asynchronous termination (``terminate()``) is only supported for HiSLIP.
+* LXI service discovery is not supported.
 
 ``VXI-11 device_docmd()``
 ^^^^^^^^^^^^^^^^^^^^^^^^^
