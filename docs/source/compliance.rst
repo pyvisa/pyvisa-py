@@ -87,7 +87,14 @@ The following features are not supported:
 * Asynchronous read/write operations are not supported.
 * Termination is only supported for HiSLIP.
 
-VXI-11 fully supports ``gpib_command()``, for use with VXI-11.2 compliant VXI-11 to GPIB gateways. Note that not all VISA backends nor all Gateways support that. 
+``gpib_command()``
+^^^^^^^^^^^^^^^^^^
+
+VXI-11 fully supports ``gpib_command()``, for use with VXI-11.2 compliant VXI-11 to GPIB gateways. 
+
+Note that not all VISA backends nor all Gateways support that. 
+
+Only use this on the SICL address (typically ``gpib0``), not on the individual instrument addresses.
 
 Attributes: VPP-4.3 Compliance
 ==============================
