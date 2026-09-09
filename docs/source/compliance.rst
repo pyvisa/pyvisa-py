@@ -522,7 +522,7 @@ Coverage: Full.
 
 
 ``VI_ATTR_MANF_NAME``
-^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^
 Usable by USB INSTR.
 
 Coverage: Missing.

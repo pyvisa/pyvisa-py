@@ -243,14 +243,24 @@ Event handling is not affected by locking.
     but can also lead to unexpected locking issues in subsequent connections, requiring an instrument reboot.
     The DMM6500 is especially lacking in this aspect.
 
-    About the lock timeout handling: Keysight VISA and PyVISA-py both support the lock timeout 
-    attribute ``VI_KTATTR_LOCKWAIT``. NI-VISA and R&S VISA have no known means of controlling 
-    the lock timeout, and mostly use the I/O timeout and/or internal timing for lock timeout handling.
+    About the lock timeout handling on already opened sessions: 
+    
+        Keysight VISA and PyVISA-py both support the lock timeout attribute ``VI_KTATTR_LOCKWAIT``. 
+        
+        NI-VISA and R&S VISA have no known means of controlling 
+        the lock timeout, and mostly use the I/O timeout and/or internal timing for lock timeout handling.
 
+        HiSLIP will allow writes of most commands, even if the resource is locked by another session, 
+        but the instrument will not execute these commands, nor allow reads to be performed until the other lock is removed. 
+        Therefore, it is best to use the ``VI_ATTR_RSRC_LOCK_STATE`` attribute to check the instrument lock state before attempting any 
+        operations that might be affected by a lock.
+        
     If you are debugging locking issues, note that NI-VISA supports
     the lock-on-open method, but underneath uses the lock-after-open method, and, 
     after having established a lock, handles the locking internally without addressing
     the instrument.
+
+    HiSLIP always translates lock-on-open into lock-after-open.
 
 Remote/Local control
 --------------------
