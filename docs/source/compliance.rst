@@ -218,63 +218,70 @@ Resource classes not listed in a section cannot use that attribute under VPP-4.3
 
 This chapter does not cover attributes for the PRLGX interface and device resources, as they are very limited.
 
-
 ``VI_ATTR_4882_COMPLIANT``
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
+Access: RO
+
 Usable by USB INSTR.
 
 Coverage: Missing.
 
 Proposition: later
 
-
 ``VI_ATTR_ASRL_AVAIL_NUM``
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
+Access: RO
+
 Usable by ASRL INSTR.
 
 Coverage: Full.
-
 
 ``VI_ATTR_ASRL_BAUD``
 ^^^^^^^^^^^^^^^^^^^^^
+Access: R/W
+
 Usable by ASRL INSTR.
 
 Coverage: Full.
-
 
 ``VI_ATTR_ASRL_CTS_STATE``
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
+Access: RO
 
 Usable by ASRL INSTR.
 
 Coverage: Full.
-
 
 ``VI_ATTR_ASRL_DATA_BITS``
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
+Access: R/W
+
 Usable by ASRL INSTR.
 
 Coverage: Full.
 
-
 ``VI_ATTR_ASRL_DCD_STATE``
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
+Access: RO
+
 Usable by ASRL INSTR.
 
 Coverage: Missing.
 
 Proposition: later
 
-
 ``VI_ATTR_ASRL_DSR_STATE``
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
+Access: RO
+
 Usable by ASRL INSTR.
 
 Coverage: Full.
 
-
 ``VI_ATTR_ASRL_DTR_STATE``
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
+Access: R/W
+
 Usable by ASRL INSTR.
 
 Coverage: Missing.
@@ -283,95 +290,108 @@ Proposition: later
 
 ``VI_ATTR_ASRL_END_IN``
 ^^^^^^^^^^^^^^^^^^^^^^^
+Access: R/W
+
 Usable by ASRL INSTR.
 
 Coverage: Full.
-
 
 ``VI_ATTR_ASRL_END_OUT``
 ^^^^^^^^^^^^^^^^^^^^^^^^
+Access: R/W
+
 Usable by ASRL INSTR.
 
 Coverage: Full.
-
 
 ``VI_ATTR_ASRL_FLOW_CNTRL``
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Access: R/W
+
 Usable by ASRL INSTR.
 
 Coverage: Full.
-
 
 ``VI_ATTR_ASRL_PARITY``
 ^^^^^^^^^^^^^^^^^^^^^^^
+Access: R/W
+
 Usable by ASRL INSTR.
 
 Coverage: Full.
-
 
 ``VI_ATTR_ASRL_REPLACE_CHAR``
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Access: R/W
+
 Usable by ASRL INSTR.
 
 Coverage: Missing.
 
 Proposition: later
-
 
 ``VI_ATTR_ASRL_RI_STATE``
 ^^^^^^^^^^^^^^^^^^^^^^^^^
+Access: RO
+
 Usable by ASRL INSTR.
 
 Coverage: Missing.
 
 Proposition: later
-
 
 ``VI_ATTR_ASRL_RTS_STATE``
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
+Access: R/W
+
 Usable by ASRL INSTR.
 
 Coverage: Missing.
 
 Proposition: later
 
-
 ``VI_ATTR_ASRL_STOP_BITS``
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
+Access: R/W
+
 Usable by ASRL INSTR.
 
 Coverage: Full.
 
-
 ``VI_ATTR_ASRL_XOFF_CHAR``
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
+Access: R/W
+
 Usable by ASRL INSTR.
 
 Coverage: Missing.
 
 Proposition: later
-
 
 ``VI_ATTR_ASRL_XON_CHAR``
 ^^^^^^^^^^^^^^^^^^^^^^^^^
+Access: R/W
+
 Usable by ASRL INSTR.
 
 Coverage: Missing.
 
 Proposition: later
 
-
 ``VI_ATTR_DEV_STATUS_BYTE``
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Access: R/W
+
 Usable by GPIB INTFC.
 
 Coverage: Missing.
 
 Proposition: later
 
-
 ``VI_ATTR_DMA_ALLOW_EN``
 ^^^^^^^^^^^^^^^^^^^^^^^^
+Access: R/W
+
 Usable by all resources.
 
 Coverage: HiSLIP Partial; all others Missing. 
@@ -381,9 +401,10 @@ the required writable attribute and unsupported-state response.
 
 Proposition: add to all (`dma_allow_enabled`), in faked RW (force to False, unsupported-state otherwise).
 
-
 ``VI_ATTR_FILE_APPEND_EN``
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
+Access: R/W
+
 Usable by all resources.
 
 Coverage: HiSLIP Partial; all others Missing. 
@@ -393,108 +414,122 @@ and is not used by file transfer operations.
 
 Proposition: add to all (`file_append_enabled`), in faked RW (force to False, unsupported-state otherwise).
 
-
 ``VI_ATTR_GPIB_ADDR_STATE``
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Access: RO
+
 Usable by GPIB INTFC.
 
 Coverage: Missing.
 
 Proposition: later
-
 
 ``VI_ATTR_GPIB_ATN_STATE``
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
+Access: RO
+
 Usable by GPIB INTFC.
 
 Coverage: Full.
-
 
 ``VI_ATTR_GPIB_CIC_STATE``
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
+Access: RO
+
 Usable by GPIB INTFC.
 
 Coverage: Full.
-
 
 ``VI_ATTR_GPIB_HS488_CBL_LEN``
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Access: R/W
+
 Usable by GPIB INTFC.
 
 Coverage: Missing.
 
 Proposition: later
-
 
 ``VI_ATTR_GPIB_NDAC_STATE``
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Access: RO
+
 Usable by GPIB INTFC.
 
 Coverage: Full.
 
-
 ``VI_ATTR_GPIB_PRIMARY_ADDR``
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Access: RO for INSTR, R/W for INTFC and SERVANT
+
 Usable by GPIB INSTR and GPIB INTFC.
 
 Coverage: Full.
 
-
 ``VI_ATTR_GPIB_READDR_EN``
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
+Access: R/W
+
 Usable by GPIB INSTR.
 
 Coverage: Full.
 
-
 ``VI_ATTR_GPIB_REN_STATE``
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
+Access: RO
+
 Usable by GPIB INSTR and GPIB INTFC.
 
 Coverage: Full.
-
 
 ``VI_ATTR_GPIB_SECONDARY_ADDR``
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Access: RO for INSTR, R/W for INTFC and SERVANT
+
 Usable by GPIB INSTR and GPIB INTFC.
 
 Coverage: Full.
 
-
 ``VI_ATTR_GPIB_SRQ_STATE``
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
+Access: RO
+
 Usable by GPIB INTFC.
 
 Coverage: Full.
 
-
 ``VI_ATTR_GPIB_SYS_CNTRL_STATE``
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Access: R/W
+
 Usable by GPIB INTFC.
 
 Coverage: Missing.
 
 Proposition: later
 
-
 ``VI_ATTR_GPIB_UNADDR_EN``
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
+Access: R/W
+
 Usable by GPIB INSTR.
 
 Coverage: Full.
 
-
 ``VI_ATTR_INTF_INST_NAME``
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
+Access: RO
+
 Usable by all resources.
 
 Coverage: HiSLIP Full; all others Missing.
 
 Proposition: add to all (`interface_instrument_name`).
 
-
 ``VI_ATTR_INTF_NUM``
 ^^^^^^^^^^^^^^^^^^^^
+Access: RO
+
 Usable by all resources.
 
 Coverage: GPIB INSTR, GPIB INTFC, HiSLIP, and TCPIP SOCKET Full; 
@@ -505,16 +540,18 @@ While we're there, correct `VI_ATTR_INTF_INST_NAME` (`interface_instrument_name`
 For VXI-11 and HiSLIP, interface_number corresponds to the network interface of the client PC.
 Add tests about this.
 
-
 ``VI_ATTR_INTF_TYPE``
 ^^^^^^^^^^^^^^^^^^^^^
+Access: RO
+
 Usable by all resources.
 
 Coverage: Full.
 
-
 ``VI_ATTR_IO_PROT``
 ^^^^^^^^^^^^^^^^^^^
+Access: R/W
+
 Usable by GPIB INSTR, ASRL INSTR, TCPIP SOCKET, and USB INSTR.
 
 Coverage: 
@@ -525,25 +562,28 @@ USB Missing.
 Proposition: fake RW on the missing/partial interfaces, and use unsupported-state on all where needed. 
 Could probably easily be added for GPIB, mark that in the code.
 
-
 ``VI_ATTR_MANF_ID``
 ^^^^^^^^^^^^^^^^^^^
+Access: RO
+
 Usable by USB INSTR.
 
 Coverage: Full.
 
-
 ``VI_ATTR_MANF_NAME``
 ^^^^^^^^^^^^^^^^^^^^^
+Access: RO
+
 Usable by USB INSTR.
 
 Coverage: Missing.
 
 Proposition: later
 
-
 ``VI_ATTR_MAX_QUEUE_LENGTH``
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Access: R/W (becomes RO after the first ``viEnableEvent()``)
+
 Usable by all resources.
 
 Coverage: Missing.
@@ -555,22 +595,26 @@ NI-VISA has 50 by default.
 
 ``VI_ATTR_MODEL_CODE``
 ^^^^^^^^^^^^^^^^^^^^^^^^
+Access: RO
+
 Usable by USB INSTR.
 
 Coverage: Full.
 
-
 ``VI_ATTR_MODEL_NAME``
 ^^^^^^^^^^^^^^^^^^^^^^^^
+Access: RO
+
 Usable by USB INSTR.
 
 Coverage: Missing.
 
 Proposition: later
 
-
 ``VI_ATTR_RD_BUF_OPER_MODE``
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Access: R/W
+
 Usable by all resources.
 
 Coverage: HiSLIP Partial; all others Missing. 
@@ -580,41 +624,46 @@ buffer behavior.
 
 Proposition: add to all (`read_buffer_operation_mode`), in faked RW (force to VI_FLUSH_DISABLE, unsupported-state otherwise).
 
-
 ``VI_ATTR_RD_BUF_SIZE``
 ^^^^^^^^^^^^^^^^^^^^^^^^
+Access: RO
+
 Usable by all resources.
 
 Coverage: Missing.
 
 Proposition: together with ``VI_ATTR_WR_BUF_SIZE``. Not sure how to do that, as we don't have ``viSetBuf()``
 
-
 ``VI_ATTR_RM_SESSION``
 ^^^^^^^^^^^^^^^^^^^^^^^^
+Access: RO
+
 Usable by all resources.
 
 Coverage: Full.
-
 
 ``VI_ATTR_RSRC_CLASS``
 ^^^^^^^^^^^^^^^^^^^^^^^^
+Access: RO
+
 Usable by all resources.
 
 Coverage: Full.
 
-
 ``VI_ATTR_RSRC_IMPL_VERSION``
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Access: RO
+
 Usable by all resources.
 
 Coverage: Missing.
 
 Proposition: later
 
-
 ``VI_ATTR_RSRC_LOCK_STATE``
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Access: RO
+
 Usable by all resources.
 
 Coverage: HiSLIP and VXI-11 Partial; Does not implement VISA lock sharing nor nesting.
@@ -624,6 +673,8 @@ Proposition: add to all others (`resource_lock_state`), in faked RW (force to VI
 
 ``VI_ATTR_RSRC_MANF_ID``
 ^^^^^^^^^^^^^^^^^^^^^^^^
+Access: RO
+
 Usable by all resources.
 
 Coverage: Missing.
@@ -633,20 +684,24 @@ NI-Visa = 0x0FF6
 
 ``VI_ATTR_RSRC_MANF_NAME``
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
+Access: RO
+
 Usable by all resources.
 
 Coverage: full.
 
-
 ``VI_ATTR_RSRC_NAME``
 ^^^^^^^^^^^^^^^^^^^^^
+Access: RO
+
 Usable by all resources. 
 
 Coverage: Full.
 
-
 ``VI_ATTR_RSRC_SPEC_VERSION``
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Access: RO
+
 Usable by all resources. 
 
 Coverage: Missing.
@@ -658,9 +713,10 @@ Maybe set to 0x0030 0000 ?
 
 Covered by berg's test.
 
-
 ``VI_ATTR_SEND_END_EN``
 ^^^^^^^^^^^^^^^^^^^^^^^^
+Access: R/W
+
 Usable by all resources.
 
 Coverage: GPIB INSTR, GPIB INTFC Full; 
@@ -672,9 +728,10 @@ the underlying transport's end-of-message behavior.
 
 Proposition: to be tackled together with ``VI_ATTR_SUPPRESS_END_EN``.
 
-
 ``VI_ATTR_SUPPRESS_END_EN``
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Access: R/W
+
 Usable by GPIB INSTR, ASRL INSTR, TCPIP INSTR (VXI-11 and HiSLIP), TCPIP
 SOCKET, and USB INSTR. 
 
@@ -686,30 +743,34 @@ HiSLIP stores the value but its receive implementation does not honor it.
 
 Proposition: to be tackled together with ``VI_ATTR_SEND_END_EN``.
 
-
 ``VI_ATTR_TCPIP_ADDR``
 ^^^^^^^^^^^^^^^^^^^^^^^^
+Access: RO
+
 Usable by TCPIP INSTR (VXI-11 and HiSLIP) and TCPIP SOCKET. 
 
 Coverage: Full.
 
-
 ``VI_ATTR_TCPIP_DEVICE_NAME``
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Access: RO
+
 Usable by TCPIP INSTR (VXI-11 and HiSLIP).
 
 Coverage: Full.
 
-
 ``VI_ATTR_TCPIP_HISLIP_MAX_MESSAGE_KB``
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Access: R/W
+
 Usable by TCPIP INSTR (HiSLIP).
 
 Coverage: Full.
 
-
 ``VI_ATTR_TCPIP_HISLIP_OVERLAP_EN``
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Access: R/W
+
 Usable by TCPIP INSTR (HiSLIP).
 
 Coverage: Partial. 
@@ -720,37 +781,42 @@ protocol's overlap mode.
 Proposition: not easy to do. Default value is supposed to be "Preference returned by device." 
 For now: Fake RW (force to VI_FALSE, unsupported-state otherwise).
 
-
 ``VI_ATTR_TCPIP_HISLIP_VERSION``
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Access: RO
+
 Usable by TCPIP INSTR (HiSLIP).
 
 Coverage: Full.
 
-
 ``VI_ATTR_TCPIP_HOSTNAME``
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
+Access: RO
+
 Usable by TCPIP INSTR (VXI-11 and HiSLIP) and TCPIP SOCKET. 
 
 Coverage: Full.
 
-
 ``VI_ATTR_TCPIP_IS_HISLIP``
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Access: RO
+
 Usable by TCPIP INSTR (VXI-11 and HiSLIP).
 
 Coverage: Full.
 
-
 ``VI_ATTR_TCPIP_KEEPALIVE``
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Access: R/W
+
 Usable by TCPIP INSTR (HiSLIP) and TCPIP SOCKET.
 
 Coverage: Full.
 
-
 ``VI_ATTR_TCPIP_NODELAY``
 ^^^^^^^^^^^^^^^^^^^^^^^^^
+Access: R/W
+
 Usable by TCPIP INSTR (HiSLIP) and TCPIP SOCKET.
 
 Coverage: SOCKET Full; 
@@ -760,16 +826,18 @@ HiSLIP reports a stored value but does not set the TCP socket's ``TCP_NODELAY`` 
 
 Proposition: do like SOCKET
 
-
 ``VI_ATTR_TCPIP_PORT``
 ^^^^^^^^^^^^^^^^^^^^^^
+Access: RO
+
 Usable by TCPIP INSTR (HiSLIP) and TCPIP SOCKET.
 
 Coverage: Full.
 
-
 ``VI_ATTR_TERMCHAR``
 ^^^^^^^^^^^^^^^^^^^^
+Access: R/W
+
 Usable by all resources.
 
 Coverage: all Full except HiSLIP: Partial. 
@@ -778,9 +846,10 @@ HiSLIP stores the value but does not use it to terminate reads.
 
 Proposition: to be tackled together with ``VI_ATTR_TERMCHAR_EN``.
 
-
 ``VI_ATTR_TERMCHAR_EN``
 ^^^^^^^^^^^^^^^^^^^^^^^
+Access: R/W
+
 Usable by all resources.
 
 Coverage: all Full except HiSLIP: Partial. 
@@ -789,16 +858,18 @@ HiSLIP stores the value but does not use it to terminate reads.
 
 Proposition: to be tackled together with ``VI_ATTR_TERMCHAR``.
 
-
 ``VI_ATTR_TMO_VALUE``
 ^^^^^^^^^^^^^^^^^^^^^
+Access: R/W
+
 Usable by all resources.
 
 Coverage: Full.
 
-
 ``VI_ATTR_TRIG_ID``
 ^^^^^^^^^^^^^^^^^^^
+Access: R/W while trigger sensing is disabled, RO while it is enabled
+
 Usable by GPIB INSTR, ASRL INSTR, TCPIP INSTR (VXI-11 and HiSLIP), and USB
 INSTR.
 
@@ -812,47 +883,54 @@ NI-VISA claims it is fixed to VI_TRIG_SW for GPIB, Serial, TCPIP.
 
 ``VI_ATTR_USB_INTFC_NUM``
 ^^^^^^^^^^^^^^^^^^^^^^^^^
+Access: RO
+
 Usable by USB INSTR.
 
 Coverage: Full.
-
 
 ``VI_ATTR_USB_MAX_INTR_SIZE``
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Access: R/W while USB interrupt sensing is disabled, RO while it is enabled
+
 Usable by USB INSTR.
 
 Coverage: Missing.
 
 Proposition: later
-
 
 ``VI_ATTR_USB_PROTOCOL``
 ^^^^^^^^^^^^^^^^^^^^^^^^
+Access: RO
+
 Usable by USB INSTR.
 
 Coverage: Missing.
 
 Proposition: later
 
-
 ``VI_ATTR_USB_SERIAL_NUM``
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
+Access: RO
+
 Usable by USB INSTR.
 
 Coverage: Full.
 
-
 ``VI_ATTR_USER_DATA`` / ``VI_ATTR_USER_DATA_32`` / ``VI_ATTR_USER_DATA_64``
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Access: RW
+
 Usable by all resources.
 
 Coverage: Missing.
 
 Proposition: Can be implemented as a simple session-local storage attribute.
 
-
 ``VI_ATTR_WR_BUF_OPER_MODE``
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Access: R/W
+
 Usable by all resources.
 
 Coverage: HiSLIP Partial; 
@@ -861,18 +939,20 @@ All others Missing. HiSLIP stores the default but has no formatted write buffer.
 Proposition: (write_buffer_operation_mode) fake RW (force to VI_FLUSH_WHEN_FULL, unsupported-state otherwise)
 See ``VI_ATTR_RD_BUF_OPER_MODE`` for more details.
 
-
 ``VI_ATTR_WR_BUF_SIZE``
 ^^^^^^^^^^^^^^^^^^^^^^^
+Access: RO
+
 Usable by all resources.
 
 Coverage: Missing.
 
 Proposition: together with ``VI_ATTR_RD_BUF_SIZE``. Not sure how to do that, as we don't have ``viSetBuf()``
 
-
 ``VI_KTATTR_LOCKWAIT``
 ^^^^^^^^^^^^^^^^^^^^^^
+Access: RW
+
 Usable by VXI-11 INSTR.
 
 This is a PyVISA-Py and Keysight specific attribute.
