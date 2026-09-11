@@ -386,7 +386,9 @@ class _GPIBCommon(Session):
         )
 
         # RO, attributes:
-        self.attrs[constants.ResourceAttribute.resource_lock_state] = constants.VI_NO_LOCK
+        self.attrs[constants.ResourceAttribute.resource_lock_state] = (
+            constants.VI_NO_LOCK
+        )
 
     def _get_timeout(
         self, attribute: constants.ResourceAttribute

@@ -58,17 +58,29 @@ def instr_session(request):
         if USBInstrSession is None:
             pytest.skip("USBInstrSession is not available")
         with patch.object(USBInstrSession, "_intf_cls", return_value=MagicMock()):
-            yield USBInstrSession(VISARMSession(1), resource_name, rname.parse_resource_name(resource_name))
+            yield USBInstrSession(
+                VISARMSession(1),
+                resource_name,
+                rname.parse_resource_name(resource_name),
+            )
     elif request.param == "hislip":
         resource_name = "TCPIP::localhost::hislip0::INSTR"
         with patch("pyvisa_py.tcpip.hislip.Instrument", return_value=MagicMock()):
-            yield TCPIPInstrHiSLIP(VISARMSession(1), resource_name, rname.parse_resource_name(resource_name))
+            yield TCPIPInstrHiSLIP(
+                VISARMSession(1),
+                resource_name,
+                rname.parse_resource_name(resource_name),
+            )
     elif request.param == "serial":
         resource_name = "ASRL1::INSTR"
         if SerialSession is None:
             pytest.skip("SerialSession is not available")
         with patch("pyvisa_py.serial.serial.serial_for_url", return_value=MagicMock()):
-            yield SerialSession(VISARMSession(1), resource_name, rname.parse_resource_name(resource_name))
+            yield SerialSession(
+                VISARMSession(1),
+                resource_name,
+                rname.parse_resource_name(resource_name),
+            )
     elif request.param == "socket":
         resource_name = "TCPIP::localhost::1234::SOCKET"
         interface = MagicMock()
@@ -87,7 +99,9 @@ def instr_session(request):
             pytest.skip("GPIBSession is not available")
         with patch("pyvisa_py.gpib.Gpib", return_value=MagicMock()):
             yield GPIBSession(
-                VISARMSession(1), resource_name, rname.parse_resource_name(resource_name)
+                VISARMSession(1),
+                resource_name,
+                rname.parse_resource_name(resource_name),
             )
     else:
         # VXI-11 fall through
@@ -95,15 +109,24 @@ def instr_session(request):
         client = MagicMock()
         client.create_link.return_value = (0, 1, 0, 1024)
         with patch("pyvisa_py.tcpip.Vxi11CoreClient", return_value=client):
-            yield TCPIPInstrVxi11(VISARMSession(1), resource_name, rname.parse_resource_name(resource_name))
+            yield TCPIPInstrVxi11(
+                VISARMSession(1),
+                resource_name,
+                rname.parse_resource_name(resource_name),
+            )
 
 
 @pytest.mark.parametrize("attribute", ATTRIBUTES)
 def test_instr_attribute_reads_succeed(instr_session, attribute):
     """INSTR transports support reading the common VISA attributes."""
-    if instr_session.__class__.__name__ == "TCPIPInstrHiSLIP" and attribute == ResourceAttribute.resource_lock_state:
-        pytest.skip("TCPIPInstrHiSLIP does not support reading resource_lock_state (unless I also mock that part)")
+    if (
+        instr_session.__class__.__name__ == "TCPIPInstrHiSLIP"
+        and attribute == ResourceAttribute.resource_lock_state
+    ):
+        pytest.skip(
+            "TCPIPInstrHiSLIP does not support reading resource_lock_state (unless I also mock that part)"
+        )
     _value, status = instr_session.get_attribute(attribute)
 
     if status is not StatusCode.success:
-        pytest.fail(f"Failed to read attribute \"{attribute.name}\", status: {status}")
+        pytest.fail(f'Failed to read attribute "{attribute.name}", status: {status}')

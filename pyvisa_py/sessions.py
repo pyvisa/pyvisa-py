@@ -186,7 +186,7 @@ class Session(metaclass=abc.ABCMeta):
         # VI_ATTR_RD_BUF_OPER_MODE/read_buffer_operation_mode
         ResourceAttribute.read_buffer_operation_mode: constants.VI_FLUSH_DISABLE,
         # VI_ATTR_WR_BUF_OPER_MODE/write_buffer_operation_mode
-        ResourceAttribute.write_buffer_operation_mode: constants.VI_FLUSH_WHEN_FULL
+        ResourceAttribute.write_buffer_operation_mode: constants.VI_FLUSH_WHEN_FULL,
     }
 
     @staticmethod
@@ -344,30 +344,22 @@ class Session(metaclass=abc.ABCMeta):
         self.attrs = {
             # VI_ATTR_RM_SESSION/resource_manager_session
             ResourceAttribute.resource_manager_session: resource_manager_session,
-
             # VI_ATTR_RSRC_NAME/resource_name
             ResourceAttribute.resource_name: str(parsed),
-
             # VI_ATTR_RSRC_CLASS/resource_class
             ResourceAttribute.resource_class: parsed.resource_class,
-
             # VI_ATTR_INTF_TYPE/interface_type (This is not required by USB RAW, but I set it anyway)
             ResourceAttribute.interface_type: parsed.interface_type_const,
-
             # VI_ATTR_TMO_VALUE/timeout_value (This is not required by USB RAW, but I set it anyway)
             ResourceAttribute.timeout_value: (self._get_timeout, self._set_timeout),
-
             # VI_ATTR_RSRC_MANF_NAME/resource_manufacturer_name
             ResourceAttribute.resource_manufacturer_name: "PyVISA-Py",
-
             # VI_ATTR_RSRC_MANF_ID/resource_manufacturer_id
             # a unique 12-bit hexadecimal value assigned to hardware vendors by the VXI Consortium
             # We don't have one, so fake it (like we do with HISLIP).
             ResourceAttribute.resource_manufacturer_id: 0,
-
             # VI_ATTR_RSRC_SPEC_VERSION/resource_spec_version
             ResourceAttribute.resource_spec_version: 0x00700200,  # VPP-4.3 compliant
-
             # VI_ATTR_USER_DATA/user_data
             # This is a session-local variable. No interaction with the resource.
             ResourceAttribute.user_data: 0,
