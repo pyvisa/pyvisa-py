@@ -226,6 +226,7 @@ if SerialSession is not None:
                 "TERMCHAR",
                 "TERMCHAR_EN",
                 "SUPPRESS_END_EN",
+                "RSRC_LOCK_STATE",
             ):
                 attribute = getattr(constants, "VI_ATTR_" + name)
                 self.attrs[attribute] = attributes.AttributesByID[attribute].default

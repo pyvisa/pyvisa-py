@@ -160,6 +160,13 @@ class TCPIPInstrHiSLIP(Session):
     # for a specific kind of resource
     parsed: rname.TCPIPInstr
 
+    # extend the fixed attributes from the base Session class.
+    # Contrary to serial and socket, io_prot is not used, because VPP-4.3 does not explicitly demands it.
+    _hardcoded_attrs = {
+        **Session._hardcoded_attrs,
+        ResourceAttribute.io_prot: constants.VI_PROT_NORMAL,
+    }
+
     default_tcpip_port = 4880
 
     @staticmethod
@@ -214,14 +221,8 @@ class TCPIPInstrHiSLIP(Session):
             raise OpenError() from e
 
         # initialize the constant attributes
-        self.attrs[ResourceAttribute.dma_allow_enabled] = constants.VI_FALSE
-        self.attrs[ResourceAttribute.file_append_enabled] = constants.VI_FALSE
         self.attrs[ResourceAttribute.interface_instrument_name] = "TCPIP0 (HiSLIP)"
         self.attrs[ResourceAttribute.interface_number] = 0
-        self.attrs[ResourceAttribute.io_prot] = constants.VI_PROT_NORMAL
-        self.attrs[ResourceAttribute.read_buffer_operation_mode] = (
-            constants.VI_FLUSH_DISABLE
-        )
         # do NOT set the resource_lock_state manually; it will be managed by the remote locking mechanism.
         self.attrs[ResourceAttribute.send_end_enabled] = constants.VI_TRUE
         self.attrs[ResourceAttribute.suppress_end_enabled] = constants.VI_FALSE
@@ -445,8 +446,6 @@ class TCPIPInstrHiSLIP(Session):
         """
         if protocol != constants.TriggerProtocol.default:
             return StatusCode.error_nonsupported_operation
-
-        # Contrary to serial and socket, io_prot is not used, because VPP-4.3 does not explicitly demands it.
 
         self.interface.trigger()
         return StatusCode.success
@@ -688,6 +687,13 @@ class TCPIPInstrVxi11(Session):
     # Setting if keepalive has been activated
     keepalive: bool
 
+    # extend the fixed attributes from the base Session class.
+    # Contrary to serial and socket, io_prot is not used, because VPP-4.3 does not explicitly demands it.
+    _hardcoded_attrs = {
+        **Session._hardcoded_attrs,
+        ResourceAttribute.io_prot: constants.VI_PROT_NORMAL,
+    }
+
     @staticmethod
     def list_resources() -> List[str]:
         broadcast_addr = []
@@ -793,6 +799,8 @@ class TCPIPInstrVxi11(Session):
         self.link = link
         self.max_recv_size = min(max_recv_size, 2**30)  # 1GB
 
+        self.attrs[ResourceAttribute.interface_instrument_name] = "TCPIP0 (VXI-11)"
+        self.attrs[ResourceAttribute.interface_number] = 0
         self.attrs[ResourceAttribute.tcpip_is_hislip] = False
         self.attrs[ResourceAttribute.tcpip_address] = self.parsed.host_address
         self.attrs[ResourceAttribute.tcpip_hostname] = ""
@@ -1223,8 +1231,6 @@ class TCPIPInstrVxi11(Session):
         if protocol != constants.TriggerProtocol.default:
             return StatusCode.error_nonsupported_operation
 
-        # Contrary to serial and socket, io_prot is not used, because VPP-4.3 does not explicitly demands it.
-
         flags = 0
         flags, lock_timeout = self._adapt_flags_and_lock_timeout(flags)
 
@@ -1369,6 +1375,13 @@ class TCPIPInstrVicp(Session):
     # for a specific kind of resource
     parsed: rname.VICPInstr
 
+    # extend the fixed attributes from the base Session class.
+    # Contrary to serial and socket, io_prot is not used, because VPP-4.3 does not explicitly demands it.
+    _hardcoded_attrs = {
+        **Session._hardcoded_attrs,
+        ResourceAttribute.io_prot: constants.VI_PROT_NORMAL,
+    }
+
     @staticmethod
     def list_resources(wait_time=1.0) -> List[str]:
         resources = []
@@ -1415,19 +1428,17 @@ class TCPIPInstrVicp(Session):
             raise OpenError() from e
 
         # initialize the constant attributes
-        for name in ("SEND_END_EN", "TERMCHAR", "TERMCHAR_EN"):
+        for name in (
+                "SEND_END_EN",
+                "TERMCHAR",
+                "TERMCHAR_EN",
+                "RSRC_LOCK_STATE"
+        ):
             attribute = getattr(constants, "VI_ATTR_" + name)
             self.attrs[attribute] = attributes.AttributesByID[attribute].default
 
-        self.attrs[ResourceAttribute.dma_allow_enabled] = constants.VI_FALSE
-        self.attrs[ResourceAttribute.file_append_enabled] = constants.VI_FALSE
         self.attrs[ResourceAttribute.interface_instrument_name] = "TCPIP0 (VICP)"
         self.attrs[ResourceAttribute.interface_number] = 0
-        self.attrs[ResourceAttribute.io_prot] = constants.VI_PROT_NORMAL
-        self.attrs[ResourceAttribute.read_buffer_operation_mode] = (
-            constants.VI_FLUSH_DISABLE
-        )
-        self.attrs[ResourceAttribute.resource_lock_state] = constants.VI_NO_LOCK
         self.attrs[ResourceAttribute.suppress_end_enabled] = constants.VI_FALSE
         self.attrs[ResourceAttribute.tcpip_address] = self.parsed.host_address
         self.attrs[ResourceAttribute.tcpip_hostname] = self.parsed.host_address
@@ -1650,7 +1661,8 @@ class TCPIPSocketSession(Session):
 
         self.attrs[ResourceAttribute.tcpip_address] = self.parsed.host_address
         self.attrs[ResourceAttribute.tcpip_port] = self.parsed.port
-        self.attrs[ResourceAttribute.interface_number] = self.parsed.board
+        self.attrs[ResourceAttribute.interface_instrument_name] = "TCPIP0 (SOCKET)"
+        self.attrs[ResourceAttribute.interface_number] = 0
         self.attrs[ResourceAttribute.tcpip_nodelay] = (
             self._get_tcpip_nodelay,
             self._set_attribute,
@@ -1660,11 +1672,16 @@ class TCPIPSocketSession(Session):
             self._get_tcpip_keepalive,
             self._set_tcpip_keepalive,
         )
-        # to use default as ni visa driver (NI-VISA 15.0)
+        # to use same default as ni visa driver (NI-VISA 15.0)
         self.attrs[ResourceAttribute.suppress_end_enabled] = True
+        self.attrs[ResourceAttribute.send_end_enabled] = True
         self.attrs[ResourceAttribute.io_prot] = constants.VI_PROT_NORMAL
 
-        for name in ("TERMCHAR", "TERMCHAR_EN"):
+        for name in (
+                "TERMCHAR",
+                "TERMCHAR_EN",
+                "RSRC_LOCK_STATE"
+        ):
             attribute = getattr(constants, "VI_ATTR_" + name)
             self.attrs[attribute] = attributes.AttributesByID[attribute].default
 

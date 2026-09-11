@@ -168,6 +168,27 @@ class Session(metaclass=abc.ABCMeta):
         Dict[Tuple[constants.InterfaceType, str], Type["Session"]]
     ] = {}
 
+    # The following are unsupported/unhandled attributes, that are still supported via
+    # `get_attribute()` and `set_attribute()`
+    # Defining them here pins them to their default values, and refuses 'set'
+    #
+    # If you do support them in your session class, you should override the corresponding
+    # entries in `_hardcoded_attrs`.
+    # Please only set attributes that are applicable to all resource types (with some leeway for USB RAW).
+    _hardcoded_attrs = {
+        # VI_ATTR_MAX_QUEUE_LENGTH/max_queue_length
+        # There is no real limit, except OOM.
+        ResourceAttribute.max_queue_length: 50,  # is the default value
+        # VI_ATTR_DMA_ALLOW_EN/dma_allow_enabled
+        ResourceAttribute.dma_allow_enabled: constants.VI_FALSE,
+        # VI_ATTR_FILE_APPEND_EN/file_append_enabled
+        ResourceAttribute.file_append_enabled: constants.VI_FALSE,
+        # VI_ATTR_RD_BUF_OPER_MODE/read_buffer_operation_mode
+        ResourceAttribute.read_buffer_operation_mode: constants.VI_FLUSH_DISABLE,
+        # VI_ATTR_WR_BUF_OPER_MODE/write_buffer_operation_mode
+        ResourceAttribute.write_buffer_operation_mode: constants.VI_FLUSH_WHEN_FULL
+    }
+
     @staticmethod
     def list_resources() -> List[str]:
         """List the resources available for the resource class."""
@@ -315,19 +336,44 @@ class Session(metaclass=abc.ABCMeta):
         self.interface = None
 
         #: Used for attributes not handled by the underlying interface.
-        #: Values are get or set automatically by get_attribute and
-        #: set_attribute
-        #: Add your own by overriding after_parsing.
+        #: Values are get or set automatically by `get_attribute()` and
+        #: `set_attribute()`
+        #: Add your own or adapt the following default values by overriding `after_parsing()`.
+        # Don't put anything here that can be overridden by _get_attribute() or _set_attribute(),
+        # as self.attrs has priority over those functions.
         self.attrs = {
+            # VI_ATTR_RM_SESSION/resource_manager_session
             ResourceAttribute.resource_manager_session: resource_manager_session,
+
+            # VI_ATTR_RSRC_NAME/resource_name
             ResourceAttribute.resource_name: str(parsed),
+
+            # VI_ATTR_RSRC_CLASS/resource_class
             ResourceAttribute.resource_class: parsed.resource_class,
+
+            # VI_ATTR_INTF_TYPE/interface_type (This is not required by USB RAW, but I set it anyway)
             ResourceAttribute.interface_type: parsed.interface_type_const,
+
+            # VI_ATTR_TMO_VALUE/timeout_value (This is not required by USB RAW, but I set it anyway)
             ResourceAttribute.timeout_value: (self._get_timeout, self._set_timeout),
+
+            # VI_ATTR_RSRC_MANF_NAME/resource_manufacturer_name
             ResourceAttribute.resource_manufacturer_name: "PyVISA-Py",
-            # TODO: VI_ATTR_RSRC_MANF_ID, VI_ATTR_RSRC_SPEC_VERSION
+
+            # VI_ATTR_RSRC_MANF_ID/resource_manufacturer_id
+            # a unique 12-bit hexadecimal value assigned to hardware vendors by the VXI Consortium
+            # We don't have one, so fake it (like we do with HISLIP).
+            ResourceAttribute.resource_manufacturer_id: 0,
+
+            # VI_ATTR_RSRC_SPEC_VERSION/resource_spec_version
+            ResourceAttribute.resource_spec_version: 0x00700200,  # VPP-4.3 compliant
+
+            # VI_ATTR_USER_DATA/user_data
+            # This is a session-local variable. No interaction with the resource.
+            ResourceAttribute.user_data: 0,
         }
 
+        #: Special case for timeout, as it can be overridden by set_attribute
         #: Timeout expressed in second or None for the absence of a timeout.
         #: The default value is set when calling self.set_attribute(attr, default_timeout)
         self.timeout = None
@@ -336,6 +382,26 @@ class Session(metaclass=abc.ABCMeta):
         attr = ResourceAttribute.timeout_value
         default_timeout = attributes.AttributesByID[attr].default
         self.set_attribute(attr, default_timeout)
+
+        # you MUST handle the following attributes in `after_parsing()` or
+        # in `_get_attribute()`/`_set_attribute()`, as there are no simple default values:
+        # (the following list only has attributes that are supported by PyVISA-Py's resource types)
+        #
+        # RO, for all resources:
+        #  VI_ATTR_RSRC_IMPL_VERSION/resource_impl_version
+        #  VI_ATTR_RSRC_LOCK_STATE/resource_lock_state
+        #
+        # RO, for all resources except USB RAW:
+        #  VI_ATTR_INTF_INST_NAME/interface_instrument_name
+        #  VI_ATTR_INTF_NUM /interface_number
+        #  VI_ATTR_RD_BUF_SIZE/read_buffer_size
+        #  VI_ATTR_WR_BUF_SIZE/write_buffer_size
+        #
+        # R/W, for all resources except USB RAW:
+        #  VI_ATTR_SEND_END_EN/send_end_enabled
+        #  VI_ATTR_SUPPRESS_END_EN/suppress_end_enabled
+        #  VI_ATTR_TERMCHAR/termchar
+        #  VI_ATTR_TERMCHAR_EN/termchar_enabled
 
         self.after_parsing()
 
@@ -724,9 +790,14 @@ class Session(metaclass=abc.ABCMeta):
         # Check if reading the attribute is allowed.
         # This should however not exist: only RO and RW should exist.
         if not attr.read:
-            raise Exception("Do not now how to handle write only attributes.")
+            raise Exception("Do not know how to handle write only attributes.")
 
-        # First try to answer those attributes that are registered in
+        # First try to answer those attributes that are hardcoded.
+        for myattr, default_value in self._hardcoded_attrs.items():
+            if attribute == myattr:
+                return default_value, StatusCode.success
+
+        # Then try to answer those attributes that are registered in
         # self.attrs, see Session.after_parsing
         if attribute in self.attrs:
             value = self.attrs[attribute]
@@ -785,7 +856,15 @@ class Session(metaclass=abc.ABCMeta):
         if not attr.write:
             return StatusCode.error_attribute_read_only
 
-        # First try to answer those attributes that are registered in
+        # First try to answer those attributes that are hardcoded,
+        # and refuse any change. Accept only the default value.
+        for myattr, default_value in self._hardcoded_attrs.items():
+            if attribute == myattr:
+                if attribute_state != default_value:
+                    return StatusCode.error_nonsupported_attribute_state
+                return StatusCode.success
+
+        # Then try to answer those attributes that are registered in
         # self.attrs, see Session.after_parsing
         if attribute in self.attrs:
             value = self.attrs[attribute]

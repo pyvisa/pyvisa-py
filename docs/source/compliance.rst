@@ -334,17 +334,15 @@ This chapter does not cover attributes for the PRLGX interface and device resour
 
 ``VI_ATTR_DMA_ALLOW_EN``
 ^^^^^^^^^^^^^^^^^^^^^^^^
-| **Used by:** all resources
+| **Used by:** all resources except USB RAW
 | **Access:** R/W
-| **Coverage:** Missing
-
-Proposition for future change: add to all (`dma_allow_enabled`), in faked RW (force to False, unsupported-state otherwise)
+| **Coverage:** Partial; fixed to False
 
 ``VI_ATTR_FILE_APPEND_EN``
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
-| **Used by:** all resources
+| **Used by:** all resources except USB RAW
 | **Access:** R/W
-| **Coverage:** Missing
+| **Coverage:** Partial; fixed to False
 
 Proposition for future change: add to all (`file_append_enabled`), in faked RW (force to False, unsupported-state otherwise)
 
@@ -422,30 +420,22 @@ Proposition for future change: add to all (`file_append_enabled`), in faked RW (
 
 ``VI_ATTR_INTF_INST_NAME``
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
-| **Used by:** all resources
+| **Used by:** all resources except USB RAW
 | **Access:** RO
-| **Coverage:**
-|  - HiSLIP: Full
-|  - All others: Missing
-
-Proposition for future change: add to all (`interface_instrument_name`)
+| **Coverage:** Full
 
 ``VI_ATTR_INTF_NUM``
 ^^^^^^^^^^^^^^^^^^^^
-| **Used by:** all resources
+| **Used by:** all resources except USB RAW
 | **Access:** RO
-| **Coverage:**
-|  - GPIB INSTR, GPIB INTFC, HiSLIP, TCPIP SOCKET: Full
-|  - ASRL, VXI-11, USB: Missing
+| **Coverage:** Full
 
-Proposition for future change: distribute everywhere except GPIB: `interface_number = self.parsed.board`.
-While we're there, correct `VI_ATTR_INTF_INST_NAME` (`interface_instrument_name`): include board in it, for VXI-11 and HiSLIP.
-For VXI-11 and HiSLIP, interface_number corresponds to the network interface of the client PC.
-Add tests about this.
+For some resources, this relies on the board that can be defined in the connection string. 
+Support for board selection for network connections is not implemented yet.
 
 ``VI_ATTR_INTF_TYPE``
 ^^^^^^^^^^^^^^^^^^^^^
-| **Used by:** all resources
+| **Used by:** all resources except USB RAW
 | **Access:** RO
 | **Coverage:** Full
 
@@ -477,12 +467,7 @@ Could probably easily be added for GPIB, mark that in the code.
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 | **Used by:** all resources
 | **Access:** R/W (becomes RO after the first ``viEnableEvent()``)
-| **Coverage:** Missing
-
-Proposition for future change: (`max_queue_length`) This means creating a queue with configurable size
-per each session, on all types of instruments.
-See VPP-4.3 Rules 3.2.5, 3.2.6, 3.7.3, 3.7.4, 3.7.5.
-NI-VISA has 50 by default.
+| **Coverage:** Partial; fixed to a default value.
 
 ``VI_ATTR_MODEL_CODE``
 ^^^^^^^^^^^^^^^^^^^^^^
@@ -498,17 +483,13 @@ NI-VISA has 50 by default.
 
 ``VI_ATTR_RD_BUF_OPER_MODE``
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-| **Used by:** all resources
+| **Used by:** all resources except USB RAW
 | **Access:** R/W
-| **Coverage:**
-|  - HiSLIP: Partial; stores the default but does not provide formatted read buffer behavior.
-|  - All others: Missing
-
-Proposition for future change: add to all (`read_buffer_operation_mode`), in faked RW (force to VI_FLUSH_DISABLE, unsupported-state otherwise).
+| **Coverage:** Partial; fixed to VI_FLUSH_DISABLE.
 
 ``VI_ATTR_RD_BUF_SIZE``
 ^^^^^^^^^^^^^^^^^^^^^^^
-| **Used by:** all resources
+| **Used by:** all resources except USB RAW
 | **Access:** RO
 | **Coverage:** Missing
 
@@ -536,28 +517,22 @@ Proposition for future change: together with ``VI_ATTR_WR_BUF_SIZE``. Not sure h
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
 | **Used by:** all resources
 | **Access:** RO
-| **Coverage:**
-|  - HiSLIP, VXI-11: Partial
-|  - All others: Missing
+| **Coverage:** Full
 
-Lock sharing or nesting is not implemented.
-
-Proposition for future change: add to all others (`resource_lock_state`), in faked RW (force to VI_NO_LOCK, unsupported-state otherwise)
+However, the only locking that is supported is exclusive locking, on HiSLIP and VXI-11. 
+Lock sharing or lock nesting is not supported.
 
 ``VI_ATTR_RSRC_MANF_ID``
 ^^^^^^^^^^^^^^^^^^^^^^^^
 | **Used by:** all resources
 | **Access:** RO
-| **Coverage:** Missing
-
-Proposition for future change: PyVISA-Py does not have a VXI manufacturer ID (although it might be possible to get one). We fake IVI member ID `xx` on HiSLIP. Maybe that?
-NI-Visa = 0x0FF6
+| **Coverage:** Full. Uses 0 as a placeholder for the VXI manufacturer ID.
 
 ``VI_ATTR_RSRC_MANF_NAME``
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 | **Used by:** all resources
 | **Access:** RO
-| **Coverage:** Full
+| **Coverage:** Full ("PyVISA-Py")
 
 ``VI_ATTR_RSRC_NAME``
 ^^^^^^^^^^^^^^^^^^^^^
@@ -569,21 +544,15 @@ NI-Visa = 0x0FF6
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 | **Used by:** all resources
 | **Access:** RO
-| **Coverage:** Missing
-
-Proposition for future change: since we're not fully compliant, this is stretching it.
-NI-VISA MacOS uses 0x0070 0000, NI-VISA's doc says it is 0x0030 0000
-VPP-4.3 says it SHALL be 0x0070 0200
-Maybe set to 0x0030 0000 ?
+| **Coverage:** Full
 
 ``VI_ATTR_SEND_END_EN``
 ^^^^^^^^^^^^^^^^^^^^^^^
-| **Used by:** all resources
+| **Used by:** all resources except USB RAW
 | **Access:** R/W
 | **Coverage:**
 |  - GPIB INSTR, GPIB INTFC: Full
-|  - ASRL, VXI-11, HiSLIP, USB: Partial; The partial implementations expose or read the setting but do not consistently apply it to the underlying transport's end-of-message behavior.
-|  - SOCKET: Missing
+|  - ASRL, VXI-11, HiSLIP, USB, SOCKET: Partial; The partial implementations expose or read the setting but do not consistently apply it to the underlying transport's end-of-message behavior.
 
 Proposition for future change: to be tackled together with ``VI_ATTR_SUPPRESS_END_EN``
 
@@ -667,7 +636,7 @@ Proposition for future change: do like SOCKET
 
 ``VI_ATTR_TERMCHAR``
 ^^^^^^^^^^^^^^^^^^^^
-| **Used by:** all resources
+| **Used by:** all resources except USB RAW
 | **Access:** R/W
 | **Coverage:**
 |  - HiSLIP: Partial; HiSLIP stores the value but does not use it to terminate reads.
@@ -677,7 +646,7 @@ Proposition for future change: to be tackled together with ``VI_ATTR_TERMCHAR_EN
 
 ``VI_ATTR_TERMCHAR_EN``
 ^^^^^^^^^^^^^^^^^^^^^^^
-| **Used by:** all resources
+| **Used by:** all resources except USB RAW
 | **Access:** R/W
 | **Coverage:**
 |  - HiSLIP: Partial; HiSLIP stores the value but does not use it to terminate reads.
@@ -730,24 +699,17 @@ NI-VISA claims it is fixed to VI_TRIG_SW for GPIB, Serial, TCPIP.
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 | **Used by:** all resources
 | **Access:** RW
-| **Coverage:** Missing
-
-Proposition for future change: Can be implemented as a simple session-local storage attribute
+| **Coverage:** Full
 
 ``VI_ATTR_WR_BUF_OPER_MODE``
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-| **Used by:** all resources
+| **Used by:** all resources except USB RAW
 | **Access:** R/W
-| **Coverage:**
-|  - HiSLIP: Partial; HiSLIP stores the default but has no formatted write buffer.
-|  - All others: Missing
-
-Proposition for future change: (`write_buffer_operation_mode`) fake RW (force to VI_FLUSH_WHEN_FULL, unsupported-state otherwise)
-See ``VI_ATTR_RD_BUF_OPER_MODE`` for more details
+| **Coverage:** Partial; fixed to VI_FLUSH_WHEN_FULL
 
 ``VI_ATTR_WR_BUF_SIZE``
 ^^^^^^^^^^^^^^^^^^^^^^^
-| **Used by:** all resources
+| **Used by:** all resources except USB RAW
 | **Access:** RO
 | **Coverage:** Missing
 

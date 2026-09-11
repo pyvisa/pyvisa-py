@@ -73,6 +73,9 @@ class SerialSession(Session):
             timeout=self.timeout,
             write_timeout=self.timeout,
         )
+        self.attrs[ResourceAttribute.interface_instrument_name] = (
+            "ASRL" + self.parsed.board
+        )
         self.attrs[ResourceAttribute.io_prot] = constants.VI_PROT_NORMAL
 
         for name in (
@@ -82,9 +85,11 @@ class SerialSession(Session):
             "TERMCHAR",
             "TERMCHAR_EN",
             "SUPPRESS_END_EN",
+            "RSRC_LOCK_STATE",
         ):
             attribute = getattr(constants, "VI_ATTR_" + name)
             self.attrs[attribute] = attributes.AttributesByID[attribute].default
+        self.attrs[ResourceAttribute.interface_number] = self.parsed.board
 
     def _get_timeout(self, attribute: ResourceAttribute) -> Tuple[int, StatusCode]:
         if self.interface:
