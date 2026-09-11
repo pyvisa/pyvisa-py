@@ -22,3 +22,8 @@ _test/
 
 # auto-generated version file
 version.py
+
+# work documents while doing compliance checks, will be removed later from this file
+docs/source/json_to_rst_table.py
+docs/source/compliance.txt
+docs/source/attr.json
