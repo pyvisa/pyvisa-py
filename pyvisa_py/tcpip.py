@@ -1428,12 +1428,7 @@ class TCPIPInstrVicp(Session):
             raise OpenError() from e
 
         # initialize the constant attributes
-        for name in (
-                "SEND_END_EN",
-                "TERMCHAR",
-                "TERMCHAR_EN",
-                "RSRC_LOCK_STATE"
-        ):
+        for name in ("SEND_END_EN", "TERMCHAR", "TERMCHAR_EN", "RSRC_LOCK_STATE"):
             attribute = getattr(constants, "VI_ATTR_" + name)
             self.attrs[attribute] = attributes.AttributesByID[attribute].default
 
@@ -1677,11 +1672,7 @@ class TCPIPSocketSession(Session):
         self.attrs[ResourceAttribute.send_end_enabled] = True
         self.attrs[ResourceAttribute.io_prot] = constants.VI_PROT_NORMAL
 
-        for name in (
-                "TERMCHAR",
-                "TERMCHAR_EN",
-                "RSRC_LOCK_STATE"
-        ):
+        for name in ("TERMCHAR", "TERMCHAR_EN", "RSRC_LOCK_STATE"):
             attribute = getattr(constants, "VI_ATTR_" + name)
             self.attrs[attribute] = attributes.AttributesByID[attribute].default
 
