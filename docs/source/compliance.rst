@@ -344,8 +344,6 @@ This chapter does not cover attributes for the PRLGX interface and device resour
 | **Access:** R/W
 | **Coverage:** Partial; fixed to False
 
-Proposition for future change: add to all (`file_append_enabled`), in faked RW (force to False, unsupported-state otherwise)
-
 ``VI_ATTR_GPIB_ADDR_STATE``
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
 | **Used by:** GPIB INTFC
@@ -444,12 +442,10 @@ Support for board selection for network connections is not implemented yet.
 | **Used by:** GPIB INSTR, ASRL INSTR, TCPIP SOCKET, USB INSTR
 | **Access:** R/W
 | **Coverage:**
-|  - GPIB: Partial; only supports the normal protocol.
+|  - GPIB, USB: Partial; only supports the normal protocol.
 |  - ASRL, SOCKET: Full
-|  - USB: Missing
 
-Proposition for future change: fake RW on the missing/partial interfaces, and use unsupported-state on all where needed.
-Could probably easily be added for GPIB, mark that in the code.
+Proposition for future change: Could probably easily be added for GPIB.
 
 ``VI_ATTR_MANF_ID``
 ^^^^^^^^^^^^^^^^^^^
