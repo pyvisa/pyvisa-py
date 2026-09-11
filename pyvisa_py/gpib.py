@@ -382,7 +382,7 @@ class _GPIBCommon(Session):
         ):
             attribute = getattr(constants, "VI_ATTR_" + name)
             self.set_attribute(attr, attributes.AttributesByID[attribute].default)
-            
+
         # RO, attributes:
         self.attrs[constants.ResourceAttribute.resource_lock_state] = (
             constants.VI_NO_LOCK
