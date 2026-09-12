@@ -122,8 +122,13 @@ The following features are not or not fully supported:
 
 * Shared locks and nested locks are not supported.
 * Asynchronous read/write operations are not supported.
+* Direct file I/O operations are not supported, but pyVISA provides alternative methods for reading and writing data.
 * Secured/Encrypted (SSL/TLS) and Authenticated connections are not supported.
 * Asynchronous termination (``terminate()``) is only supported for HiSLIP.
+* Event handling is only supported for HiSLIP and VXI-11, and only for service requests. 
+  The other resources do not support events.
+* viSetBuf-style buffer configuration is not supported.
+* flush() is implemented only for ASRL and TCPIP SOCKET.
 * LXI service discovery is not supported.
 
 ``VXI-11 device_docmd()``
@@ -426,10 +431,9 @@ This chapter does not cover attributes for the PRLGX interface and device resour
 ^^^^^^^^^^^^^^^^^^^^
 | **Used by:** all resources except USB RAW
 | **Access:** RO
-| **Coverage:** Full
-
-For some resources, this relies on the board that can be defined in the connection string. 
-Support for board selection for network connections is not implemented yet.
+| **Coverage:** 
+|  - TCPIP VXI-11, HiSLIP, SOCKET: Partial; board selection is not implemented yet.
+|  - Other resources: Full
 
 ``VI_ATTR_INTF_TYPE``
 ^^^^^^^^^^^^^^^^^^^^^
@@ -463,7 +467,7 @@ Proposition for future change: Could probably easily be added for GPIB.
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 | **Used by:** all resources
 | **Access:** R/W (becomes RO after the first ``viEnableEvent()``)
-| **Coverage:** Partial; fixed to a default value.
+| **Coverage:** Missing. The queue is unbounded. The attribute is fixed to a default value.
 
 ``VI_ATTR_MODEL_CODE``
 ^^^^^^^^^^^^^^^^^^^^^^
@@ -522,7 +526,7 @@ Lock sharing or lock nesting is not supported.
 ^^^^^^^^^^^^^^^^^^^^^^^^
 | **Used by:** all resources
 | **Access:** RO
-| **Coverage:** Full. Uses 0 as a placeholder for the VXI manufacturer ID.
+| **Coverage:** Non conforming. Returns 0 instead of a VXI manufacturer ID.
 
 ``VI_ATTR_RSRC_MANF_NAME``
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -567,7 +571,7 @@ Proposition for future change: to be tackled together with ``VI_ATTR_SEND_END_EN
 ^^^^^^^^^^^^^^^^^^^^^^
 | **Used by:** TCPIP INSTR (VXI-11 and HiSLIP), SOCKET
 | **Access:** RO
-| **Coverage:** Full
+| **Coverage:** Partial; will report the name parsed from the connection string rather than the actual hostname.
 
 ``VI_ATTR_TCPIP_DEVICE_NAME``
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -594,13 +598,13 @@ For now: Fake RW (force to VI_FALSE, unsupported-state otherwise)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 | **Used by:** TCPIP INSTR (HiSLIP)
 | **Access:** RO
-| **Coverage:** Full
+| **Coverage:** Partial; reports 1.0 regardless of the negotiated protocol version.
 
 ``VI_ATTR_TCPIP_HOSTNAME``
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 | **Used by:** TCPIP INSTR (VXI-11 and HiSLIP), SOCKET
 | **Access:** RO
-| **Coverage:** Full
+| **Coverage:** Partial; will report the name parsed from the connection string rather than the actual hostname.
 
 ``VI_ATTR_TCPIP_IS_HISLIP``
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -645,7 +649,7 @@ Proposition for future change: to be tackled together with ``VI_ATTR_TERMCHAR_EN
 | **Used by:** all resources except USB RAW
 | **Access:** R/W
 | **Coverage:**
-|  - HiSLIP: Partial; HiSLIP stores the value but does not use it to terminate reads.
+|  - HiSLIP, ASRL: Partial; stores the value but does not use it to terminate reads.
 |  - All others: Full
 
 Proposition for future change: to be tackled together with ``VI_ATTR_TERMCHAR``
