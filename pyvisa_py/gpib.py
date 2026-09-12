@@ -372,17 +372,20 @@ class _GPIBCommon(Session):
         self.controller = Gpib(name=minor)
 
         # Force timeout and termchar settings to interface
-        self.set_attribute(
-            constants.ResourceAttribute.timeout_value,
-            attributes.AttributesByID[constants.VI_ATTR_TMO_VALUE].default,
-        )
-        self.set_attribute(
-            constants.ResourceAttribute.termchar,
-            attributes.AttributesByID[constants.VI_ATTR_TERMCHAR].default,
-        )
-        self.set_attribute(
-            constants.ResourceAttribute.termchar_enabled,
-            attributes.AttributesByID[constants.VI_ATTR_TERMCHAR_EN].default,
+        # This uses the setter, so it can do fancy stuff.
+        for name, attr in (
+            ("TMO_VALUE", ResourceAttribute.timeout_value),
+            ("TERMCHAR", ResourceAttribute.termchar),
+            ("TERMCHAR_EN", ResourceAttribute.termchar_enabled),
+            ("SEND_END_EN", ResourceAttribute.send_end_enabled),
+            # ("SUPPRESS_END_EN", ResourceAttribute.suppress_end_enabled)  # not yet supported
+        ):
+            attribute = getattr(constants, "VI_ATTR_" + name)
+            self.set_attribute(attr, attributes.AttributesByID[attribute].default)
+
+        # RO, attributes:
+        self.attrs[constants.ResourceAttribute.resource_lock_state] = (
+            constants.VI_NO_LOCK
         )
 
     def _get_timeout(
@@ -740,6 +743,13 @@ class GPIBSession(_GPIBCommon):  # type: ignore[no-redef]
     # for a specific kind of resource
     parsed: GPIBInstr
 
+    # extend the fixed attributes from the base Session class.
+    # io_prot is not (yet) supported, namely VI_PROT_HS488
+    _hardcoded_attrs = {
+        **Session._hardcoded_attrs,
+        ResourceAttribute.io_prot: constants.VI_PROT_NORMAL,
+    }
+
     @staticmethod
     def list_resources() -> List[str]:
         return [
@@ -843,9 +853,6 @@ class GPIBSession(_GPIBCommon):  # type: ignore[no-redef]
                 return constants.VI_TRUE, StatusCode.success
             else:
                 return constants.VI_FALSE, StatusCode.success
-        elif attribute == constants.VI_ATTR_IO_PROT:
-            # io_prot is not (yet) supported
-            return constants.VI_PROT_NORMAL, StatusCode.success
 
         return super(GPIBSession, self)._get_attribute(attribute)
 
@@ -888,12 +895,6 @@ class GPIBSession(_GPIBCommon):  # type: ignore[no-redef]
                 ifc.config(gpib_constants.config.IbcUnAddr, attribute_state)
                 return StatusCode.success
             except gpib.GpibError:
-                return StatusCode.error_nonsupported_attribute_state
-        elif attribute == constants.VI_ATTR_IO_PROT:
-            if attribute_state == constants.VI_PROT_NORMAL:
-                return StatusCode.success
-            else:
-                # io_prot is not (yet) supported, namely VI_PROT_HS488
                 return StatusCode.error_nonsupported_attribute_state
 
         return super(GPIBSession, self)._set_attribute(attribute, attribute_state)
