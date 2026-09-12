@@ -527,7 +527,7 @@ class TCPIPInstrHiSLIP(Session):
             Return value of the library call.
 
         """
-        rv = self.interface.async_lock_release("")
+        rv = self.interface.async_lock_release()
         # rv is from LOCKRESPONSE
         return self.LOCKRESPONSE_TO_STATUSCODE.get(
             rv, StatusCode.error_nonsupported_operation
