@@ -31,7 +31,7 @@ Notes:
 
 * TCPIP INSTR: 
     * Supports both VXI-11 and HiSLIP protocols, as determined by `LAN device name` (``hislip...`` for HiSLIP, anything else goes to VXI-11), with VXI-11 as the default.
-    * For HiSLIP, the port number can be specified the standard way by appending it to the `LAN device name`, separated by a comma. Example: ``hislip0,4880``
+    * For HiSLIP, the port number can be specified by appending it to the `LAN device name`, separated by a comma. Example: ``hislip0,4880``. This is the standard way, and all VISA backends should support this method.
     * For VXI-11, the port number is normally provided by a port mapper, but can also be provided explicitly by appending it to the `host address`, separated by a comma. Example: ``192.168.1.101,1024``. Not all VISA backends support this feature.
 * PRLGX / Prologix:
     * This is PyVISA-Py specific. See the Prologix section for details.
