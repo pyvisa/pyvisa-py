@@ -803,7 +803,7 @@ class TCPIPInstrVxi11(Session):
         self.attrs[ResourceAttribute.interface_number] = 0
         self.attrs[ResourceAttribute.tcpip_is_hislip] = False
         self.attrs[ResourceAttribute.tcpip_address] = self.parsed.host_address
-        self.attrs[ResourceAttribute.tcpip_hostname] = ""
+        self.attrs[ResourceAttribute.tcpip_hostname] = self.parsed.host_address
         self.attrs[ResourceAttribute.tcpip_device_name] = self.parsed.lan_device_name
         for name in ("SEND_END_EN", "TERMCHAR", "TERMCHAR_EN", "SUPPRESS_END_EN"):
             attribute = getattr(constants, "VI_ATTR_" + name)
@@ -1662,7 +1662,7 @@ class TCPIPSocketSession(Session):
             self._get_tcpip_nodelay,
             self._set_attribute,
         )
-        self.attrs[ResourceAttribute.tcpip_hostname] = ""
+        self.attrs[ResourceAttribute.tcpip_hostname] = self.parsed.host_address
         self.attrs[ResourceAttribute.tcpip_keepalive] = (
             self._get_tcpip_keepalive,
             self._set_tcpip_keepalive,

@@ -508,7 +508,7 @@ class SerialSession(Session):
                 self.interface.parity = serial.PARITY_ODD
                 return StatusCode.success
 
-            elif attribute_state == serial.PARITY_MARK:
+            elif attribute_state == constants.Parity.mark:
                 self.interface.parity = serial.PARITY_MARK
                 return StatusCode.success
 
