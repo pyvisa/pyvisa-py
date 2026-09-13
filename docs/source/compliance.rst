@@ -517,8 +517,10 @@ Proposition for future change: together with ``VI_ATTR_WR_BUF_SIZE``. Not sure h
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
 | **Used by:** all resources
 | **Access:** RO
-| **Coverage:** Partial; the only locking that is supported is exclusive locking, on HiSLIP and VXI-11. 
-| Other resources do not support locking. Lock sharing or lock nesting is not supported.
+| **Coverage:** Full
+
+However, locking itself is partially implemented: the only locking that is supported is exclusive locking, on HiSLIP and VXI-11. 
+Other resources do not support locking. Lock sharing or lock nesting is not supported.
 
 ``VI_ATTR_RSRC_MANF_ID``
 ^^^^^^^^^^^^^^^^^^^^^^^^
