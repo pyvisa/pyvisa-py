@@ -517,10 +517,8 @@ Proposition for future change: together with ``VI_ATTR_WR_BUF_SIZE``. Not sure h
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
 | **Used by:** all resources
 | **Access:** RO
-| **Coverage:** Full
-
-However, the only locking that is supported is exclusive locking, on HiSLIP and VXI-11. 
-Lock sharing or lock nesting is not supported.
+| **Coverage:** Partial; the only locking that is supported is exclusive locking, on HiSLIP and VXI-11. 
+Other resources do not support locking. Lock sharing or lock nesting is not supported.
 
 ``VI_ATTR_RSRC_MANF_ID``
 ^^^^^^^^^^^^^^^^^^^^^^^^
@@ -532,7 +530,7 @@ Lock sharing or lock nesting is not supported.
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 | **Used by:** all resources
 | **Access:** RO
-| **Coverage:** Full ("PyVISA-Py")
+| **Coverage:** Full (returns "PyVISA-Py")
 
 ``VI_ATTR_RSRC_NAME``
 ^^^^^^^^^^^^^^^^^^^^^
