@@ -221,7 +221,10 @@ Attributes
 This document assesses the VPP-4.3 attributes applicable to PyVISA-Py's implemented resource types.
 Resource classes not listed in a section cannot use that attribute under VPP-4.3.
 
-This chapter does not cover attributes for the PRLGX interface and device resources, as they are very limited.
+This chapter does not cover attributes for the PRLGX interface and device resources, as they are not 
+standardised and have limited support for attributes.
+
+VICP attributes are also not standardised.
 
 ``VI_ATTR_4882_COMPLIANT``
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
