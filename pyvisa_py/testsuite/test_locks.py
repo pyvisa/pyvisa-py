@@ -181,7 +181,7 @@ def test_hislip_lock_updates_resource_lock_state():
     )
 
     assert library.unlock(1) == constants.StatusCode.success
-    session.interface.async_lock_release.assert_called_once_with("")
+    session.interface.async_lock_release.assert_called_once()
 
     state, status = library.get_attribute(1, constants.VI_ATTR_RSRC_LOCK_STATE)
     assert (state, status) == (constants.VI_NO_LOCK, constants.StatusCode.success)

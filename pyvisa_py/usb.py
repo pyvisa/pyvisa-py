@@ -65,6 +65,13 @@ class USBSession(Session):
     # for a specific kind of resource
     parsed: Union[USBInstr, USBRaw]
 
+    # extend the fixed attributes from the base Session class.
+    # Contrary to serial and socket, io_prot is not used, because VPP-4.3 does not explicitly demands it.
+    _hardcoded_attrs = {
+        **Session._hardcoded_attrs,
+        ResourceAttribute.io_prot: constants.VI_PROT_NORMAL,
+    }
+
     #: Class to use when instantiating the interface
     _intf_cls: Union[Type[usbraw.USBRawDevice], Type[usbtmc.USBTMC]]
 
@@ -94,6 +101,7 @@ class USBSession(Session):
         return "via PyUSB (%s). Backend: %s" % (ver, backend)
 
     def after_parsing(self) -> None:
+        # TODO: board is not used
         self.interface = self._intf_cls(
             int(self.parsed.manufacturer_id, 0),
             int(self.parsed.model_code, 0),
@@ -102,12 +110,14 @@ class USBSession(Session):
 
         self.attrs.update(
             {
+                ResourceAttribute.interface_instrument_name: f"USB{self.parsed.usb_interface_number}",
                 ResourceAttribute.manufacturer_id: int(self.parsed.manufacturer_id, 0),
                 ResourceAttribute.model_code: int(self.parsed.model_code, 0),
                 ResourceAttribute.usb_serial_number: self.parsed.serial_number,
                 ResourceAttribute.usb_interface_number: int(
                     self.parsed.usb_interface_number
                 ),
+                ResourceAttribute.interface_number: 0,
             }
         )
 
@@ -116,6 +126,7 @@ class USBSession(Session):
             ("SUPPRESS_END_EN", ResourceAttribute.suppress_end_enabled),
             ("TERMCHAR", ResourceAttribute.termchar),
             ("TERMCHAR_EN", ResourceAttribute.termchar_enabled),
+            ("RSRC_LOCK_STATE", ResourceAttribute.resource_lock_state),
         ):
             attribute = getattr(constants, "VI_ATTR_" + name)
             self.attrs[attr] = attributes.AttributesByID[attribute].default
