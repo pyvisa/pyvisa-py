@@ -25,6 +25,9 @@ Here's some guidelines to help the review process go smoothly.
    already reviewed code ends up having to be re-reviewed/it is hard to tell
    what is new etc!).
 
+6. Please update docs\sources\compliance.rst manually when you affect the level 
+   of compliance (be it IVI side or the other side: VXI-11, HiSLIP, VICP, GPIB, ...)
+
 Many thanks in advance for your cooperation!
 
 -->
@@ -34,3 +37,4 @@ Many thanks in advance for your cooperation!
 - [ ] The change is fully covered by automated unit tests
 - [ ] Documented in docs/ as appropriate
 - [ ] Added an entry to the CHANGES file
+- [ ] Adapted faq.rst and/or compliance.rst to reflect any changes in compliance
