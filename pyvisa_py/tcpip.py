@@ -347,15 +347,32 @@ class TCPIPInstrHiSLIP(Session):
             Return value of the library call.
 
         """
+        if count < 0:
+            return b"", StatusCode.error_invalid_parameter
+        if count == 0:
+            return b"", StatusCode.success_max_count_read
+
+        suppress_end_en, _ = self.get_attribute(ResourceAttribute.suppress_end_enabled)
+        termchar_enabled, _ = self.get_attribute(ResourceAttribute.termchar_enabled)
+        termchar, _ = self.get_attribute(ResourceAttribute.termchar)
+
         try:
-            data = self.interface.receive(count)
-            status = (
-                StatusCode.success_termination_character_read
-                if self.interface._rmt
-                else StatusCode.success_max_count_read
-                if len(data) >= count
-                else StatusCode.success
+            data = self.interface.receive(
+                count,
+                termination_char=termchar if termchar_enabled else None,
+                suppress_end=bool(suppress_end_en),
             )
+            if not suppress_end_en and self.interface._last_read_rmt:
+                # RULE 6.1.1: END takes priority over TERMCHAR and count.
+                status = StatusCode.success
+            elif termchar_enabled and self.interface._last_read_termchar:
+                # RULE 6.1.2
+                status = StatusCode.success_termination_character_read
+            elif len(data) >= count:
+                # RULE 6.1.3
+                status = StatusCode.success_max_count_read
+            else:
+                status = StatusCode.success
 
         except hislip.HiSLIPInterruptedError:
             # terminate() was called from another thread.  Reset the HiSLIP

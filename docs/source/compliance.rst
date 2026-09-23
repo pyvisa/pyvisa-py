@@ -637,21 +637,15 @@ For now: Fake RW (force to VI_FALSE, unsupported-state otherwise)
 ^^^^^^^^^^^^^^^^^^^^
 | **Used by:** all resources except USB RAW
 | **Access:** R/W
-| **Coverage:**
-|  - HiSLIP: Partial; HiSLIP stores the value but does not use it to terminate reads.
-|  - All others: Full
-
-Proposition for future change: to be tackled together with ``VI_ATTR_TERMCHAR_EN``
+| **Coverage:** Full
 
 ``VI_ATTR_TERMCHAR_EN``
 ^^^^^^^^^^^^^^^^^^^^^^^
 | **Used by:** all resources except USB RAW
 | **Access:** R/W
 | **Coverage:**
-|  - HiSLIP, ASRL: Partial; stores the value but does not use it to terminate reads.
+|  - ASRL: Partial; stores the value but does not use it to terminate reads.
 |  - All others: Full
-
-Proposition for future change: to be tackled together with ``VI_ATTR_TERMCHAR``
 
 ``VI_ATTR_TMO_VALUE``
 ^^^^^^^^^^^^^^^^^^^^^
