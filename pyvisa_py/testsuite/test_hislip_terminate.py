@@ -509,9 +509,7 @@ class TestSessionTerminateBase:
 class TestTCPIPInstrHiSLIPTerminate:
     """Test TCPIPInstrHiSLIP.terminate() and read() abort path."""
 
-    def _make_session(
-        self, *, termchar_enabled=False, suppress_end_enabled=False
-    ):
+    def _make_session(self, *, termchar_enabled=False, suppress_end_enabled=False):
         """Create a TCPIPInstrHiSLIP with a mocked HiSLIP Instrument."""
         from pyvisa import constants
         from pyvisa_py.tcpip import TCPIPInstrHiSLIP
@@ -621,9 +619,7 @@ class TestTCPIPInstrHiSLIPTerminate:
     def test_read_suppressed_rmt_returns_termchar_status(self):
         from pyvisa.constants import StatusCode
 
-        sess = self._make_session(
-            termchar_enabled=True, suppress_end_enabled=True
-        )
+        sess = self._make_session(termchar_enabled=True, suppress_end_enabled=True)
         sess.interface.receive.return_value = b"response\n"
         sess.interface._last_read_rmt = True
         sess.interface._last_read_termchar = True
