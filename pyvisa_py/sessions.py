@@ -363,6 +363,10 @@ class Session(metaclass=abc.ABCMeta):
         # Lowest 8 bits: Sub-minor version number
         resource_impl_version = 0
         for part, shift in zip(version_parts[:3], (20, 8, 0)):
+            try:
+                part = int(part)
+            except ValueError:
+                part = 0
             resource_impl_version += int(part) << shift
 
         self.attrs = {
