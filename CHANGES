@@ -4,7 +4,7 @@ PyVISA-py Changelog
 0.9.0 (unreleased)
 ------------------
 
-- Various small compliance problems #650 PR #???
+- Various small compliance problems #650 PR #651
 - Suppress exception logs in case of unknown attribute #644 PR #645
 - Improve coverage of attributes  PR #645
 - Add compliance documentation  PR #645
