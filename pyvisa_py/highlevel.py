@@ -499,9 +499,7 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
 
         """
         # rule VPP-4.3 3.3.2
-        if session is None:
-            return self.handle_return_value(session, StatusCode.warning_null_object)
-        if session == constants.VI_NULL:
+        if session is None or session == constants.VI_NULL:
             return self.handle_return_value(session, StatusCode.warning_null_object)
 
         try:
