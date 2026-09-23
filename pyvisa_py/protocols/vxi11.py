@@ -231,6 +231,7 @@ class CoreClient(rpc.TCPClient):
             return ErrorCodes.device_not_accessible, None, None, None
 
     def device_write(self, link, io_timeout, lock_timeout, flags, data):
+        # This returns a tuple (error, size)
         params = (link, io_timeout, lock_timeout, flags, data)
         try:
             return self.make_call(
@@ -239,12 +240,15 @@ class CoreClient(rpc.TCPClient):
                 self.packer.pack_device_write_parms,
                 self.unpacker.unpack_device_write_resp,
             )
-        except socket.timeout as e:
-            return ErrorCodes.io_error, e.args[0]
+        except socket.timeout:
+            # No idea how many bytes were successfully written before the timeout occurred
+            # must reply with timeout according to VPP-4.3 6.1.4
+            return ErrorCodes.io_timeout, 0
 
     def device_read(
         self, link, request_size, io_timeout, lock_timeout, flags, term_char
     ):
+        # This returns a tuple (error, reason, data)
         params = (link, request_size, io_timeout, lock_timeout, flags, term_char)
         try:
             return self.make_call(
@@ -253,8 +257,10 @@ class CoreClient(rpc.TCPClient):
                 self.packer.pack_device_read_parms,
                 self.unpacker.unpack_device_read_resp,
             )
-        except socket.timeout as e:
-            return ErrorCodes.io_error, e.args[0], ""
+        except socket.timeout:
+            # No idea what was read before the timeout occurred
+            # must reply with timeout according to VPP-4.3 6.1.1
+            return ErrorCodes.io_error, 0, b""
 
     def device_read_stb(self, link, flags, lock_timeout, io_timeout):
         params = (link, flags, lock_timeout, io_timeout)

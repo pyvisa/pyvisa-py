@@ -783,10 +783,14 @@ class TCPIPInstrVxi11(Session):
         )
 
         if error:
-            raise Exception("error creating link: %d" % error)
+            LOGGER.exception("Error creating link: %d", error)
+            raise OpenError()
 
         self.link = link
-        self.max_recv_size = min(max_recv_size, 2**30)  # 1GB
+        # Although VXI-11 RULE B.6.3 says min 1kB, I accept from 64B to accomodate unit tests,
+        # and bad behaving VXI devices that might report small max_recv_size values.
+        # This is mainly to avoid hangups due to too low values (< 4B). Max 1GB is reasonable.
+        self.max_recv_size = min(max(max_recv_size, 64), 2**30)
 
         self.attrs[ResourceAttribute.interface_instrument_name] = "TCPIP0 (VXI-11)"
         self.attrs[ResourceAttribute.interface_number] = 0
@@ -1074,7 +1078,10 @@ class TCPIPInstrVxi11(Session):
             flags, lock_timeout = self._adapt_flags_and_lock_timeout(flags)
 
             while num > 0:
-                if num <= self.max_recv_size:
+                if (
+                    num <= self.max_recv_size
+                    and self.attrs[ResourceAttribute.send_end_enabled]
+                ):
                     flags |= vxi11.OP_FLAG_END
 
                 block = data[offset : offset + self.max_recv_size]

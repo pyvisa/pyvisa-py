@@ -554,8 +554,8 @@ Other resources do not support locking. Lock sharing or lock nesting is not supp
 | **Used by:** all resources except USB RAW
 | **Access:** R/W
 | **Coverage:**
-|  - GPIB INSTR, GPIB INTFC: Full
-|  - ASRL, VXI-11, HiSLIP, USB, SOCKET: Partial; The partial implementations expose or read the setting but do not consistently apply it to the underlying transport's end-of-message behavior.
+|  - GPIB INSTR, GPIB INTFC, VXI-11: Full
+|  - ASRL, HiSLIP, USB, SOCKET: Partial; The partial implementations expose or read the setting but do not consistently apply it to the underlying transport's end-of-message behavior.
 
 Proposition for future change: to be tackled together with ``VI_ATTR_SUPPRESS_END_EN``
 
