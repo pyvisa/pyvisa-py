@@ -787,9 +787,9 @@ class TCPIPInstrVxi11(Session):
             raise OpenError()
 
         self.link = link
-        # Although VXI-11 RULE B.6.3 says min 1kB, I accept from 64B to accomodate unit tests
-        # This is mainly to avoid hangups due to too low values (< 4B)
-        # Max 1GB is reasonable.
+        # Although VXI-11 RULE B.6.3 says min 1kB, I accept from 64B to accomodate unit tests,
+        # and bad behaving VXI devices that might report small max_recv_size values.
+        # This is mainly to avoid hangups due to too low values (< 4B). Max 1GB is reasonable.
         self.max_recv_size = min(max(max_recv_size, 64), 2**30)
 
         self.attrs[ResourceAttribute.interface_instrument_name] = "TCPIP0 (VXI-11)"
