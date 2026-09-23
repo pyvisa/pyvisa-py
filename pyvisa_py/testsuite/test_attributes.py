@@ -1,5 +1,6 @@
 """Tests for VISA resource attributes."""
 
+import socket
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -130,3 +131,70 @@ def test_instr_attribute_reads_succeed(instr_session, attribute):
 
     if status is not StatusCode.success:
         pytest.fail(f'Failed to read attribute "{attribute.name}", status: {status}')
+
+
+def test_hislip_tcpip_port_is_readable():
+    resource_name = "TCPIP::localhost::hislip0,4881::INSTR"
+    with patch("pyvisa_py.tcpip.hislip.Instrument", return_value=MagicMock()):
+        session = TCPIPInstrHiSLIP(
+            VISARMSession(1),
+            resource_name,
+            rname.parse_resource_name(resource_name),
+        )
+
+    value, status = session.get_attribute(ResourceAttribute.tcpip_port)
+
+    assert value == 4881
+    assert status == StatusCode.success
+    assert (
+        session.set_attribute(ResourceAttribute.tcpip_port, 4882)
+        == StatusCode.error_attribute_read_only
+    )
+
+
+def test_hislip_tcpip_nodelay_delegates_to_interface():
+    resource_name = "TCPIP::localhost::hislip0::INSTR"
+    interface = MagicMock()
+    interface.nodelay = True
+    with patch("pyvisa_py.tcpip.hislip.Instrument", return_value=interface):
+        session = TCPIPInstrHiSLIP(
+            VISARMSession(1),
+            resource_name,
+            rname.parse_resource_name(resource_name),
+        )
+
+    value, status = session.get_attribute(ResourceAttribute.tcpip_nodelay)
+
+    assert value is True
+    assert status == StatusCode.success
+    assert (
+        session.set_attribute(ResourceAttribute.tcpip_nodelay, False)
+        == StatusCode.success
+    )
+    assert interface.nodelay is False
+
+
+def test_vxi11_tcpip_port_and_nodelay():
+    resource_name = "TCPIP::localhost,4881::INSTR"
+    client = MagicMock()
+    client.create_link.return_value = (0, 1, 0, 1024)
+    client.sock.getsockopt.return_value = 1
+    with patch("pyvisa_py.tcpip.Vxi11CoreClient", return_value=client):
+        session = TCPIPInstrVxi11(
+            VISARMSession(1),
+            resource_name,
+            rname.parse_resource_name(resource_name),
+        )
+
+    port, port_status = session.get_attribute(ResourceAttribute.tcpip_port)
+    nodelay, nodelay_status = session.get_attribute(ResourceAttribute.tcpip_nodelay)
+
+    assert (port, port_status) == (4881, StatusCode.success)
+    assert (nodelay, nodelay_status) == (True, StatusCode.success)
+    assert (
+        session.set_attribute(ResourceAttribute.tcpip_nodelay, False)
+        == StatusCode.success
+    )
+    client.sock.setsockopt.assert_called_once_with(
+        socket.IPPROTO_TCP, socket.TCP_NODELAY, False
+    )

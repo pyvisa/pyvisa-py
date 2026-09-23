@@ -10,6 +10,8 @@ For additional information and VISA attributes see pyvisa.constants
 from pyvisa import constants
 from pyvisa.attributes import (
     AttrVI_ATTR_TCPIP_KEEPALIVE as former_keepalive,
+    AttrVI_ATTR_TCPIP_NODELAY as former_nodelay,
+    AttrVI_ATTR_TCPIP_PORT as former_port,
     BooleanAttribute,
 )
 
@@ -28,6 +30,28 @@ class AttrVI_ATTR_TCPIP_KEEPALIVE(former_keepalive):
     """
 
     resources = [
+        (constants.InterfaceType.tcpip, "SOCKET"),
+        (constants.InterfaceType.tcpip, "INSTR"),
+        (constants.InterfaceType.vicp, "INSTR"),
+    ]
+
+
+class AttrVI_ATTR_TCPIP_NODELAY(former_nodelay):
+    """Requests that a TCP/IP provider disable the Nagle algorithm."""
+
+    resources = [
+        (constants.InterfaceType.prlgx_tcpip, "INTFC"),
+        (constants.InterfaceType.tcpip, "SOCKET"),
+        (constants.InterfaceType.tcpip, "INSTR"),
+        (constants.InterfaceType.vicp, "INSTR"),
+    ]
+
+
+class AttrVI_ATTR_TCPIP_PORT(former_port):
+    """Specifies the TCP port used by a TCP/IP resource."""
+
+    resources = [
+        (constants.InterfaceType.prlgx_tcpip, "INTFC"),
         (constants.InterfaceType.tcpip, "SOCKET"),
         (constants.InterfaceType.tcpip, "INSTR"),
         (constants.InterfaceType.vicp, "INSTR"),
