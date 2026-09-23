@@ -232,7 +232,6 @@ class TCPIPInstrHiSLIP(Session):
         self.attrs[ResourceAttribute.tcpip_hislip_version] = 0x0010_0000
         self.attrs[ResourceAttribute.tcpip_hostname] = parsed.host_address
         self.attrs[ResourceAttribute.tcpip_is_hislip] = constants.VI_TRUE
-        self.attrs[ResourceAttribute.tcpip_nodelay] = constants.VI_TRUE
         self.attrs[ResourceAttribute.tcpip_port] = port
         self.attrs[ResourceAttribute.termchar] = ord("\n")
         self.attrs[ResourceAttribute.termchar_enabled] = constants.VI_FALSE
@@ -248,6 +247,10 @@ class TCPIPInstrHiSLIP(Session):
         self.attrs[ResourceAttribute.tcpip_keepalive] = (
             self.get_keepalive,
             self.set_keepalive,
+        )
+        self.attrs[ResourceAttribute.tcpip_nodelay] = (
+            self.get_nodelay,
+            self.set_nodelay,
         )
 
         # and now handle the lock
@@ -303,6 +306,17 @@ class TCPIPInstrHiSLIP(Session):
     ) -> StatusCode:
         """Turns TCP keepalive on/off for this connection."""
         self.interface.keepalive = keepalive
+        return StatusCode.success
+
+    def get_nodelay(self, attribute: ResourceAttribute) -> Tuple[bool, StatusCode]:
+        """Return whether the Nagle algorithm is disabled."""
+        return self.interface.nodelay, StatusCode.success
+
+    def set_nodelay(
+        self, attribute: ResourceAttribute, nodelay: bool
+    ) -> StatusCode:
+        """Enable or disable the Nagle algorithm for this connection."""
+        self.interface.nodelay = nodelay
         return StatusCode.success
 
     def close(self) -> StatusCode:
@@ -798,6 +812,9 @@ class TCPIPInstrVxi11(Session):
         self.attrs[ResourceAttribute.tcpip_address] = self.parsed.host_address
         self.attrs[ResourceAttribute.tcpip_hostname] = self.parsed.host_address
         self.attrs[ResourceAttribute.tcpip_device_name] = self.parsed.lan_device_name
+        self.attrs[ResourceAttribute.tcpip_port] = (
+            port if port is not None else self.interface.sock.getpeername()[1]
+        )
         for name in ("SEND_END_EN", "TERMCHAR", "TERMCHAR_EN", "SUPPRESS_END_EN"):
             attribute = getattr(constants, "VI_ATTR_" + name)
             self.attrs[attribute] = attributes.AttributesByID[attribute].default
@@ -1162,6 +1179,12 @@ class TCPIPInstrVxi11(Session):
         if attribute == constants.VI_ATTR_TCPIP_KEEPALIVE:
             return self.keepalive, StatusCode.success
 
+        if attribute == constants.VI_ATTR_TCPIP_NODELAY:
+            value = self.interface.sock.getsockopt(
+                socket.IPPROTO_TCP, socket.TCP_NODELAY
+            )
+            return bool(value), StatusCode.success
+
         if attribute == constants.VI_KTATTR_LOCKWAIT:  # type: ignore[attr-defined]
             return self.attrs[ResourceAttribute.lockwait], StatusCode.success  # type: ignore[attr-defined]
 
@@ -1201,6 +1224,12 @@ class TCPIPInstrVxi11(Session):
                 self.keepalive = False
             else:
                 return StatusCode.error_nonsupported_format
+            return StatusCode.success
+
+        if attribute == constants.VI_ATTR_TCPIP_NODELAY:
+            self.interface.sock.setsockopt(
+                socket.IPPROTO_TCP, socket.TCP_NODELAY, bool(attribute_state)
+            )
             return StatusCode.success
 
         if attribute == constants.VI_KTATTR_LOCKWAIT:  # type: ignore[attr-defined]

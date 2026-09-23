@@ -625,11 +625,7 @@ For now: Fake RW (force to VI_FALSE, unsupported-state otherwise)
 ^^^^^^^^^^^^^^^^^^^^^^^^^
 | **Used by:** TCPIP INSTR (HiSLIP), SOCKET
 | **Access:** R/W
-| **Coverage:**
-|  - SOCKET: Full
-|  - HiSLIP: Partial; HiSLIP reports a stored value but does not set the TCP socket's ``TCP_NODELAY`` option.
-
-Proposition for future change: do like SOCKET
+| **Coverage:** Full
 
 ``VI_ATTR_TCPIP_PORT``
 ^^^^^^^^^^^^^^^^^^^^^^

@@ -798,6 +798,16 @@ class Instrument:
         self._sync.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, bool(keepalive))
         self._async.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, bool(keepalive))
 
+    @property
+    def nodelay(self) -> bool:
+        """Whether the Nagle algorithm is disabled on both sockets."""
+        return bool(self._sync.getsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY))
+
+    @nodelay.setter
+    def nodelay(self, nodelay: bool) -> None:
+        self._sync.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, bool(nodelay))
+        self._async.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, bool(nodelay))
+
     def send(self, data: BytesBuffer) -> int:
         """Send the data on the synchronous channel.
 

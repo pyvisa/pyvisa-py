@@ -290,6 +290,24 @@ class TestAsyncChannelDispatcher:
 class TestInstrumentTerminate:
     """Test Instrument.terminate() and complete_terminate() via mocking."""
 
+    def test_nodelay_controls_both_channels(self):
+        from pyvisa_py.protocols.hislip import Instrument
+
+        inst = object.__new__(Instrument)
+        inst._sync = MagicMock()
+        inst._async = MagicMock()
+        inst._sync.getsockopt.return_value = 1
+
+        assert inst.nodelay is True
+
+        inst.nodelay = False
+        inst._sync.setsockopt.assert_called_once_with(
+            socket.IPPROTO_TCP, socket.TCP_NODELAY, False
+        )
+        inst._async.setsockopt.assert_called_once_with(
+            socket.IPPROTO_TCP, socket.TCP_NODELAY, False
+        )
+
     def test_terminate_calls_cancel(self):
         """Instrument.terminate() signals cancel only when receiving."""
         from pyvisa_py.protocols.hislip import Instrument
