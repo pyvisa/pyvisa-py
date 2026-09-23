@@ -393,12 +393,25 @@ class TestHighlevelEventMethods:
         sess._stop_event_monitor.assert_called_once()
 
     def test_disable_event_does_not_stop_when_other_enabled(self, lib_and_session):
+
+        def my_handler(*_):
+                    pass
+
+
         lib, sess, sid = lib_and_session
         lib.enable_event(
             sid,
             constants.EventType.service_request,
             constants.EventMechanism.queue,
         )
+
+        result = lib.install_handler(
+            sid,
+            constants.EventType.service_request,
+            my_handler,
+            "uh",
+        )
+        assert result == (my_handler, "uh", my_handler, StatusCode.success)
         lib.enable_event(
             sid,
             constants.EventType.service_request,

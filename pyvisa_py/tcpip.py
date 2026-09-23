@@ -263,17 +263,6 @@ class TCPIPInstrHiSLIP(Session):
                 self.close()  # the operation was open_with_lock. If the lock fails, the open should also be reversed.
                 raise RuntimeError("Failed to acquire exclusive lock")
 
-        # TODO: additional attributes (someday)
-        # self.attrs[ResourceAttribute.manufacturer_id] = 16711
-        # self.attrs[ResourceAttribute.max_queue_length] = 50
-        # self.attrs[ResourceAttribute.read_buffer_size] = 4096
-        # self.attrs[ResourceAttribute.resource_impl_version] = 0x0050_0c01
-        # self.attrs[ResourceAttribute.resource_manufacturer_id] = 4015
-        # self.attrs[ResourceAttribute.resource_manufacturer_name] = 'Rohde & Schwarz GmbH'
-        # self.attrs[ResourceAttribute.resource_spec_version] = 0x0050_0800
-        # self.attrs[ResourceAttribute.user_data] = 0
-        # self.attrs[ResourceAttribute.write_buffer_size] = 4096
-
     def _handle_async_service_request(self, status_byte: int) -> None:
         ctx = EventContext(
             event_type=constants.EventType.service_request,
@@ -1450,17 +1439,6 @@ class TCPIPInstrVicp(Session):
             self.set_keepalive,
         )
 
-        # TODO: additional attributes (someday)
-        # self.attrs[ResourceAttribute.manufacturer_id] = 16711
-        # self.attrs[ResourceAttribute.max_queue_length] = 50
-        # self.attrs[ResourceAttribute.read_buffer_size] = 4096
-        # self.attrs[ResourceAttribute.resource_impl_version] = 0x0050_0c01
-        # self.attrs[ResourceAttribute.resource_manufacturer_id] = 4015
-        # self.attrs[ResourceAttribute.resource_manufacturer_name] = 'Rohde & Schwarz GmbH'
-        # self.attrs[ResourceAttribute.resource_spec_version] = 0x0050_0800
-        # self.attrs[ResourceAttribute.user_data] = 0
-        # self.attrs[ResourceAttribute.write_buffer_size] = 4096
-
     def get_keepalive(self, attribute: ResourceAttribute) -> Tuple[bool, StatusCode]:
         """Is TCP keepalive enabled for the resource."""
         return self.interface.keepalive, StatusCode.success
@@ -1647,7 +1625,8 @@ class TCPIPSocketSession(Session):
         ret_status = self._connect()
         if ret_status != StatusCode.success:
             self.close()
-            raise Exception("could not connect: {0}".format(str(ret_status)))
+            LOGGER.exception("could not connect: {0}".format(str(ret_status)))
+            raise OpenError()
 
         self.max_recv_size = 4096
         # This buffer is used to store the bytes that appeared after
@@ -1683,7 +1662,8 @@ class TCPIPSocketSession(Session):
             self.interface.setblocking(False)
             self.interface.connect_ex((self.parsed.host_address, int(self.parsed.port)))
         except Exception as e:
-            raise Exception("could not connect: {0}".format(str(e)))
+            LOGGER.exception("could not connect: {0}".format(str(e)))
+            raise OpenError()
         finally:
             self.interface.setblocking(True)
 

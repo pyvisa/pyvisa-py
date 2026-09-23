@@ -498,6 +498,12 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
             Return value of the library call.
 
         """
+        # rule VPP-4.3 3.3.2
+        if session is None:
+            return self.handle_return_value(session, StatusCode.warning_null_object)
+        if session == constants.VI_NULL:
+            return self.handle_return_value(session, StatusCode.warning_null_object)
+
         try:
             sess = self.sessions[session]
             # The RM session directly references the library.
@@ -731,6 +737,32 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
         except KeyError:
             return self.handle_return_value(session, StatusCode.error_invalid_object)
 
+    def set_buffer(
+        self, session: VISASession, mask: constants.BufferType, size: int
+    ) -> StatusCode:
+        """Set the size for the formatted I/O and/or low-level I/O communication buffer(s).
+
+        Corresponds to viSetBuf function of the VISA library.
+
+        Parameters
+        ----------
+        session : VISASession
+            Unique logical identifier to a session.
+        mask : constants.BufferType
+            Specifies the type of buffer.
+        size : int
+            The size to be set for the specified buffer(s).
+
+        Returns
+        -------
+        StatusCode
+            Return value of the library call.
+
+        """
+        # Not implemented yet.
+        # According to VPP-4.3 6.2.3: return VI_ERROR_NSUP_OPER
+        return self.handle_return_value(session, StatusCode.error_nonsupported_operation)
+
     def lock(
         self,
         session: VISASession,
@@ -831,6 +863,16 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
 
         if event_type not in sess._supported_event_types:
             return self.handle_return_value(session, StatusCode.error_invalid_event)
+
+        if mechanism & constants.EventMechanism.handler and \
+            mechanism & constants.EventMechanism.suspend_handler:
+                # you cannot ask to activate and suspend the handler at the same time
+                return self.handle_return_value(session, StatusCode.error_invalid_mechanism)
+
+        if mechanism & constants.EventMechanism.handler and \
+            not sess._event_state.registry.is_handler_installed(event_type):
+                # the handler mechanism cannot be enabled if no handler is installed
+                return self.handle_return_value(session, StatusCode.error_handler_not_installed)
 
         sess._event_state.enable(event_type, mechanism)
         status = sess._start_event_monitor()
