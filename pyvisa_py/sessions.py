@@ -353,6 +353,7 @@ class Session(metaclass=abc.ABCMeta):
 
         # Get the implementation version
         from . import __version__
+
         version_parts = __version__.split(".")
         if len(version_parts) < 3:
             version_parts += ["0"] * (3 - len(version_parts))

@@ -761,7 +761,9 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
         """
         # Not implemented yet.
         # According to VPP-4.3 6.2.3: return VI_ERROR_NSUP_OPER
-        return self.handle_return_value(session, StatusCode.error_nonsupported_operation)
+        return self.handle_return_value(
+            session, StatusCode.error_nonsupported_operation
+        )
 
     def lock(
         self,
@@ -864,15 +866,21 @@ class PyVisaLibrary(highlevel.VisaLibraryBase):
         if event_type not in sess._supported_event_types:
             return self.handle_return_value(session, StatusCode.error_invalid_event)
 
-        if mechanism & constants.EventMechanism.handler and \
-            mechanism & constants.EventMechanism.suspend_handler:
-                # you cannot ask to activate and suspend the handler at the same time
-                return self.handle_return_value(session, StatusCode.error_invalid_mechanism)
+        if (
+            mechanism & constants.EventMechanism.handler
+            and mechanism & constants.EventMechanism.suspend_handler
+        ):
+            # you cannot ask to activate and suspend the handler at the same time
+            return self.handle_return_value(session, StatusCode.error_invalid_mechanism)
 
-        if mechanism & constants.EventMechanism.handler and \
-            not sess._event_state.registry.is_handler_installed(event_type):
-                # the handler mechanism cannot be enabled if no handler is installed
-                return self.handle_return_value(session, StatusCode.error_handler_not_installed)
+        if (
+            mechanism & constants.EventMechanism.handler
+            and not sess._event_state.registry.is_handler_installed(event_type)
+        ):
+            # the handler mechanism cannot be enabled if no handler is installed
+            return self.handle_return_value(
+                session, StatusCode.error_handler_not_installed
+            )
 
         sess._event_state.enable(event_type, mechanism)
         status = sess._start_event_monitor()

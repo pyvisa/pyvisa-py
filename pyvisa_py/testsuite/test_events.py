@@ -395,8 +395,7 @@ class TestHighlevelEventMethods:
     def test_disable_event_does_not_stop_when_other_enabled(self, lib_and_session):
 
         def my_handler(*_):
-                    pass
-
+            pass
 
         lib, sess, sid = lib_and_session
         lib.enable_event(
