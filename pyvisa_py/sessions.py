@@ -189,6 +189,15 @@ class Session(metaclass=abc.ABCMeta):
         ResourceAttribute.write_buffer_operation_mode: constants.VI_FLUSH_WHEN_FULL,
     }
 
+    _integer_attribute_ranges: ClassVar[Dict[str, Tuple[int, int]]] = {
+        "ViUInt8": (0, 0xFF),
+        "ViUInt16": (0, 0xFFFF),
+        "ViUInt32": (0, 0xFFFFFFFF),
+        "ViInt8": (-0x80, 0x7F),
+        "ViInt16": (-0x8000, 0x7FFF),
+        "ViInt32": (-0x80000000, 0x7FFFFFFF),
+    }
+
     @staticmethod
     def list_resources() -> List[str]:
         """List the resources available for the resource class."""
@@ -341,6 +350,25 @@ class Session(metaclass=abc.ABCMeta):
         #: Add your own or adapt the following default values by overriding `after_parsing()`.
         # Don't put anything here that can be overridden by _get_attribute() or _set_attribute(),
         # as self.attrs has priority over those functions.
+
+        # Get the implementation version
+        from . import __version__
+
+        version_parts = __version__.split(".")
+        if len(version_parts) < 3:
+            version_parts += ["0"] * (3 - len(version_parts))
+        # resource_impl_version format:
+        # Upper 12 bits: Major version number.
+        # Next 12 bits: Minor version number.
+        # Lowest 8 bits: Sub-minor version number
+        resource_impl_version = 0
+        for part, shift in zip(version_parts[:3], (20, 8, 0)):
+            try:
+                ipart = int(part)
+            except ValueError:
+                ipart = 0
+            resource_impl_version += ipart << shift
+
         self.attrs = {
             # VI_ATTR_RM_SESSION/resource_manager_session
             ResourceAttribute.resource_manager_session: resource_manager_session,
@@ -354,6 +382,8 @@ class Session(metaclass=abc.ABCMeta):
             ResourceAttribute.timeout_value: (self._get_timeout, self._set_timeout),
             # VI_ATTR_RSRC_MANF_NAME/resource_manufacturer_name
             ResourceAttribute.resource_manufacturer_name: "PyVISA-Py",
+            # VI_ATTR_RSRC_IMPL_VERSION/resource_impl_version
+            ResourceAttribute.resource_impl_version: resource_impl_version,
             # VI_ATTR_RSRC_MANF_ID/resource_manufacturer_id
             # a unique 12-bit hexadecimal value assigned to hardware vendors by the VXI Consortium
             # We don't have one, so fake it (like we do with HISLIP).
@@ -380,7 +410,6 @@ class Session(metaclass=abc.ABCMeta):
         # (the following list only has attributes that are supported by PyVISA-Py's resource types)
         #
         # RO, for all resources:
-        #  VI_ATTR_RSRC_IMPL_VERSION/resource_impl_version
         #  VI_ATTR_RSRC_LOCK_STATE/resource_lock_state
         #
         # RO, for all resources except USB RAW:
@@ -568,7 +597,7 @@ class Session(metaclass=abc.ABCMeta):
             Return value of the library call.
 
         """
-        raise NotImplementedError
+        return StatusCode.error_nonsupported_operation
 
     def read_stb(self) -> Tuple[int, StatusCode]:
         """Reads a status byte of the service request.
@@ -855,6 +884,15 @@ class Session(metaclass=abc.ABCMeta):
                 if attribute_state != default_value:
                     return StatusCode.error_nonsupported_attribute_state
                 return StatusCode.success
+
+        # Validate integer ranges before self.attrs can bypass a setter.
+        valid_range = self._integer_attribute_ranges.get(attr.visa_type)
+        if valid_range is not None:
+            lower_bound, upper_bound = valid_range
+            if not isinstance(attribute_state, int) or not (
+                lower_bound <= attribute_state <= upper_bound
+            ):
+                return StatusCode.error_nonsupported_attribute_state
 
         # Then try to answer those attributes that are registered in
         # self.attrs, see Session.after_parsing
