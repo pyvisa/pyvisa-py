@@ -364,10 +364,10 @@ class Session(metaclass=abc.ABCMeta):
         resource_impl_version = 0
         for part, shift in zip(version_parts[:3], (20, 8, 0)):
             try:
-                part = int(part)
+                ipart = int(part)
             except ValueError:
-                part = 0
-            resource_impl_version += int(part) << shift
+                ipart = 0
+            resource_impl_version += ipart << shift
 
         self.attrs = {
             # VI_ATTR_RM_SESSION/resource_manager_session
