@@ -312,9 +312,7 @@ class TCPIPInstrHiSLIP(Session):
         """Return whether the Nagle algorithm is disabled."""
         return self.interface.nodelay, StatusCode.success
 
-    def set_nodelay(
-        self, attribute: ResourceAttribute, nodelay: bool
-    ) -> StatusCode:
+    def set_nodelay(self, attribute: ResourceAttribute, nodelay: bool) -> StatusCode:
         """Enable or disable the Nagle algorithm for this connection."""
         self.interface.nodelay = nodelay
         return StatusCode.success

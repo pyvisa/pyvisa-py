@@ -195,4 +195,6 @@ def test_vxi11_tcpip_port_and_nodelay():
         session.set_attribute(ResourceAttribute.tcpip_nodelay, False)
         == StatusCode.success
     )
-    client.sock.setsockopt.assert_called_once_with(socket.IPPROTO_TCP, socket.TCP_NODELAY, False)
+    client.sock.setsockopt.assert_called_once_with(
+        socket.IPPROTO_TCP, socket.TCP_NODELAY, False
+    )
