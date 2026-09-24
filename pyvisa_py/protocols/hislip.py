@@ -736,6 +736,9 @@ class Instrument:
         self._last_message_id: Optional[int] = None
         self._msg_type: str = ""
         self._payload_remaining: int = 0
+        self._pending_data = bytearray()
+        self._last_read_rmt = False
+        self._last_read_termchar = False
         self._receiving = threading.Event()
 
     # ================ #
@@ -778,6 +781,9 @@ class Instrument:
         self._rmt = 0
         self._payload_remaining = 0
         self._msg_type = ""
+        self._pending_data.clear()
+        self._last_read_rmt = False
+        self._last_read_termchar = False
 
     @property
     def keepalive(self) -> bool:
@@ -808,7 +814,7 @@ class Instrument:
         self._sync.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, bool(nodelay))
         self._async.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, bool(nodelay))
 
-    def send(self, data: BytesBuffer) -> int:
+    def send(self, data: BytesBuffer, send_end: bool = True) -> int:
         """Send the data on the synchronous channel.
 
         More than one packet may be necessary in order
@@ -823,7 +829,10 @@ class Instrument:
         while num_bytes_to_send > 0:
             if num_bytes_to_send <= max_payload_size:
                 assert len(data_view) == num_bytes_to_send
-                self._send_data_end_packet(data_view)
+                if send_end:
+                    self._send_data_end_packet(data_view)
+                else:
+                    self._send_data_packet(data_view)
                 bytes_sent = num_bytes_to_send
             else:
                 self._send_data_packet(data_view[:max_payload_size])
@@ -834,10 +843,16 @@ class Instrument:
 
         return len(data)
 
-    def receive(self, max_len: int = 4096) -> bytes:
+    def receive(
+        self,
+        max_len: int = 4096,
+        termination_char: Optional[int] = None,
+        suppress_end: bool = False,
+    ) -> bytes:
         """Receive data on the synchronous channel.
 
-        Terminate after max_len bytes or after receiving a DataEnd message
+        Terminate after max_len bytes, an enabled termination character, or
+        an unsuppressed DataEnd message.
         """
 
         # print(f"receive({max_len=})")  # uncomment for debugging
@@ -850,37 +865,57 @@ class Instrument:
         #
         self._receiving.set()
         try:
-            recv_buffer = bytearray(max_len)
-            view = memoryview(recv_buffer)
-            bytes_recvd = 0
+            recv_buffer = bytearray()
+            term_byte = (
+                bytes((termination_char,)) if termination_char is not None else None
+            )
+            self._last_read_rmt = False
+            self._last_read_termchar = False
 
-            while bytes_recvd < max_len:
-                if self._payload_remaining <= 0:
+            while len(recv_buffer) < max_len:
+                if not self._pending_data and self._payload_remaining <= 0:
                     if self._msg_type == "DataEnd":
-                        # truncate to the actual number of bytes received
-                        recv_buffer = recv_buffer[:bytes_recvd]
-                        break
+                        self._rmt = 1
+                        self._last_read_rmt = True
+                        self._msg_type = ""
+                        if not suppress_end:
+                            break
                     self._msg_type, self._payload_remaining = self._next_data_header()
 
-                request_size = min(self._payload_remaining, max_len - bytes_recvd)
-                receive_exact_into(self._sync, view[:request_size])
-                self._payload_remaining -= request_size
-                bytes_recvd += request_size
-                view = view[request_size:]
+                if not self._pending_data:
+                    request_size = min(
+                        self._payload_remaining, max_len - len(recv_buffer)
+                    )
+                    chunk = bytearray(request_size)
+                    receive_exact_into(self._sync, chunk)
+                    self._payload_remaining -= request_size
+                    self._pending_data.extend(chunk)
 
-            if bytes_recvd > max_len:
+                take = min(len(self._pending_data), max_len - len(recv_buffer))
+                if term_byte is not None:
+                    term_index = self._pending_data.find(term_byte, 0, take)
+                    if term_index >= 0:
+                        take = term_index + 1
+                        self._last_read_termchar = True
+
+                recv_buffer.extend(self._pending_data[:take])
+                del self._pending_data[:take]
+
+                reached_end = (
+                    not self._pending_data
+                    and self._payload_remaining == 0
+                    and self._msg_type == "DataEnd"
+                )
+                if reached_end:
+                    self._rmt = 1
+                    self._last_read_rmt = True
+                    self._msg_type = ""
+
+                if self._last_read_termchar or (reached_end and not suppress_end):
+                    break
+
+            if len(recv_buffer) > max_len:
                 raise MemoryError("scribbled past end of recv_buffer")
-
-            # if there is no data remaining, set the RMT flag
-            if self._payload_remaining == 0 and self._msg_type == "DataEnd":
-                #
-                # From IEEE Std 488.2: Response Message Terminator.
-                #
-                # RMT is the new-line accompanied by END sent from the server
-                # to the client at the end of a response. Note that with HiSLIP
-                # this is implied by the DataEND message.
-                #
-                self._rmt = 1
 
             return bytes(recv_buffer)
         finally:
@@ -929,6 +964,7 @@ class Instrument:
         self.device_clear_complete(feature)
         # reset messageID and resume normal opreation
         self._message_id = 0xFFFF_FF00
+        self.last_message_id = None
 
     def terminate(self) -> None:
         """Cancel a pending I/O operation on the synchronous channel.
@@ -1016,10 +1052,7 @@ class Instrument:
 
         # 4. Reset all protocol state
         self._message_id = 0xFFFF_FF00
-        self._last_message_id = None
-        self._rmt = 0
-        self._payload_remaining = 0
-        self._msg_type = ""
+        self.last_message_id = None
 
     def initialize(
         self,

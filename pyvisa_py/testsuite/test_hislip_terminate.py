@@ -192,6 +192,79 @@ class TestHiSLIPInterruptedInHeader:
         assert header.message_parameter == 0xFFFF_FF00
 
 
+class TestInstrumentReceive:
+    """Test HiSLIP payload termination and buffering."""
+
+    def setup_method(self):
+        from pyvisa_py.protocols.hislip import Instrument
+
+        self.server, client_raw = socket.socketpair()
+        self.client = CancellableSocket(client_raw)
+        self.instrument = object.__new__(Instrument)
+        self.instrument._sync = self.client
+        self.instrument._receiving = threading.Event()
+        self.instrument._last_message_id = None
+        self.instrument._msg_type = ""
+        self.instrument._payload_remaining = 0
+        self.instrument._rmt = 0
+        self.instrument._pending_data = bytearray()
+        self.instrument._last_read_rmt = False
+        self.instrument._last_read_termchar = False
+
+    def teardown_method(self):
+        self.client.close()
+        self.server.close()
+
+    def _send_packet(self, msg_type, payload):
+        header = struct.pack(
+            HEADER_FORMAT,
+            b"HS",
+            MESSAGETYPE[msg_type],
+            0,
+            0xFFFF_FFFF,
+            len(payload),
+        )
+        self.server.sendall(header + payload)
+
+    def test_termchar_preserves_dataend_remainder(self):
+        self._send_packet("DataEnd", b"abc\nrest")
+
+        assert self.instrument.receive(4096, termination_char=ord("\n")) == b"abc\n"
+        assert self.instrument._last_read_termchar is True
+        assert self.instrument._last_read_rmt is False
+        assert self.instrument.receive(4096) == b"rest"
+        assert self.instrument._last_read_rmt is True
+
+    def test_termchar_across_data_packets(self):
+        self._send_packet("Data", b"abc")
+        self._send_packet("DataEnd", b"def\nrest")
+
+        assert self.instrument.receive(4096, termination_char=ord("\n")) == b"abcdef\n"
+        assert self.instrument._last_read_termchar is True
+        assert self.instrument._last_read_rmt is False
+        assert self.instrument.receive(4096) == b"rest"
+        assert self.instrument._last_read_rmt is True
+
+    def test_suppress_end_continues_to_next_message(self):
+        self._send_packet("DataEnd", b"abc")
+        self._send_packet("DataEnd", b"def\n")
+
+        data = self.instrument.receive(
+            4096, termination_char=ord("\n"), suppress_end=True
+        )
+
+        assert data == b"abcdef\n"
+        assert self.instrument._last_read_rmt is True
+        assert self.instrument._last_read_termchar is True
+
+    def test_dataend_and_termchar_are_both_reported(self):
+        self._send_packet("DataEnd", b"abc\n")
+
+        assert self.instrument.receive(4, termination_char=ord("\n")) == b"abc\n"
+        assert self.instrument._last_read_rmt is True
+        assert self.instrument._last_read_termchar is True
+
+
 class TestAsyncChannelDispatcher:
     """Test the background async reader and request dispatcher."""
 
@@ -342,6 +415,9 @@ class TestInstrumentTerminate:
         inst._rmt = 1
         inst._payload_remaining = 42
         inst._msg_type = "Data"
+        inst._pending_data = bytearray(b"unread")
+        inst._last_read_rmt = True
+        inst._last_read_termchar = True
 
         # Mock the async channel methods that complete_terminate calls
         inst.async_device_clear = MagicMock(return_value=0)
@@ -360,6 +436,9 @@ class TestInstrumentTerminate:
         assert inst._rmt == 0
         assert inst._payload_remaining == 0
         assert inst._msg_type == ""
+        assert inst._pending_data == b""
+        assert inst._last_read_rmt is False
+        assert inst._last_read_termchar is False
 
         # Verify cancel pipe was drained
         mock_sync.drain_cancel.assert_called_once()
@@ -430,12 +509,20 @@ class TestSessionTerminateBase:
 class TestTCPIPInstrHiSLIPTerminate:
     """Test TCPIPInstrHiSLIP.terminate() and read() abort path."""
 
-    def _make_session(self):
+    def _make_session(self, *, termchar_enabled=False, suppress_end_enabled=False):
         """Create a TCPIPInstrHiSLIP with a mocked HiSLIP Instrument."""
+        from pyvisa import constants
         from pyvisa_py.tcpip import TCPIPInstrHiSLIP
 
         sess = object.__new__(TCPIPInstrHiSLIP)
         sess.interface = MagicMock()
+        sess.interface._last_read_rmt = False
+        sess.interface._last_read_termchar = False
+        sess.attrs = {
+            constants.ResourceAttribute.suppress_end_enabled: suppress_end_enabled,
+            constants.ResourceAttribute.termchar_enabled: termchar_enabled,
+            constants.ResourceAttribute.termchar: ord("\n"),
+        }
         return sess
 
     def test_terminate_calls_interface(self):
@@ -475,16 +562,70 @@ class TestTCPIPInstrHiSLIPTerminate:
         assert data == b""
         assert status == StatusCode.error_timeout
 
+    @pytest.mark.parametrize(
+        ("count", "expected_status"),
+        [(-1, "error_invalid_parameter"), (0, "success_max_count_read")],
+    )
+    def test_read_count_boundaries(self, count, expected_status):
+        from pyvisa.constants import StatusCode
+
+        sess = self._make_session()
+
+        data, status = sess.read(count)
+
+        assert data == b""
+        assert status == getattr(StatusCode, expected_status)
+        sess.interface.receive.assert_not_called()
+
     def test_read_success_rmt(self):
-        """read() returns success_termination_character_read when rmt is set."""
+        """An unsuppressed RMT returns success."""
         from pyvisa.constants import StatusCode
 
         sess = self._make_session()
         sess.interface.receive.return_value = b"*IDN? response\n"
-        sess.interface._rmt = 1
+        sess.interface._last_read_rmt = True
 
         data, status = sess.read(4096)
         assert data == b"*IDN? response\n"
+        assert status == StatusCode.success
+
+    def test_read_success_termchar(self):
+        from pyvisa.constants import StatusCode
+
+        sess = self._make_session(termchar_enabled=True)
+        sess.interface.receive.return_value = b"response\n"
+        sess.interface._last_read_termchar = True
+
+        data, status = sess.read(4096)
+
+        assert data == b"response\n"
+        assert status == StatusCode.success_termination_character_read
+        sess.interface.receive.assert_called_once_with(
+            4096, termination_char=ord("\n"), suppress_end=False
+        )
+
+    def test_read_rmt_takes_priority_over_termchar(self):
+        from pyvisa.constants import StatusCode
+
+        sess = self._make_session(termchar_enabled=True)
+        sess.interface.receive.return_value = b"response\n"
+        sess.interface._last_read_rmt = True
+        sess.interface._last_read_termchar = True
+
+        _data, status = sess.read(4096)
+
+        assert status == StatusCode.success
+
+    def test_read_suppressed_rmt_returns_termchar_status(self):
+        from pyvisa.constants import StatusCode
+
+        sess = self._make_session(termchar_enabled=True, suppress_end_enabled=True)
+        sess.interface.receive.return_value = b"response\n"
+        sess.interface._last_read_rmt = True
+        sess.interface._last_read_termchar = True
+
+        _data, status = sess.read(4096)
+
         assert status == StatusCode.success_termination_character_read
 
     def test_read_success_max_count(self):
@@ -498,6 +639,9 @@ class TestTCPIPInstrHiSLIPTerminate:
         data, status = sess.read(4)
         assert data == b"abcd"
         assert status == StatusCode.success_max_count_read
+        sess.interface.receive.assert_called_once_with(
+            4, termination_char=None, suppress_end=False
+        )
 
     def test_async_service_request_callback_fires_event(self):
         from pyvisa import constants
