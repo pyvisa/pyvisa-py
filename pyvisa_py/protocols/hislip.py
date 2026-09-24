@@ -814,7 +814,7 @@ class Instrument:
         self._sync.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, bool(nodelay))
         self._async.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, bool(nodelay))
 
-    def send(self, data: BytesBuffer) -> int:
+    def send(self, data: BytesBuffer, send_end: bool = True) -> int:
         """Send the data on the synchronous channel.
 
         More than one packet may be necessary in order
@@ -829,7 +829,10 @@ class Instrument:
         while num_bytes_to_send > 0:
             if num_bytes_to_send <= max_payload_size:
                 assert len(data_view) == num_bytes_to_send
-                self._send_data_end_packet(data_view)
+                if send_end:
+                    self._send_data_end_packet(data_view)
+                else:
+                    self._send_data_packet(data_view)
                 bytes_sent = num_bytes_to_send
             else:
                 self._send_data_packet(data_view[:max_payload_size])

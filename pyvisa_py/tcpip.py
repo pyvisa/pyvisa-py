@@ -403,7 +403,8 @@ class TCPIPInstrHiSLIP(Session):
             Return value of the library call.
 
         """
-        self.interface.send(data)
+        send_end_en, _ = self.get_attribute(ResourceAttribute.send_end_enabled)
+        self.interface.send(data, send_end=bool(send_end_en))
 
         return len(data), StatusCode.success
 
