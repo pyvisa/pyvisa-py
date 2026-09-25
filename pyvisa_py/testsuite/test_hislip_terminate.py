@@ -15,7 +15,9 @@ import pytest
 
 from pyvisa_py.protocols.hislip import (
     HEADER_FORMAT,
+    HEADER_SIZE,
     MESSAGETYPE,
+    MESSAGETYPE_STR,
     CancellableSocket,
     HiSLIPInterruptedError,
 )
@@ -268,6 +270,12 @@ class TestInstrumentReceive:
 class TestAsyncChannelDispatcher:
     """Test the background async reader and request dispatcher."""
 
+    def _recv_exact(self, sock, size):
+        data = bytearray()
+        while len(data) < size:
+            data.extend(sock.recv(size - len(data)))
+        return bytes(data)
+
     def _make_hislip_header(
         self,
         msg_type: str,
@@ -302,6 +310,140 @@ class TestAsyncChannelDispatcher:
         channel.close()
         server.close()
 
+    def test_async_service_request_callback_can_make_async_request(self):
+        from pyvisa_py.protocols.hislip import AsyncChannel
+
+        server, client_raw = socket.socketpair()
+        client_raw.settimeout(0.5)
+        callback_done = threading.Event()
+        result = {}
+        channel = None
+
+        def callback(_status_byte):
+            try:
+                result["response"] = channel.request(
+                    "AsyncStatusQuery",
+                    0,
+                    0,
+                    expected_response="AsyncStatusResponse",
+                )
+            except Exception as exc:
+                result["error"] = exc
+            finally:
+                callback_done.set()
+
+        channel = AsyncChannel(client_raw, event_callback=callback)
+        server.sendall(self._make_hislip_header("AsyncServiceRequest", 0x42, 0, 0))
+
+        request_header = self._recv_exact(server, HEADER_SIZE)
+        _, msg_type, _, _, payload_length = struct.unpack(HEADER_FORMAT, request_header)
+        assert msg_type == MESSAGETYPE["AsyncStatusQuery"]
+        assert payload_length == 0
+        server.sendall(self._make_hislip_header("AsyncStatusResponse", 0x5A, 0, 0))
+
+        assert callback_done.wait(timeout=2.0)
+        assert "error" not in result
+        assert result["response"].control_code == 0x5A
+
+        channel.close()
+        server.close()
+
+    def test_async_service_requests_are_dispatched_in_order(self):
+        from pyvisa_py.protocols.hislip import AsyncChannel
+
+        server, client_raw = socket.socketpair()
+        events = []
+        first_started = threading.Event()
+        release_first = threading.Event()
+        all_delivered = threading.Event()
+
+        def callback(status_byte):
+            events.append(status_byte)
+            if status_byte == 0x41:
+                first_started.set()
+                release_first.wait(timeout=2.0)
+            if len(events) == 3:
+                all_delivered.set()
+
+        channel = AsyncChannel(client_raw, event_callback=callback)
+        for status_byte in (0x41, 0x42, 0x43):
+            server.sendall(
+                self._make_hislip_header("AsyncServiceRequest", status_byte, 0, 0)
+            )
+
+        assert first_started.wait(timeout=2.0)
+        deadline = time.monotonic() + 2.0
+        while channel._event_queue.qsize() < 2 and time.monotonic() < deadline:
+            threading.Event().wait(0.01)
+        assert channel._event_queue.qsize() == 2
+        assert events == [0x41]
+
+        release_first.set()
+        assert all_delivered.wait(timeout=2.0)
+        assert events == [0x41, 0x42, 0x43]
+
+        channel.close()
+        server.close()
+
+    def test_async_service_request_callback_exception_does_not_stop_dispatch(self):
+        from pyvisa_py.protocols.hislip import AsyncChannel
+
+        server, client_raw = socket.socketpair()
+        events = []
+        second_delivered = threading.Event()
+
+        def callback(status_byte):
+            events.append(status_byte)
+            if status_byte == 0x41:
+                raise RuntimeError("callback failed")
+            second_delivered.set()
+
+        channel = AsyncChannel(client_raw, event_callback=callback)
+        server.sendall(self._make_hislip_header("AsyncServiceRequest", 0x41, 0, 0))
+        server.sendall(self._make_hislip_header("AsyncServiceRequest", 0x42, 0, 0))
+
+        assert second_delivered.wait(timeout=2.0)
+        assert events == [0x41, 0x42]
+
+        channel.close()
+        server.close()
+
+    def test_close_stops_async_service_request_worker(self):
+        from pyvisa_py.protocols.hislip import AsyncChannel
+
+        server, client_raw = socket.socketpair()
+        channel = AsyncChannel(client_raw, event_callback=lambda _status: None)
+        event_thread = channel._event_thread
+        assert event_thread is not None
+        assert event_thread.is_alive()
+
+        channel.close()
+
+        assert not event_thread.is_alive()
+        server.close()
+
+    def test_async_service_request_callback_can_close_channel(self):
+        from pyvisa_py.protocols.hislip import AsyncChannel
+
+        server, client_raw = socket.socketpair()
+        callback_done = threading.Event()
+        channel = None
+
+        def callback(_status_byte):
+            channel.close()
+            callback_done.set()
+
+        channel = AsyncChannel(client_raw, event_callback=callback)
+        event_thread = channel._event_thread
+        assert event_thread is not None
+        server.sendall(self._make_hislip_header("AsyncServiceRequest", 0x42, 0, 0))
+
+        assert callback_done.wait(timeout=2.0)
+        event_thread.join(timeout=2.0)
+        assert not event_thread.is_alive()
+
+        server.close()
+
     def test_async_request_gets_dispatcher_response(self):
         from pyvisa_py.protocols.hislip import AsyncChannel
 
@@ -331,6 +473,272 @@ class TestAsyncChannelDispatcher:
         assert result["response"].control_code == 0x5A
 
         channel.close()
+        server.close()
+
+    def test_concurrent_requests_with_same_response_type_complete_in_order(self):
+        from pyvisa_py.protocols.hislip import AsyncChannel
+
+        server, client_raw = socket.socketpair()
+        channel = AsyncChannel(client_raw)
+        results = {}
+        errors = {}
+
+        def request_status(request_id):
+            try:
+                response = channel.request(
+                    "AsyncStatusQuery",
+                    request_id,
+                    0,
+                    expected_response="AsyncStatusResponse",
+                )
+                results[request_id] = response.control_code
+            except Exception as exc:
+                errors[request_id] = exc
+
+        threads = [
+            threading.Thread(target=request_status, args=(request_id,))
+            for request_id in range(3)
+        ]
+        for thread in threads:
+            thread.start()
+
+        request_ids = []
+        for _ in threads:
+            header = self._recv_exact(server, HEADER_SIZE)
+            _, msg_type, control_code, _, payload_length = struct.unpack(
+                HEADER_FORMAT, header
+            )
+            assert msg_type == MESSAGETYPE["AsyncStatusQuery"]
+            assert payload_length == 0
+            request_ids.append(control_code)
+
+        for request_id in request_ids:
+            server.sendall(
+                self._make_hislip_header("AsyncStatusResponse", request_id + 0x40, 0, 0)
+            )
+
+        for thread in threads:
+            thread.join(timeout=2.0)
+            assert not thread.is_alive()
+
+        assert errors == {}
+        assert results == {request_id: request_id + 0x40 for request_id in request_ids}
+
+        channel.close()
+        server.close()
+
+    def test_concurrent_mixed_requests_route_interleaved_responses(self):
+        from pyvisa_py.protocols.hislip import AsyncChannel
+
+        server, client_raw = socket.socketpair()
+        events = []
+        channel = AsyncChannel(client_raw, event_callback=events.append)
+        results = {}
+
+        requests = {
+            "status": ("AsyncStatusQuery", "AsyncStatusResponse"),
+            "lock": ("AsyncLockInfo", "AsyncLockInfoResponse"),
+        }
+
+        def make_request(name):
+            msg_type, expected_response = requests[name]
+            results[name] = channel.request(
+                msg_type, 0, 0, expected_response=expected_response
+            )
+
+        threads = [
+            threading.Thread(target=make_request, args=(name,)) for name in requests
+        ]
+        for thread in threads:
+            thread.start()
+
+        sent_types = []
+        for _ in threads:
+            header = self._recv_exact(server, HEADER_SIZE)
+            _, msg_type, _, _, payload_length = struct.unpack(HEADER_FORMAT, header)
+            assert payload_length == 0
+            sent_types.append(MESSAGETYPE_STR[msg_type])
+
+        server.sendall(self._make_hislip_header("AsyncServiceRequest", 0x44, 0, 0))
+        response_for = {
+            "AsyncStatusQuery": ("AsyncStatusResponse", 0x52, 0),
+            "AsyncLockInfo": ("AsyncLockInfoResponse", 1, 3),
+        }
+        for sent_type in reversed(sent_types):
+            response_type, control_code, message_parameter = response_for[sent_type]
+            server.sendall(
+                self._make_hislip_header(
+                    response_type, control_code, message_parameter, 0
+                )
+            )
+
+        for thread in threads:
+            thread.join(timeout=2.0)
+            assert not thread.is_alive()
+
+        assert events == [0x44]
+        assert results["status"].control_code == 0x52
+        assert results["lock"].control_code == 1
+        assert results["lock"].message_parameter == 3
+
+        channel.close()
+        server.close()
+
+    def test_timed_out_request_absorbs_its_late_response(self):
+        from pyvisa_py.protocols.hislip import AsyncChannel
+
+        server, client_raw = socket.socketpair()
+        client_raw.settimeout(0.05)
+        channel = AsyncChannel(client_raw)
+
+        with pytest.raises(socket.timeout):
+            channel.request(
+                "AsyncStatusQuery", 0, 0, expected_response="AsyncStatusResponse"
+            )
+        self._recv_exact(server, HEADER_SIZE)
+
+        client_raw.settimeout(1.0)
+        result = {}
+
+        def request_status():
+            result["response"] = channel.request(
+                "AsyncStatusQuery", 0, 0, expected_response="AsyncStatusResponse"
+            )
+
+        thread = threading.Thread(target=request_status)
+        thread.start()
+        self._recv_exact(server, HEADER_SIZE)
+
+        server.sendall(self._make_hislip_header("AsyncStatusResponse", 0x11, 0, 0))
+        time.sleep(0.05)
+        assert thread.is_alive()
+
+        server.sendall(self._make_hislip_header("AsyncStatusResponse", 0x22, 0, 0))
+        thread.join(timeout=2.0)
+        assert not thread.is_alive()
+        assert result["response"].control_code == 0x22
+
+        channel.close()
+        server.close()
+
+    @pytest.mark.parametrize("failure", ["close", "protocol"])
+    def test_channel_failure_releases_all_pending_requests(self, failure):
+        from pyvisa_py.protocols.hislip import AsyncChannel
+
+        server, client_raw = socket.socketpair()
+        channel = AsyncChannel(client_raw)
+        errors = []
+
+        def request_status():
+            try:
+                channel.request(
+                    "AsyncStatusQuery",
+                    0,
+                    0,
+                    expected_response="AsyncStatusResponse",
+                )
+            except Exception as exc:
+                errors.append(exc)
+
+        threads = [threading.Thread(target=request_status) for _ in range(2)]
+        for thread in threads:
+            thread.start()
+        for _ in threads:
+            self._recv_exact(server, HEADER_SIZE)
+
+        if failure == "close":
+            channel.close()
+        else:
+            server.sendall(b"XX" + b"\x00" * (HEADER_SIZE - 2))
+
+        for thread in threads:
+            thread.join(timeout=2.0)
+            assert not thread.is_alive()
+
+        assert len(errors) == 2
+        assert all(isinstance(error, RuntimeError) for error in errors)
+
+        channel.close()
+        server.close()
+
+    def test_async_interrupted_aborts_all_pending_requests(self):
+        from pyvisa_py.protocols.hislip import AsyncChannel
+
+        server, client_raw = socket.socketpair()
+        channel = AsyncChannel(client_raw)
+        errors = []
+
+        def request_status():
+            try:
+                channel.request(
+                    "AsyncStatusQuery",
+                    0,
+                    0,
+                    expected_response="AsyncStatusResponse",
+                )
+            except Exception as exc:
+                errors.append(exc)
+
+        threads = [threading.Thread(target=request_status) for _ in range(2)]
+        for thread in threads:
+            thread.start()
+        for _ in threads:
+            self._recv_exact(server, HEADER_SIZE)
+
+        server.sendall(self._make_hislip_header("AsyncInterrupted", 0, 0xBEEF, 0))
+
+        for thread in threads:
+            thread.join(timeout=2.0)
+            assert not thread.is_alive()
+
+        assert len(errors) == 2
+        assert all(isinstance(error, HiSLIPInterruptedError) for error in errors)
+        assert all(error.message_id == 0xBEEF for error in errors)
+
+        channel.close()
+        server.close()
+
+    def test_concurrent_instrument_status_queries_preserve_sync_message_id(self):
+        from pyvisa_py.protocols.hislip import AsyncChannel, Instrument
+
+        server, client_raw = socket.socketpair()
+        instrument = object.__new__(Instrument)
+        instrument._async_channel = AsyncChannel(client_raw)
+        instrument._rmt = 1
+        instrument._message_id = 0xFFFF_FF00
+        results = []
+
+        threads = [
+            threading.Thread(
+                target=lambda: results.append(instrument.async_status_query())
+            )
+            for _ in range(2)
+        ]
+        for thread in threads:
+            thread.start()
+
+        for _ in threads:
+            header = self._recv_exact(server, HEADER_SIZE)
+            _, msg_type, control_code, message_parameter, payload_length = (
+                struct.unpack(HEADER_FORMAT, header)
+            )
+            assert msg_type == MESSAGETYPE["AsyncStatusQuery"]
+            assert control_code == 1
+            assert message_parameter == 0xFFFF_FF00
+            assert payload_length == 0
+
+        server.sendall(self._make_hislip_header("AsyncStatusResponse", 0x31, 0, 0))
+        server.sendall(self._make_hislip_header("AsyncStatusResponse", 0x32, 0, 0))
+
+        for thread in threads:
+            thread.join(timeout=2.0)
+            assert not thread.is_alive()
+
+        assert sorted(results) == [0x31, 0x32]
+        assert instrument._rmt == 0
+        assert instrument._message_id == 0xFFFF_FF00
+
+        instrument._async_channel.close()
         server.close()
 
     def test_async_interrupted_aborts_pending_request(self):
