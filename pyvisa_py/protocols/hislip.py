@@ -4,13 +4,15 @@ Python implementation of HiSLIP protocol.  Based on the HiSLIP spec:
 http://www.ivifoundation.org/downloads/Class%20Specifications/IVI-6.1_HiSLIP-1.1-2024-02-24.pdf
 """
 
+import queue
 import select
 import socket
 import struct
 import threading
 import time
+from collections import defaultdict, deque
 from dataclasses import dataclass
-from typing import Callable, Dict, Optional, Tuple
+from typing import Callable, Deque, Dict, Optional, Tuple
 
 from pyvisa_py.common import LOGGER, BytesBuffer, MutableBytesBuffer, connect_timeout
 
@@ -423,6 +425,15 @@ class AsyncMessage:
     payload: bytes
 
 
+@dataclass
+class _PendingRequest:
+    expected_response: str
+    response: Optional[AsyncMessage] = None
+    error: Optional[Exception] = None
+    done: bool = False
+    abandoned: bool = False
+
+
 class AsyncChannel:
     """Own the async HiSLIP socket and dispatch unsolicited messages."""
 
@@ -437,8 +448,16 @@ class AsyncChannel:
         self._interrupt_callback = interrupt_callback
         self._send_lock = threading.Lock()
         self._state_lock = threading.Condition()
-        self._pending_request: Optional[dict] = None
+        self._pending_requests: Dict[str, Deque[_PendingRequest]] = defaultdict(deque)
+        self._failure: Optional[Exception] = None
         self._stop = threading.Event()
+        self._event_queue: queue.Queue[Optional[int]] = queue.Queue()
+        self._event_thread: Optional[threading.Thread] = None
+        if self._event_callback is not None:
+            self._event_thread = threading.Thread(
+                target=self._dispatch_events, daemon=True
+            )
+            self._event_thread.start()
         self._thread = threading.Thread(target=self._run, daemon=True)
         # And start the thread
         if not self._thread.is_alive():
@@ -446,12 +465,21 @@ class AsyncChannel:
 
     def close(self) -> None:
         self._stop.set()
+        self._fail_pending(lambda: RuntimeError("async channel closed"), terminal=True)
+        self._event_queue.put(None)
         try:
             self._sock.shutdown(socket.SHUT_RDWR)
         except Exception:
             pass
-        if self._thread.is_alive():
+        current_thread = threading.current_thread()
+        if self._thread.is_alive() and self._thread is not current_thread:
             self._thread.join(timeout=1.0)
+        if (
+            self._event_thread is not None
+            and self._event_thread.is_alive()
+            and self._event_thread is not current_thread
+        ):
+            self._event_thread.join(timeout=1.0)
         try:
             self._sock.close()
         except Exception:
@@ -469,24 +497,34 @@ class AsyncChannel:
             raise ValueError("expected_response is required for async requests")
 
         timeout = self._sock.gettimeout()
-        with self._state_lock:
-            if self._pending_request is not None:
-                raise RuntimeError("another async request is already pending")
-            pending = {
-                "expected_response": expected_response,
-                "response": None,
-                "error": None,
-                "done": False,
-            }
-            self._pending_request = pending
+        pending = _PendingRequest(expected_response)
 
         try:
             with self._send_lock:
-                send_msg(self._sock, msg_type, control_code, message_parameter, payload)
+                with self._state_lock:
+                    if self._failure is not None:
+                        raise self._failure
+                    if self._stop.is_set():
+                        raise RuntimeError("async channel closed")
+                    self._pending_requests[expected_response].append(pending)
+                try:
+                    send_msg(
+                        self._sock,
+                        msg_type,
+                        control_code,
+                        message_parameter,
+                        payload,
+                    )
+                except Exception:
+                    self._fail_pending(
+                        lambda: RuntimeError("async channel send failed"),
+                        terminal=True,
+                    )
+                    raise
 
             deadline = None if timeout is None else time.monotonic() + float(timeout)
             with self._state_lock:
-                while not pending["done"] and pending["error"] is None:
+                while not pending.done:
                     if deadline is None:
                         self._state_lock.wait()
                     else:
@@ -495,25 +533,19 @@ class AsyncChannel:
                             break
                         self._state_lock.wait(remaining)
 
-                if not pending["done"]:
-                    if self._pending_request is pending:
-                        self._pending_request = None
+                if not pending.done:
+                    pending.abandoned = True
                     raise socket.timeout("timed out")
 
-                if pending["error"] is not None:
-                    if isinstance(pending["error"], Exception):
-                        raise pending["error"]
-                    else:
-                        raise RuntimeError(pending["error"])
-                response = pending["response"]
+                if pending.error is not None:
+                    raise pending.error
+                response = pending.response
                 assert response is not None
-                if not isinstance(response, AsyncMessage):
-                    raise RuntimeError("unexpected response type: %s" % type(response))
                 return response
         finally:
             with self._state_lock:
-                if self._pending_request is pending and not pending["done"]:
-                    self._pending_request = None
+                if not pending.done:
+                    pending.abandoned = True
 
     def _read_exact(self, size: int) -> bytes:
         data = bytearray()
@@ -554,8 +586,18 @@ class AsyncChannel:
             message.msg_type == "AsyncServiceRequest"
             and self._event_callback is not None
         ):
+            self._event_queue.put(message.control_code)
+
+    def _dispatch_events(self) -> None:
+        while True:
+            status_byte = self._event_queue.get()
+            if status_byte is None:
+                break
+            if self._stop.is_set():
+                continue
             try:
-                self._event_callback(message.control_code)
+                assert self._event_callback is not None
+                self._event_callback(status_byte)
             except Exception:
                 LOGGER.exception("Error handling async service request")
 
@@ -569,16 +611,31 @@ class AsyncChannel:
 
     def _complete_pending(self, message: AsyncMessage) -> bool:
         with self._state_lock:
-            pending = self._pending_request
-            if pending is None or pending["done"]:
+            requests = self._pending_requests.get(message.msg_type)
+            if not requests:
                 return False
-            if message.msg_type != pending["expected_response"]:
-                return False
-            pending["response"] = message
-            pending["done"] = True
-            self._pending_request = None
+            pending = requests.popleft()
+            if not requests:
+                del self._pending_requests[message.msg_type]
+            if not pending.abandoned:
+                pending.response = message
+                pending.done = True
             self._state_lock.notify_all()
             return True
+
+    def _fail_pending(
+        self, error_factory: Callable[[], Exception], terminal: bool = False
+    ) -> None:
+        with self._state_lock:
+            if terminal and self._failure is None:
+                self._failure = error_factory()
+            for requests in self._pending_requests.values():
+                for pending in requests:
+                    if not pending.abandoned:
+                        pending.error = error_factory()
+                        pending.done = True
+            self._pending_requests.clear()
+            self._state_lock.notify_all()
 
     def _run(self) -> None:
         while not self._stop.is_set():
@@ -587,22 +644,20 @@ class AsyncChannel:
             except socket.timeout:
                 continue
             except OSError:
+                if not self._stop.is_set():
+                    self._fail_pending(
+                        lambda: RuntimeError("async channel closed"), terminal=True
+                    )
                 break
             except Exception as e:
                 if not self._stop.is_set():
                     LOGGER.exception(
                         f"Async channel reader stopped due to protocol error: {e}"
                     )
-                with self._state_lock:
-                    pending = self._pending_request
-                    if pending is not None and not pending["done"]:
-                        if not self._stop.is_set():
-                            pending["error"] = RuntimeError(
-                                "async channel protocol error"
-                            )
-                        pending["done"] = True
-                        self._pending_request = None
-                        self._state_lock.notify_all()
+                    self._fail_pending(
+                        lambda: RuntimeError("async channel protocol error"),
+                        terminal=True,
+                    )
                 break
 
             if message.msg_type == "AsyncInterrupted":
@@ -612,15 +667,9 @@ class AsyncChannel:
                 # from the server until Interrupted is encountered.
                 # If the client detects Interrupted before it detects AsyncInterrupted, the client shall not send any further
                 # messages until AsyncInterrupted is received.
-                with self._state_lock:
-                    pending = self._pending_request
-                    if pending is not None and not pending["done"]:
-                        pending["error"] = HiSLIPInterruptedError(
-                            message.message_parameter
-                        )
-                        pending["done"] = True
-                        self._pending_request = None
-                        self._state_lock.notify_all()
+                self._fail_pending(
+                    lambda: HiSLIPInterruptedError(message.message_parameter)
+                )
                 self._deliver_interrupt(message)
                 continue
 
@@ -736,6 +785,9 @@ class Instrument:
         self._last_message_id: Optional[int] = None
         self._msg_type: str = ""
         self._payload_remaining: int = 0
+        self._pending_data = bytearray()
+        self._last_read_rmt = False
+        self._last_read_termchar = False
         self._receiving = threading.Event()
 
     # ================ #
@@ -778,6 +830,9 @@ class Instrument:
         self._rmt = 0
         self._payload_remaining = 0
         self._msg_type = ""
+        self._pending_data.clear()
+        self._last_read_rmt = False
+        self._last_read_termchar = False
 
     @property
     def keepalive(self) -> bool:
@@ -808,7 +863,7 @@ class Instrument:
         self._sync.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, bool(nodelay))
         self._async.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, bool(nodelay))
 
-    def send(self, data: BytesBuffer) -> int:
+    def send(self, data: BytesBuffer, send_end: bool = True) -> int:
         """Send the data on the synchronous channel.
 
         More than one packet may be necessary in order
@@ -823,7 +878,10 @@ class Instrument:
         while num_bytes_to_send > 0:
             if num_bytes_to_send <= max_payload_size:
                 assert len(data_view) == num_bytes_to_send
-                self._send_data_end_packet(data_view)
+                if send_end:
+                    self._send_data_end_packet(data_view)
+                else:
+                    self._send_data_packet(data_view)
                 bytes_sent = num_bytes_to_send
             else:
                 self._send_data_packet(data_view[:max_payload_size])
@@ -834,10 +892,16 @@ class Instrument:
 
         return len(data)
 
-    def receive(self, max_len: int = 4096) -> bytes:
+    def receive(
+        self,
+        max_len: int = 4096,
+        termination_char: Optional[int] = None,
+        suppress_end: bool = False,
+    ) -> bytes:
         """Receive data on the synchronous channel.
 
-        Terminate after max_len bytes or after receiving a DataEnd message
+        Terminate after max_len bytes, an enabled termination character, or
+        an unsuppressed DataEnd message.
         """
 
         # print(f"receive({max_len=})")  # uncomment for debugging
@@ -850,37 +914,57 @@ class Instrument:
         #
         self._receiving.set()
         try:
-            recv_buffer = bytearray(max_len)
-            view = memoryview(recv_buffer)
-            bytes_recvd = 0
+            recv_buffer = bytearray()
+            term_byte = (
+                bytes((termination_char,)) if termination_char is not None else None
+            )
+            self._last_read_rmt = False
+            self._last_read_termchar = False
 
-            while bytes_recvd < max_len:
-                if self._payload_remaining <= 0:
+            while len(recv_buffer) < max_len:
+                if not self._pending_data and self._payload_remaining <= 0:
                     if self._msg_type == "DataEnd":
-                        # truncate to the actual number of bytes received
-                        recv_buffer = recv_buffer[:bytes_recvd]
-                        break
+                        self._rmt = 1
+                        self._last_read_rmt = True
+                        self._msg_type = ""
+                        if not suppress_end:
+                            break
                     self._msg_type, self._payload_remaining = self._next_data_header()
 
-                request_size = min(self._payload_remaining, max_len - bytes_recvd)
-                receive_exact_into(self._sync, view[:request_size])
-                self._payload_remaining -= request_size
-                bytes_recvd += request_size
-                view = view[request_size:]
+                if not self._pending_data:
+                    request_size = min(
+                        self._payload_remaining, max_len - len(recv_buffer)
+                    )
+                    chunk = bytearray(request_size)
+                    receive_exact_into(self._sync, chunk)
+                    self._payload_remaining -= request_size
+                    self._pending_data.extend(chunk)
 
-            if bytes_recvd > max_len:
+                take = min(len(self._pending_data), max_len - len(recv_buffer))
+                if term_byte is not None:
+                    term_index = self._pending_data.find(term_byte, 0, take)
+                    if term_index >= 0:
+                        take = term_index + 1
+                        self._last_read_termchar = True
+
+                recv_buffer.extend(self._pending_data[:take])
+                del self._pending_data[:take]
+
+                reached_end = (
+                    not self._pending_data
+                    and self._payload_remaining == 0
+                    and self._msg_type == "DataEnd"
+                )
+                if reached_end:
+                    self._rmt = 1
+                    self._last_read_rmt = True
+                    self._msg_type = ""
+
+                if self._last_read_termchar or (reached_end and not suppress_end):
+                    break
+
+            if len(recv_buffer) > max_len:
                 raise MemoryError("scribbled past end of recv_buffer")
-
-            # if there is no data remaining, set the RMT flag
-            if self._payload_remaining == 0 and self._msg_type == "DataEnd":
-                #
-                # From IEEE Std 488.2: Response Message Terminator.
-                #
-                # RMT is the new-line accompanied by END sent from the server
-                # to the client at the end of a response. Note that with HiSLIP
-                # this is implied by the DataEND message.
-                #
-                self._rmt = 1
 
             return bytes(recv_buffer)
         finally:
@@ -929,6 +1013,7 @@ class Instrument:
         self.device_clear_complete(feature)
         # reset messageID and resume normal opreation
         self._message_id = 0xFFFF_FF00
+        self.last_message_id = None
 
     def terminate(self) -> None:
         """Cancel a pending I/O operation on the synchronous channel.
@@ -1016,10 +1101,7 @@ class Instrument:
 
         # 4. Reset all protocol state
         self._message_id = 0xFFFF_FF00
-        self._last_message_id = None
-        self._rmt = 0
-        self._payload_remaining = 0
-        self._msg_type = ""
+        self.last_message_id = None
 
     def initialize(
         self,

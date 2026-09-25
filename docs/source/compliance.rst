@@ -126,7 +126,7 @@ The following features are not or not fully supported:
 * Secured/Encrypted (SSL/TLS) and Authenticated connections are not supported.
 * Asynchronous termination (``terminate()``) is only supported for HiSLIP.
 * Event handling is only supported for HiSLIP and VXI-11, and only for service requests. 
-  The other resources do not support events.
+  The other resources do not support events. HiSLIP does support asynchronous event handling.
 * viSetBuf-style buffer configuration is not supported.
 * flush() is implemented only for ASRL and TCPIP SOCKET.
 * LXI service discovery is not supported.
@@ -554,21 +554,16 @@ Other resources do not support locking. Lock sharing or lock nesting is not supp
 | **Used by:** all resources except USB RAW
 | **Access:** R/W
 | **Coverage:**
-|  - GPIB INSTR, GPIB INTFC, VXI-11: Full
-|  - ASRL, HiSLIP, USB, SOCKET: Partial; The partial implementations expose or read the setting but do not consistently apply it to the underlying transport's end-of-message behavior.
-
-Proposition for future change: to be tackled together with ``VI_ATTR_SUPPRESS_END_EN``
+|  - GPIB INSTR, GPIB INTFC, VXI-11, HiSLIP: Full
+|  - ASRL, USB, SOCKET: Partial; The partial implementations expose or read the setting but do not consistently apply it to the underlying transport's end-of-message behavior.
 
 ``VI_ATTR_SUPPRESS_END_EN``
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
 | **Used by:** GPIB INSTR, ASRL INSTR, TCPIP INSTR (VXI-11 and HiSLIP), SOCKET, USB INSTR
 | **Access:** R/W
 | **Coverage:**
-|  - ASRL, VXI-11, SOCKET, USB: Full
-|  - HiSLIP: Partial; HiSLIP stores the value but its receive implementation does not honor it.
+|  - ASRL, VXI-11, SOCKET, HiSLIP, USB: Full
 |  - GPIB: Missing
-
-Proposition for future change: to be tackled together with ``VI_ATTR_SEND_END_EN``
 
 ``VI_ATTR_TCPIP_ADDR``
 ^^^^^^^^^^^^^^^^^^^^^^
@@ -637,21 +632,15 @@ For now: Fake RW (force to VI_FALSE, unsupported-state otherwise)
 ^^^^^^^^^^^^^^^^^^^^
 | **Used by:** all resources except USB RAW
 | **Access:** R/W
-| **Coverage:**
-|  - HiSLIP: Partial; HiSLIP stores the value but does not use it to terminate reads.
-|  - All others: Full
-
-Proposition for future change: to be tackled together with ``VI_ATTR_TERMCHAR_EN``
+| **Coverage:** Full
 
 ``VI_ATTR_TERMCHAR_EN``
 ^^^^^^^^^^^^^^^^^^^^^^^
 | **Used by:** all resources except USB RAW
 | **Access:** R/W
 | **Coverage:**
-|  - HiSLIP, ASRL: Partial; stores the value but does not use it to terminate reads.
+|  - ASRL: Partial; stores the value but does not use it to terminate reads.
 |  - All others: Full
-
-Proposition for future change: to be tackled together with ``VI_ATTR_TERMCHAR``
 
 ``VI_ATTR_TMO_VALUE``
 ^^^^^^^^^^^^^^^^^^^^^
