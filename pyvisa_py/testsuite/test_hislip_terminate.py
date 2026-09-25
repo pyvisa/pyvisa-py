@@ -532,7 +532,13 @@ class TestAsyncChannelDispatcher:
 
         server, client_raw = socket.socketpair()
         events = []
-        channel = AsyncChannel(client_raw, event_callback=events.append)
+        event_received = threading.Event()
+
+        def record_event(status):
+            events.append(status)
+            event_received.set()
+
+        channel = AsyncChannel(client_raw, event_callback=record_event)
         results = {}
 
         requests = {
@@ -576,6 +582,7 @@ class TestAsyncChannelDispatcher:
             thread.join(timeout=2.0)
             assert not thread.is_alive()
 
+        assert event_received.wait(timeout=2.0)
         assert events == [0x44]
         assert results["status"].control_code == 0x52
         assert results["lock"].control_code == 1
