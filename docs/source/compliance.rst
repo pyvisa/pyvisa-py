@@ -126,7 +126,7 @@ The following features are not or not fully supported:
 * Secured/Encrypted (SSL/TLS) and Authenticated connections are not supported.
 * Asynchronous termination (``terminate()``) is only supported for HiSLIP.
 * Event handling is only supported for HiSLIP and VXI-11, and only for service requests. 
-  The other resources do not support events.
+  The other resources do not support events. HiSLIP does support asynchronous event handling.
 * viSetBuf-style buffer configuration is not supported.
 * flush() is implemented only for ASRL and TCPIP SOCKET.
 * LXI service discovery is not supported.

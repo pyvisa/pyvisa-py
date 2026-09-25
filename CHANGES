@@ -4,9 +4,9 @@ PyVISA-py Changelog
 0.9.0 (unreleased)
 ------------------
 
-- HiSLIP: allow concurrent async transactions and events #658
-- HiSLIP: Add support for TERMCHAR/TERMCHAR_EN/SEND_END_EN/SUPPRESS_END_EN #656 PR #657
-- HiSLIP: Add support for NODELAY and port #654 PR #655
+- HiSLIP: allow concurrent async transactions and events #658 PR #659
+- HiSLIP: add support for TERMCHAR/TERMCHAR_EN/SEND_END_EN/SUPPRESS_END_EN #656 PR #657
+- HiSLIP: add support for NODELAY and port #654 PR #655
 - Various small VXI-11 compliance problems #652 PR #653
 - Various small compliance problems #650 PR #651
 - Suppress exception logs in case of unknown attribute #644 PR #645
