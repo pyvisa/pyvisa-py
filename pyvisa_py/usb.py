@@ -19,7 +19,7 @@ from pyvisa.constants import ResourceAttribute, StatusCode
 from pyvisa.rname import USBInstr, USBRaw
 
 from .common import LOGGER
-from .sessions import Session, UnknownAttribute
+from .sessions import OpenError, Session, UnknownAttribute
 
 try:
     import usb
@@ -102,11 +102,16 @@ class USBSession(Session):
 
     def after_parsing(self) -> None:
         # TODO: board is not used
-        self.interface = self._intf_cls(
-            int(self.parsed.manufacturer_id, 0),
-            int(self.parsed.model_code, 0),
-            self.parsed.serial_number,
-        )
+        try:
+            self.interface = self._intf_cls(
+                int(self.parsed.manufacturer_id, 0),
+                int(self.parsed.model_code, 0),
+                self.parsed.serial_number,
+            )
+        except usb.USBError as exc:
+            if exc.errno == errno.EBUSY:
+                raise OpenError(StatusCode.error_resource_busy) from exc
+            raise
 
         self.attrs.update(
             {
