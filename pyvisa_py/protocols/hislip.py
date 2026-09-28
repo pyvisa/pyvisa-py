@@ -870,6 +870,8 @@ class Instrument:
         #
         self._receiving.set()
         try:
+            # This is the result of this VISA read call. The call may span
+            # multiple counted HiSLIP Data payloads, but must stop at max_len.
             recv_buffer = bytearray()
             term_byte = (
                 bytes((termination_char,)) if termination_char is not None else None
@@ -891,6 +893,9 @@ class Instrument:
                     request_size = min(
                         self._payload_remaining, max_len - len(recv_buffer)
                     )
+                    # Stage only the portion needed for this call in reusable
+                    # storage; the pending slice keeps any payload remainder
+                    # for the next call when max_len or a termination char wins.
                     # grow the scratch buffer only if it's too small, otherwise
                     # reuse it instead of allocating a fresh bytearray here.
                     if len(self._recv_scratch) < request_size:
@@ -924,6 +929,8 @@ class Instrument:
                     and self._payload_remaining == 0
                     and self._msg_type == "DataEnd"
                 )
+                # HiSLIP DataEnd carries the END indication (RMT); VISA reads
+                # may also finish on count or termination character (§6.1.1).
                 if reached_end:
                     self._rmt = 1
                     self._last_read_rmt = True
