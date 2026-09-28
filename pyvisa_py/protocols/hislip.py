@@ -886,10 +886,11 @@ class Instrument:
                     request_size = min(
                         self._payload_remaining, max_len - len(recv_buffer)
                     )
-                    chunk = bytearray(request_size)
-                    receive_exact_into(self._sync, chunk)
+                    # pending_data is empty here, so receive straight into it
+                    # instead of an intermediate chunk that gets copied over.
+                    self._pending_data = bytearray(request_size)
+                    receive_exact_into(self._sync, self._pending_data)
                     self._payload_remaining -= request_size
-                    self._pending_data.extend(chunk)
 
                 take = min(len(self._pending_data), max_len - len(recv_buffer))
                 if term_byte is not None:
