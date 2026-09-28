@@ -736,7 +736,11 @@ class Instrument:
         self._last_message_id: Optional[int] = None
         self._msg_type: str = ""
         self._payload_remaining: int = 0
-        self._pending_data = bytearray()
+        # Reused across refills instead of allocating a fresh bytearray each
+        # time; _pending_off/_pending_len track the unconsumed slice within it.
+        self._recv_scratch = bytearray()
+        self._pending_off = 0
+        self._pending_len = 0
         self._last_read_rmt = False
         self._last_read_termchar = False
         self._receiving = threading.Event()
@@ -781,7 +785,8 @@ class Instrument:
         self._rmt = 0
         self._payload_remaining = 0
         self._msg_type = ""
-        self._pending_data.clear()
+        self._pending_off = 0
+        self._pending_len = 0
         self._last_read_rmt = False
         self._last_read_termchar = False
 
@@ -873,7 +878,7 @@ class Instrument:
             self._last_read_termchar = False
 
             while len(recv_buffer) < max_len:
-                if not self._pending_data and self._payload_remaining <= 0:
+                if self._pending_len == 0 and self._payload_remaining <= 0:
                     if self._msg_type == "DataEnd":
                         self._rmt = 1
                         self._last_read_rmt = True
@@ -882,28 +887,40 @@ class Instrument:
                             break
                     self._msg_type, self._payload_remaining = self._next_data_header()
 
-                if not self._pending_data:
+                if self._pending_len == 0:
                     request_size = min(
                         self._payload_remaining, max_len - len(recv_buffer)
                     )
-                    # pending_data is empty here, so receive straight into it
-                    # instead of an intermediate chunk that gets copied over.
-                    self._pending_data = bytearray(request_size)
-                    receive_exact_into(self._sync, self._pending_data)
+                    # grow the scratch buffer only if it's too small, otherwise
+                    # reuse it instead of allocating a fresh bytearray here.
+                    if len(self._recv_scratch) < request_size:
+                        self._recv_scratch = bytearray(request_size)
+                    receive_exact_into(
+                        self._sync, memoryview(self._recv_scratch)[:request_size]
+                    )
+                    self._pending_off = 0
+                    self._pending_len = request_size
                     self._payload_remaining -= request_size
 
-                take = min(len(self._pending_data), max_len - len(recv_buffer))
+                take = min(self._pending_len, max_len - len(recv_buffer))
                 if term_byte is not None:
-                    term_index = self._pending_data.find(term_byte, 0, take)
+                    term_index = self._recv_scratch.find(
+                        term_byte, self._pending_off, self._pending_off + take
+                    )
                     if term_index >= 0:
-                        take = term_index + 1
+                        take = term_index - self._pending_off + 1
                         self._last_read_termchar = True
 
-                recv_buffer.extend(self._pending_data[:take])
-                del self._pending_data[:take]
+                recv_buffer.extend(
+                    memoryview(self._recv_scratch)[
+                        self._pending_off : self._pending_off + take
+                    ]
+                )
+                self._pending_off += take
+                self._pending_len -= take
 
                 reached_end = (
-                    not self._pending_data
+                    self._pending_len == 0
                     and self._payload_remaining == 0
                     and self._msg_type == "DataEnd"
                 )
