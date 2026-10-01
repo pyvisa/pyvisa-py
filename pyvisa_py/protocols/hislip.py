@@ -891,7 +891,8 @@ class Instrument:
                 if term_byte is None:
                     # No termination character, just receive the exact number of bytes requested.
                     receive_exact_into(
-                        self._sync, memoryview(recv_buffer)[start : start + request_size]
+                        self._sync,
+                        memoryview(recv_buffer)[start : start + request_size],
                     )
                     received = request_size
                 else:
@@ -904,9 +905,7 @@ class Instrument:
                     if peeked == 0:
                         raise RuntimeError("Connection was dropped by server.")
                     term_index = recv_buffer.find(term_byte, start, start + peeked)
-                    received = (
-                        term_index - start + 1 if term_index >= 0 else peeked
-                    )
+                    received = term_index - start + 1 if term_index >= 0 else peeked
                     receive_exact_into(
                         self._sync, memoryview(recv_buffer)[start : start + received]
                     )
@@ -916,7 +915,9 @@ class Instrument:
                 # Update the remaining payload length after receiving data.
                 self._payload_remaining -= received
 
-                reached_end = self._payload_remaining == 0 and self._msg_type == "DataEnd"
+                reached_end = (
+                    self._payload_remaining == 0 and self._msg_type == "DataEnd"
+                )
                 # HiSLIP DataEnd carries the END indication (RMT); VISA reads
                 # may also finish on count or termination character (§6.1.1).
                 if reached_end:
