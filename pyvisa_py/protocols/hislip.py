@@ -736,11 +736,6 @@ class Instrument:
         self._last_message_id: Optional[int] = None
         self._msg_type: str = ""
         self._payload_remaining: int = 0
-        # Reused across refills instead of allocating a fresh bytearray each
-        # time; _pending_off/_pending_len track the unconsumed slice within it.
-        self._recv_scratch = bytearray()
-        self._pending_off = 0
-        self._pending_len = 0
         self._last_read_rmt = False
         self._last_read_termchar = False
         self._receiving = threading.Event()
@@ -785,8 +780,6 @@ class Instrument:
         self._rmt = 0
         self._payload_remaining = 0
         self._msg_type = ""
-        self._pending_off = 0
-        self._pending_len = 0
         self._last_read_rmt = False
         self._last_read_termchar = False
 
@@ -860,8 +853,6 @@ class Instrument:
         an unsuppressed DataEnd message.
         """
 
-        # print(f"receive({max_len=})")  # uncomment for debugging
-
         # receive data, terminating after len(recv_buffer) bytes or
         # after receiving a DataEnd message.
         #
@@ -871,8 +862,11 @@ class Instrument:
         self._receiving.set()
         try:
             # This is the result of this VISA read call. The call may span
-            # multiple counted HiSLIP Data payloads, but must stop at max_len.
+            # multiple counted HiSLIP Data payloads, but must stop at max_len or an enabled termination character.
+
+            # This is the receive buffer that will accumulate the incoming data.
             recv_buffer = bytearray()
+
             term_byte = (
                 bytes((termination_char,)) if termination_char is not None else None
             )
@@ -880,7 +874,7 @@ class Instrument:
             self._last_read_termchar = False
 
             while len(recv_buffer) < max_len:
-                if self._pending_len == 0 and self._payload_remaining <= 0:
+                if self._payload_remaining <= 0:
                     if self._msg_type == "DataEnd":
                         self._rmt = 1
                         self._last_read_rmt = True
@@ -889,46 +883,40 @@ class Instrument:
                             break
                     self._msg_type, self._payload_remaining = self._next_data_header()
 
-                if self._pending_len == 0:
-                    request_size = min(
-                        self._payload_remaining, max_len - len(recv_buffer)
-                    )
-                    # Stage only the portion needed for this call in reusable
-                    # storage; the pending slice keeps any payload remainder
-                    # for the next call when max_len or a termination char wins.
-                    # grow the scratch buffer only if it's too small, otherwise
-                    # reuse it instead of allocating a fresh bytearray here.
-                    if len(self._recv_scratch) < request_size:
-                        self._recv_scratch = bytearray(request_size)
+                # Grow the receive buffer if needed
+                start = len(recv_buffer)
+                request_size = min(self._payload_remaining, max_len - start)
+                recv_buffer.extend(b"\x00" * request_size)
+
+                if term_byte is None:
+                    # No termination character, just receive the exact number of bytes requested.
                     receive_exact_into(
-                        self._sync, memoryview(self._recv_scratch)[:request_size]
+                        self._sync, memoryview(recv_buffer)[start : start + request_size]
                     )
-                    self._pending_off = 0
-                    self._pending_len = request_size
-                    self._payload_remaining -= request_size
-
-                take = min(self._pending_len, max_len - len(recv_buffer))
-                if term_byte is not None:
-                    term_index = self._recv_scratch.find(
-                        term_byte, self._pending_off, self._pending_off + take
+                    received = request_size
+                else:
+                    # There is a termination character, so we need to peek into the socket to check for it.
+                    peeked = self._sync.recv_into(
+                        memoryview(recv_buffer)[start : start + request_size],
+                        request_size,
+                        socket.MSG_PEEK,
                     )
-                    if term_index >= 0:
-                        take = term_index - self._pending_off + 1
-                        self._last_read_termchar = True
+                    if peeked == 0:
+                        raise RuntimeError("Connection was dropped by server.")
+                    term_index = recv_buffer.find(term_byte, start, start + peeked)
+                    received = (
+                        term_index - start + 1 if term_index >= 0 else peeked
+                    )
+                    receive_exact_into(
+                        self._sync, memoryview(recv_buffer)[start : start + received]
+                    )
+                    del recv_buffer[start + received :]
+                    self._last_read_termchar = term_index >= 0
 
-                recv_buffer.extend(
-                    memoryview(self._recv_scratch)[
-                        self._pending_off : self._pending_off + take
-                    ]
-                )
-                self._pending_off += take
-                self._pending_len -= take
+                # Update the remaining payload length after receiving data.
+                self._payload_remaining -= received
 
-                reached_end = (
-                    self._pending_len == 0
-                    and self._payload_remaining == 0
-                    and self._msg_type == "DataEnd"
-                )
+                reached_end = self._payload_remaining == 0 and self._msg_type == "DataEnd"
                 # HiSLIP DataEnd carries the END indication (RMT); VISA reads
                 # may also finish on count or termination character (§6.1.1).
                 if reached_end:

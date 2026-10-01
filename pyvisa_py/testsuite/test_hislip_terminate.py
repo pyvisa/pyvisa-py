@@ -207,9 +207,6 @@ class TestInstrumentReceive:
         self.instrument._msg_type = ""
         self.instrument._payload_remaining = 0
         self.instrument._rmt = 0
-        self.instrument._recv_scratch = bytearray()
-        self.instrument._pending_off = 0
-        self.instrument._pending_len = 0
         self.instrument._last_read_rmt = False
         self.instrument._last_read_termchar = False
 
@@ -417,9 +414,6 @@ class TestInstrumentTerminate:
         inst._rmt = 1
         inst._payload_remaining = 42
         inst._msg_type = "Data"
-        inst._recv_scratch = bytearray(b"unread")
-        inst._pending_off = 0
-        inst._pending_len = 6
         inst._last_read_rmt = True
         inst._last_read_termchar = True
 
@@ -440,7 +434,6 @@ class TestInstrumentTerminate:
         assert inst._rmt == 0
         assert inst._payload_remaining == 0
         assert inst._msg_type == ""
-        assert inst._pending_len == 0
         assert inst._last_read_rmt is False
         assert inst._last_read_termchar is False
 
