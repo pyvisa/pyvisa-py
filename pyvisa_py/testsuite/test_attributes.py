@@ -133,6 +133,42 @@ def test_instr_attribute_reads_succeed(instr_session, attribute):
         pytest.fail(f'Failed to read attribute "{attribute.name}", status: {status}')
 
 
+@pytest.mark.parametrize(
+    "attribute",
+    (
+        ResourceAttribute.send_end_enabled,
+        ResourceAttribute.suppress_end_enabled,
+    ),
+)
+def test_end_attributes_are_writable(instr_session, attribute):
+    """VPP-4.3 end handling attributes are readable and writable."""
+    initial, status = instr_session.get_attribute(attribute)
+    assert status == StatusCode.success
+
+    expected = not initial
+    assert instr_session.set_attribute(attribute, expected) == StatusCode.success
+    assert instr_session.get_attribute(attribute) == (expected, StatusCode.success)
+
+
+@pytest.mark.parametrize("send_end", (False, True))
+def test_hislip_write_forwards_send_end_attribute(send_end):
+    resource_name = "TCPIP::localhost::hislip0::INSTR"
+    interface = MagicMock()
+    with patch("pyvisa_py.tcpip.hislip.Instrument", return_value=interface):
+        session = TCPIPInstrHiSLIP(
+            VISARMSession(1),
+            resource_name,
+            rname.parse_resource_name(resource_name),
+        )
+
+    assert (
+        session.set_attribute(ResourceAttribute.send_end_enabled, send_end)
+        == StatusCode.success
+    )
+    assert session.write(b"command") == (7, StatusCode.success)
+    interface.send.assert_called_once_with(b"command", send_end=send_end)
+
+
 def test_hislip_tcpip_port_is_readable():
     resource_name = "TCPIP::localhost::hislip0,4881::INSTR"
     with patch("pyvisa_py.tcpip.hislip.Instrument", return_value=MagicMock()):
