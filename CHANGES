@@ -6,6 +6,7 @@ PyVISA-py Changelog
 
 - HiSLIP: allow concurrent async transactions and events #658 PR #659
 - HiSLIP: add support for TERMCHAR/TERMCHAR_EN/SEND_END_EN/SUPPRESS_END_EN #656 PR #657
+- Report USB interface-busy errors during opening as VISA resource-busy errors (#593).
 - HiSLIP: add support for NODELAY and port #654 PR #655
 - Various small VXI-11 compliance problems #652 PR #653
 - Various small compliance problems #650 PR #651
