@@ -157,7 +157,7 @@ PyVISA-Py does provide a way to execute this command via a low level method::
         ----------
         inst : pyvisa resource
             Must be opened against the *interface itself* (e.g. "TCPIP::<ip>::gpib0::INSTR"),
-            not a specific device link - see RULE B.5.2 above.
+            not a specific device link.
         command_bytes : bytes | bytearray | list[int] | tuple[int, ...]
             0-128 raw GPIB command bytes to put on the bus with ATN asserted (IEEE 488.2, 16.2.1).
             This is where you'd put addressing/handshake bytes (UNL, UNT, MLA, MTA, secondary
@@ -589,10 +589,7 @@ Other resources do not support locking. Lock sharing or lock nesting is not supp
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 | **Used by:** TCPIP INSTR (HiSLIP)
 | **Access:** R/W
-| **Coverage:** Partial; The value is stored but changes do not issue the required HiSLIP device clear or switch the protocol's overlap mode.
-
-Proposition for future change: not easy to do. Default value is supposed to be "Preference returned by device."
-For now: Fake RW (force to VI_FALSE, unsupported-state otherwise)
+| **Coverage:** Missing; The value can be read and written, but is without any effect.
 
 ``VI_ATTR_TCPIP_HISLIP_VERSION``
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
