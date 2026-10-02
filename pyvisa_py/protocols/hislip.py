@@ -788,6 +788,8 @@ class Instrument:
         self._last_read_rmt = False
         self._last_read_termchar = False
         self._receiving = threading.Event()
+        self._receive_state_lock = threading.Lock()
+        self._status_query_lock = threading.Lock()
 
     # ================ #
     # MEMBER FUNCTIONS #
@@ -908,7 +910,8 @@ class Instrument:
         # note the use of receive_exact_into (which calls socket.recv_into),
         # avoiding unnecessary copies.
         #
-        self._receiving.set()
+        with self._receive_state_lock:
+            self._receiving.set()
         try:
             # This is the result of this VISA read call. The call may span
             # multiple counted HiSLIP Data payloads, but must stop at max_len or an enabled termination character.
@@ -982,7 +985,8 @@ class Instrument:
 
             return bytes(recv_buffer)
         finally:
-            self._receiving.clear()
+            with self._receive_state_lock:
+                self._receiving.clear()
 
     def _next_data_header(self) -> Tuple[str, int]:
         """
@@ -1047,9 +1051,9 @@ class Instrument:
         complete_terminate() to reset the HiSLIP protocol state before
         performing further I/O on this session.
         """
-        if not self._receiving.is_set():
-            return
-        self._sync.cancel()
+        with self._receive_state_lock:
+            if self._receiving.is_set():
+                self._sync.cancel()
 
     def complete_terminate(self) -> None:
         """Reset HiSLIP protocol state after terminate().
@@ -1245,14 +1249,19 @@ class Instrument:
         # async_status_query transaction:
         #     C->S: AsyncStatusQuery
         #     S->C: AsyncStatusResponse
-        response = self._async_channel.request(
-            "AsyncStatusQuery",
-            self._rmt,
-            self._message_id,
-            expected_response="AsyncStatusResponse",
-        )
-        self._rmt = 0
-        return response.control_code
+        with self._status_query_lock:
+            response = self._async_channel.request(
+                "AsyncStatusQuery",
+                self._rmt,
+                (
+                    self.last_message_id
+                    if self.last_message_id is not None
+                    else (self._message_id - 2) & 0xFFFF_FFFF
+                ),
+                expected_response="AsyncStatusResponse",
+            )
+            self._rmt = 0
+            return response.control_code
 
     def async_device_clear(self) -> int:
         """

@@ -211,6 +211,7 @@ class TestInstrumentReceive:
         self.instrument._rmt = 0
         self.instrument._last_read_rmt = False
         self.instrument._last_read_termchar = False
+        self.instrument._receive_state_lock = threading.Lock()
 
     def teardown_method(self):
         self.client.close()
@@ -708,44 +709,57 @@ class TestAsyncChannelDispatcher:
         from pyvisa_py.protocols.hislip import AsyncChannel, Instrument
 
         server, client_raw = socket.socketpair()
+        server.settimeout(2.0)
         instrument = object.__new__(Instrument)
         instrument._async_channel = AsyncChannel(client_raw)
         instrument._rmt = 1
         instrument._message_id = 0xFFFF_FF00
+        instrument._last_message_id = None
+        instrument._status_query_lock = threading.Lock()
         results = []
+        errors = []
 
-        threads = [
-            threading.Thread(
-                target=lambda: results.append(instrument.async_status_query())
-            )
-            for _ in range(2)
-        ]
-        for thread in threads:
-            thread.start()
+        def query_status():
+            try:
+                results.append(instrument.async_status_query())
+            except Exception as exc:
+                errors.append(exc)
 
-        for _ in threads:
-            header = self._recv_exact(server, HEADER_SIZE)
-            _, msg_type, control_code, message_parameter, payload_length = (
-                struct.unpack(HEADER_FORMAT, header)
-            )
-            assert msg_type == MESSAGETYPE["AsyncStatusQuery"]
-            assert control_code == 1
-            assert message_parameter == 0xFFFF_FF00
-            assert payload_length == 0
+        threads = [threading.Thread(target=query_status) for _ in range(2)]
+        try:
+            for thread in threads:
+                thread.start()
 
-        server.sendall(self._make_hislip_header("AsyncStatusResponse", 0x31, 0, 0))
-        server.sendall(self._make_hislip_header("AsyncStatusResponse", 0x32, 0, 0))
+            request_fields = []
+            for response_status in (0x31, 0x32):
+                header = self._recv_exact(server, HEADER_SIZE)
+                _, msg_type, control_code, message_parameter, payload_length = (
+                    struct.unpack(HEADER_FORMAT, header)
+                )
+                request_fields.append(
+                    (msg_type, control_code, message_parameter, payload_length)
+                )
+                server.sendall(
+                    self._make_hislip_header(
+                        "AsyncStatusResponse", response_status, 0, 0
+                    )
+                )
 
-        for thread in threads:
-            thread.join(timeout=2.0)
-            assert not thread.is_alive()
+            for thread in threads:
+                thread.join(timeout=2.0)
+                assert not thread.is_alive(), "status query thread did not finish"
 
-        assert sorted(results) == [0x31, 0x32]
-        assert instrument._rmt == 0
-        assert instrument._message_id == 0xFFFF_FF00
-
-        instrument._async_channel.close()
-        server.close()
+            assert errors == []
+            assert request_fields == [
+                (MESSAGETYPE["AsyncStatusQuery"], 1, 0xFFFF_FEFE, 0),
+                (MESSAGETYPE["AsyncStatusQuery"], 0, 0xFFFF_FEFE, 0),
+            ]
+            assert sorted(results) == [0x31, 0x32]
+            assert instrument._rmt == 0
+            assert instrument._message_id == 0xFFFF_FF00
+        finally:
+            instrument._async_channel.close()
+            server.close()
 
     def test_async_interrupted_aborts_pending_request(self):
         from pyvisa_py.protocols.hislip import AsyncChannel
@@ -803,6 +817,7 @@ class TestInstrumentTerminate:
         mock_sync = MagicMock(spec=CancellableSocket)
         inst._sync = mock_sync
         inst._receiving = threading.Event()
+        inst._receive_state_lock = threading.Lock()
 
         # When no receive is in progress, terminate is a no-op
         inst.terminate()
@@ -831,6 +846,8 @@ class TestInstrumentTerminate:
         inst._msg_type = "Data"
         inst._last_read_rmt = True
         inst._last_read_termchar = True
+        inst._receiving = threading.Event()
+        inst._receive_state_lock = threading.Lock()
 
         # Mock the async channel methods that complete_terminate calls
         inst.async_device_clear = MagicMock(return_value=0)
@@ -857,6 +874,67 @@ class TestInstrumentTerminate:
         # Verify device clear was performed
         inst.async_device_clear.assert_called_once()
         inst.device_clear_complete.assert_called_once()
+
+    def test_terminate_after_receive_completes_does_not_cancel_next_read(self):
+        """A terminate racing with read completion must not leave a stale cancel."""
+        from pyvisa_py.protocols.hislip import Instrument
+
+        server, client_raw = socket.socketpair()
+        client = CancellableSocket(client_raw)
+        inst = object.__new__(Instrument)
+        inst._sync = client
+        inst._receiving = threading.Event()
+        inst._receive_state_lock = threading.Lock()
+        inst._msg_type = ""
+        inst._payload_remaining = 0
+        inst._last_message_id = None
+        inst._rmt = 0
+        inst._last_read_rmt = False
+        inst._last_read_termchar = False
+
+        terminate_started = threading.Event()
+        terminate_done = threading.Event()
+
+        def terminate():
+            terminate_started.set()
+            inst.terminate()
+            terminate_done.set()
+
+        try:
+            inst._receiving.set()
+            inst._receive_state_lock.acquire()
+            thread = threading.Thread(target=terminate)
+            thread.start()
+            assert terminate_started.wait(timeout=1.0)
+            assert not terminate_done.wait(timeout=0.05)
+
+            # Model receive() completing while terminate() waits for the same
+            # state lock to decide whether cancellation is still necessary.
+            inst._receiving.clear()
+            inst._receive_state_lock.release()
+
+            assert terminate_done.wait(timeout=1.0)
+            thread.join(timeout=1.0)
+            assert not thread.is_alive()
+
+            server.sendall(
+                struct.pack(
+                    HEADER_FORMAT,
+                    b"HS",
+                    MESSAGETYPE["DataEnd"],
+                    0,
+                    0xFFFF_FFFF,
+                    2,
+                )
+                + b"ok"
+            )
+            assert inst.receive(2) == b"ok"
+            assert inst._last_read_rmt is True
+        finally:
+            if inst._receive_state_lock.locked():
+                inst._receive_state_lock.release()
+            client.close()
+            server.close()
 
 
 class TestTerminateConcurrency:
