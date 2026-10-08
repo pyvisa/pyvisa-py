@@ -61,7 +61,7 @@ jobs:
           pip install git+https://github.com/pyvisa/pyvisa.git#egg=pyvisa
       - name: Install project
         run: |
-          pip install -e .
+          pip install -e ".[serial]"
       - name: Test with pytest
         run: |
           pip install pytest-cov
