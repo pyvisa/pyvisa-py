@@ -29,6 +29,11 @@ PRLGX TCPIP        PRLGX-TCPIP[board]::host address[::port]::INTFC
 
 Notes:
 
+* ASRL INSTR:
+    * On Windows, a numeric board selects a COM port: ``ASRL1::INSTR`` opens ``COM1``.
+    * On POSIX systems, the board is the serial device path, for example ``ASRL/dev/ttyUSB0::INSTR``.
+    * A board containing ``://`` is passed unchanged to PySerial's `URL handlers <https://pyserial.readthedocs.io/en/latest/url_handlers.html>`_, on Windows and POSIX systems. Examples are ``ASRLloop://::INSTR`` for loopback and ``ASRLsocket://localhost:7777::INSTR`` for a TCP-to-serial connection.
+    * URL resources must be opened explicitly; they are not returned by ``ResourceManager.list_resources()``. Available handlers and their options depend on PySerial and any installed custom handlers. This URL syntax is PyVISA-Py specific, not a portable VISA board number.
 * TCPIP INSTR: 
     * Supports both VXI-11 and HiSLIP protocols, as determined by `LAN device name` (``hislip...`` for HiSLIP, anything else goes to VXI-11), with VXI-11 as the default.
     * For HiSLIP, the port number can be specified by appending it to the `LAN device name`, separated by a comma. Example: ``hislip0,4880``. This is the standard way, and all VISA backends should support this method.

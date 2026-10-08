@@ -41,8 +41,8 @@ Currently Pyvisa-py support the following resources:
     Note:
     ASRL INSTR supports also URL Handlers like 
     
-    - loop:// --> ASLRloop://::INSTR
-    - socket:// --> ASRLsocket://::INSTR
+    - loop:// --> ASRLloop://::INSTR
+    - socket://localhost:7777 --> ASRLsocket://localhost:7777::INSTR
 
     These entries will not be listed during the device discovery `rm.list_resources()`.
     For further details see https://pyserial.readthedocs.io/en/latest/url_handlers.html

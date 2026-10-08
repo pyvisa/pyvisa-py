@@ -4,6 +4,7 @@ PyVISA-py Changelog
 0.9.0 (unreleased)
 ------------------
 
+- Preserve serial URLs on Windows while retaining numeric COM port mapping.
 - HiSLIP: Add support for TERMCHAR/TERMCHAR_EN/SEND_END_EN/SUPPRESS_END_EN #656 PR #657
 - Report USB interface-busy errors during opening as VISA resource-busy errors (#593).
 - HiSLIP: Add support for NODELAY and port #654 PR #655
