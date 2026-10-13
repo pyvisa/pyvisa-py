@@ -5,6 +5,8 @@ PyVISA-py Changelog
 ------------------
 
 - Preserve serial URLs on Windows while retaining numeric COM port mapping.
+- Preserve synchronous RPC connection errors instead of masking them with an
+  error from restoring blocking mode on an already-closed socket (#325).
 - Warn instead of failing to list resources when the mDNS socket used for
   TCPIP discovery cannot be opened, e.g. when avahi holds the port (#378).
 - HiSLIP: Add support for TERMCHAR/TERMCHAR_EN/SEND_END_EN/SUPPRESS_END_EN #656 PR #657
