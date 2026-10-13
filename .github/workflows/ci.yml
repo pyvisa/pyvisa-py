@@ -62,6 +62,9 @@ jobs:
       - name: Install project
         run: |
           pip install -e ".[serial]"
+      - name: Install USB test dependencies
+        if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
+        run: pip install -e ".[usb-full]"
       - name: Test with pytest
         run: |
           pip install pytest-cov

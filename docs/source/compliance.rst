@@ -43,6 +43,7 @@ Notes:
 * All TCP-IP based resources (except PRLGX-TCPIP):
     * Board is ignored, and presumed to be 0 (the default network interface).
 * USB INSTR and USB RAW:
+    * Opening a resource uses the default 2000 ms I/O timeout unless a different timeout is explicitly requested.
     * A PyUSB ``EBUSY`` error when constructing an interface is reported as ``VI_ERROR_RSRC_BUSY``. This does not release the device or change its access permissions.
 
 
