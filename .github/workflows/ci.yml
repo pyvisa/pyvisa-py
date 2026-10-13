@@ -61,7 +61,7 @@ jobs:
           pip install git+https://github.com/pyvisa/pyvisa.git#egg=pyvisa
       - name: Install project
         run: |
-          pip install -e .
+          pip install -e ".[serial]"
       - name: Install USB test dependencies
         if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
         run: pip install -e ".[usb-full]"
