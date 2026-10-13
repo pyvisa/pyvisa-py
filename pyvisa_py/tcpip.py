@@ -2105,7 +2105,16 @@ def get_services(service_type: str, wait_time: float = 0.1) -> Dict[str, dict]:
 
         update_service = add_service
 
-    zero_conf = zeroconf.Zeroconf()
+    try:
+        zero_conf = zeroconf.Zeroconf()
+    except OSError as e:
+        # e.g. another mDNS stack (avahi) holds the port and does not share it
+        warnings.warn(
+            f"Discovery of {service_type} resources is unavailable, "
+            f"the mDNS socket could not be opened: {e}",
+            UserWarning,
+        )
+        return {}
     listener = MyListener()
     browser = zeroconf.ServiceBrowser(zero_conf, service_type, listener, delay=0)
     time.sleep(wait_time)
