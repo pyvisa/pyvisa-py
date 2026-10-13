@@ -139,7 +139,7 @@ class USBSession(Session):
         # Force setting the timeout to get the proper value
         self.set_attribute(
             ResourceAttribute.timeout_value,
-            attributes.AttributesByID[attribute].default,
+            attributes.AttributesByID[ResourceAttribute.timeout_value].default,
         )
 
     def _get_timeout(self, attribute: ResourceAttribute) -> Tuple[int, StatusCode]:

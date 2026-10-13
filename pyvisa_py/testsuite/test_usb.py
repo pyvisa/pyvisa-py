@@ -2,11 +2,17 @@
 
 import errno
 from contextlib import closing
+from types import SimpleNamespace
 
 import pytest
 
 import pyvisa
-from pyvisa.constants import InterfaceType, StatusCode
+from pyvisa.constants import (
+    VI_TMO_INFINITE,
+    InterfaceType,
+    ResourceAttribute,
+    StatusCode,
+)
 from pyvisa_py.sessions import Session
 
 usb = pytest.importorskip("usb")
@@ -39,3 +45,25 @@ def test_usb_open_error(monkeypatch, error_number):
         else:
             assert exc.value is error
         assert set(resource_manager.visalib.sessions) == sessions_before
+
+
+@pytest.mark.parametrize("resource_class", ["INSTR", "RAW"])
+@pytest.mark.parametrize(
+    "open_kwargs, expected_timeout",
+    [({}, 2000), ({"timeout": 125}, 125), ({"timeout": None}, VI_TMO_INFINITE)],
+)
+def test_usb_open_timeout(monkeypatch, resource_class, open_kwargs, expected_timeout):
+    """Opening USB resources preserves the default or explicitly requested timeout."""
+    interface = SimpleNamespace(timeout=999, close=lambda: None)
+    session_class = Session.get_session_class(InterfaceType.usb, resource_class)
+    monkeypatch.setattr(session_class, "_intf_cls", lambda *args: interface)
+
+    with closing(pyvisa.ResourceManager("@py")) as resource_manager:
+        with resource_manager.open_resource(
+            f"USB0::0x1234::0x5678::TEST::{resource_class}", **open_kwargs
+        ) as resource:
+            assert (
+                resource.get_visa_attribute(ResourceAttribute.timeout_value)
+                == expected_timeout
+            )
+            assert interface.timeout == expected_timeout
