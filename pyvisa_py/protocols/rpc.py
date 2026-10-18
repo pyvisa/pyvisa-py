@@ -420,8 +420,7 @@ def _connect(sock, host, port, timeout=0):
     except Exception:
         sock.close()
         return False
-    finally:
-        sock.setblocking(1)
+    sock.setblocking(1)
 
     # minimum is in interval 100 - 500ms based on timeout
     min_select_timeout = max(min(timeout / 10.0, 0.5), 0.1)

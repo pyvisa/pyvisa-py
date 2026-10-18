@@ -734,37 +734,56 @@ class TCPIPInstrVxi11(Session):
                 UserWarning,
             )
 
-        pmap_list = [rpc.BroadcastUDPPortMapperClient(ip) for ip in broadcast_addr]
-        for pmap in list(pmap_list):
-            pmap.set_timeout(0)
-            try:
-                pmap.send_port(
-                    (vxi11.DEVICE_CORE_PROG, vxi11.DEVICE_CORE_VERS, rpc.IPPROTO_TCP, 0)
-                )
-            except rpc.RPCError:
-                pmap_list.remove(pmap)
+        pmap_list = []
+        try:
+            for ip in broadcast_addr:
+                pmap_list.append(rpc.BroadcastUDPPortMapperClient(ip))
 
-        # Timeout for responses
-        time.sleep(1)
+            active_pmaps = []
+            for pmap in pmap_list:
+                pmap.set_timeout(0)
+                try:
+                    pmap.send_port(
+                        (
+                            vxi11.DEVICE_CORE_PROG,
+                            vxi11.DEVICE_CORE_VERS,
+                            rpc.IPPROTO_TCP,
+                            0,
+                        )
+                    )
+                except rpc.RPCError:
+                    continue
+                active_pmaps.append(pmap)
 
-        all_res = []
-        for pmap in pmap_list:
-            try:
-                resp = pmap.recv_port(
-                    (vxi11.DEVICE_CORE_PROG, vxi11.DEVICE_CORE_VERS, rpc.IPPROTO_TCP, 0)
-                )
-            except rpc.RPCError:
-                pass
-            else:
-                res = [r[1][0] for r in resp if r[0] > 0]
-                res = sorted(
-                    res, key=lambda ip: tuple(int(part) for part in ip.split("."))
-                )
-                # TODO: Detect GPIB over TCPIP
-                res = ["TCPIP::{}::INSTR".format(host) for host in res]
-                all_res.extend(res)
+            # Timeout for responses
+            time.sleep(1)
 
-        return all_res
+            all_res = []
+            for pmap in active_pmaps:
+                try:
+                    resp = pmap.recv_port(
+                        (
+                            vxi11.DEVICE_CORE_PROG,
+                            vxi11.DEVICE_CORE_VERS,
+                            rpc.IPPROTO_TCP,
+                            0,
+                        )
+                    )
+                except rpc.RPCError:
+                    pass
+                else:
+                    res = [r[1][0] for r in resp if r[0] > 0]
+                    res = sorted(
+                        res, key=lambda ip: tuple(int(part) for part in ip.split("."))
+                    )
+                    # TODO: Detect GPIB over TCPIP
+                    res = ["TCPIP::{}::INSTR".format(host) for host in res]
+                    all_res.extend(res)
+
+            return all_res
+        finally:
+            for pmap in pmap_list:
+                pmap.close()
 
     def after_parsing(self) -> None:
         # TODO: board_number not handled
@@ -2105,7 +2124,16 @@ def get_services(service_type: str, wait_time: float = 0.1) -> Dict[str, dict]:
 
         update_service = add_service
 
-    zero_conf = zeroconf.Zeroconf()
+    try:
+        zero_conf = zeroconf.Zeroconf()
+    except OSError as e:
+        # e.g. another mDNS stack (avahi) holds the port and does not share it
+        warnings.warn(
+            f"Discovery of {service_type} resources is unavailable, "
+            f"the mDNS socket could not be opened: {e}",
+            UserWarning,
+        )
+        return {}
     listener = MyListener()
     browser = zeroconf.ServiceBrowser(zero_conf, service_type, listener, delay=0)
     time.sleep(wait_time)
