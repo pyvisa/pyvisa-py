@@ -615,8 +615,6 @@ class AsyncChannel:
             if not requests:
                 return False
             pending = requests.popleft()
-            if not requests:
-                del self._pending_requests[message.msg_type]
             if not pending.abandoned:
                 pending.response = message
                 pending.done = True
