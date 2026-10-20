@@ -4,6 +4,7 @@ PyVISA-py Changelog
 0.9.0 (unreleased)
 ------------------
 
+- Fix USB RAW reads raising TypeError since the termchar is passed to the interface.
 - Preserve the default 2000 ms timeout when opening USB INSTR and USB RAW resources.
 - Preserve serial URLs on Windows while retaining numeric COM port mapping.
 - Preserve synchronous RPC connection errors instead of masking them with an
