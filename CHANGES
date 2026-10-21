@@ -5,6 +5,7 @@ PyVISA-py Changelog
 ------------------
 
 - HiSLIP: allow concurrent async transactions and events #658 PR #659
+- Fix USB RAW reads raising TypeError since the termchar is passed to the interface PR #673
 - Preserve the default 2000 ms timeout when opening USB INSTR and USB RAW resources.
 - Preserve serial URLs on Windows while retaining numeric COM port mapping.
 - Preserve synchronous RPC connection errors instead of masking them with an

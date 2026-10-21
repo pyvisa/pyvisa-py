@@ -67,3 +67,28 @@ def test_usb_open_timeout(monkeypatch, resource_class, open_kwargs, expected_tim
                 == expected_timeout
             )
             assert interface.timeout == expected_timeout
+
+
+def test_usb_raw_read(monkeypatch):
+    """USB RAW reads go through USBRawDevice.read to the Bulk-IN endpoint."""
+    from pyvisa_py.protocols.usbraw import USBRawDevice
+
+    reads = []
+
+    def endpoint_read(size, timeout):
+        reads.append(size)
+        return memoryview(b"abc")
+
+    interface = object.__new__(USBRawDevice)
+    interface.usb_recv_ep = SimpleNamespace(read=endpoint_read)
+    interface.close = lambda: None
+    session_class = Session.get_session_class(InterfaceType.usb, "RAW")
+    monkeypatch.setattr(session_class, "_intf_cls", lambda *args: interface)
+
+    with closing(pyvisa.ResourceManager("@py")) as resource_manager:
+        with resource_manager.open_resource(
+            "USB0::0x1234::0x5678::TEST::RAW"
+        ) as resource:
+            assert resource.read_bytes(6) == b"abcabc"
+
+    assert reads == [USBRawDevice.RECV_CHUNK] * 2
