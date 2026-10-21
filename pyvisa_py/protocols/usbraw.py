@@ -60,11 +60,12 @@ class USBRawDevice(USBRaw):
 
         return bytes_sent
 
-    def read(self, size):
+    def read(self, size, termchar=None):
         """Read raw bytes from the instrument.
 
         :param size: amount of bytes to be sent to the instrument
         :type size: integer
+        :param termchar: termination character, passed through to USBRaw.read
         :return: received bytes
         :return type: bytes
         """
@@ -74,7 +75,7 @@ class USBRawDevice(USBRaw):
         received = bytearray()
 
         while not len(received) >= size:
-            resp = raw_read(self.RECV_CHUNK)
+            resp = raw_read(self.RECV_CHUNK, termchar)
 
             received.extend(resp)
 
