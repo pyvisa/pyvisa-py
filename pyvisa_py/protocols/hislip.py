@@ -593,6 +593,10 @@ class AsyncChannel:
             status_byte = self._event_queue.get()
             if status_byte is None:
                 break
+            # When _stop is set, the dispatcher skips queued callbacks.
+            # close() also puts a None sentinel on the queue; because the queue is FIFO,
+            # the dispatcher eventually consumes it and breaks out of the loop.
+            # The continue here therefore drains and discards queued events until shutdown reaches the sentinel.
             if self._stop.is_set():
                 continue
             try:
