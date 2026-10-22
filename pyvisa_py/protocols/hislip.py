@@ -876,6 +876,12 @@ class Instrument:
         self._last_read_rmt = False
         self._last_read_termchar = False
 
+    def _message_id_for_async_request(self) -> int:
+        message_id = self.last_message_id
+        if message_id is not None:
+            return message_id
+        return (self._message_id - 2) & 0xFFFF_FFFF
+
     @property
     def feature_bitmap(self) -> int:
         return self._feature_bitmap
@@ -1274,7 +1280,7 @@ class Instrument:
         response = self._async_channel.request(
             "AsyncLock",
             ctrl_code,
-            self.last_message_id or 0,
+            self._message_id_for_async_request(),
             expected_response="AsyncLockResponse",
         )
         return LOCKRESPONSE[response.control_code]
@@ -1290,7 +1296,7 @@ class Instrument:
         self._async_channel.request(
             "AsyncRemoteLocalControl",
             ctrl_code,
-            self.last_message_id or 0,
+            self._message_id_for_async_request(),
             expected_response="AsyncRemoteLocalResponse",
         )
 
@@ -1306,11 +1312,7 @@ class Instrument:
             response = self._async_channel.request(
                 "AsyncStatusQuery",
                 self._rmt,
-                (
-                    self.last_message_id
-                    if self.last_message_id is not None
-                    else (self._message_id - 2) & 0xFFFF_FFFF
-                ),
+                self._message_id_for_async_request(),
                 expected_response="AsyncStatusResponse",
             )
             self._rmt = 0
