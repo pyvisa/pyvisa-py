@@ -136,8 +136,9 @@ The following features are not or not fully supported:
 * Event handling is only supported for HiSLIP and VXI-11, and only for service requests. 
   The other resources do not support events. HiSLIP does support asynchronous event handling.
 * viSetBuf-style buffer configuration is not supported.
-* flush() is implemented only for ASRL and TCPIP SOCKET.
+* ``flush()`` is implemented only for ASRL and TCPIP SOCKET.
 * LXI service discovery is not supported.
+* HiSLIP overlapped mode is not supported.
 
 ``VXI-11 device_docmd()``
 ^^^^^^^^^^^^^^^^^^^^^^^^^
