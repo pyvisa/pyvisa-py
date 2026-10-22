@@ -1345,7 +1345,7 @@ class Instrument:
         return final_feature_bitmap
 
     def _discard_pending_sync_payload(self) -> None:
-        if getattr(self, "_payload_remaining", 0) > 0:
+        if self._payload_remaining > 0:
             receive_flush(self._sync, self._payload_remaining)
             self._payload_remaining = 0
             self._msg_type = ""

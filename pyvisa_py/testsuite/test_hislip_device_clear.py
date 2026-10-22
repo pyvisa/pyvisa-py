@@ -147,6 +147,7 @@ def test_device_clear_does_not_discard_fatal_error():
         send_msg(server, "FatalError", 0, 0, b"device failed")
 
         instrument = object.__new__(Instrument)
+        instrument._payload_remaining = 0
         instrument._sync = client
 
         with pytest.raises(RuntimeError, match="HiSLIP fatal error"):
