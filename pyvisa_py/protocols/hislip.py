@@ -216,6 +216,8 @@ def receive_flush(sock: socket.socket, recv_len: int) -> None:
     while bytes_recvd < recv_len:
         request_size = min(len(recv_buffer), recv_len - bytes_recvd)
         data_len = sock.recv_into(recv_buffer, request_size)
+        if data_len == 0:
+            raise RuntimeError("Connection was dropped by server.")
         bytes_recvd += data_len
 
 
@@ -1136,6 +1138,8 @@ class Instrument:
             finally:
                 self._sync.setblocking(True)
                 self._sync.settimeout(self._timeout)
+            self._payload_remaining = 0
+            self._msg_type = ""
 
             # 3. Full device clear: AsyncDeviceClear → Interrupted →
             #    DeviceClearComplete → DeviceClearAcknowledge
@@ -1338,7 +1342,14 @@ class Instrument:
         assert final_feature_bitmap is not None
         return final_feature_bitmap
 
+    def _discard_pending_sync_payload(self) -> None:
+        if getattr(self, "_payload_remaining", 0) > 0:
+            receive_flush(self._sync, self._payload_remaining)
+            self._payload_remaining = 0
+            self._msg_type = ""
+
     def _receive_device_clear_ack(self, wait: bool) -> Optional[int]:
+        self._discard_pending_sync_payload()
         while True:
             if not wait and not select.select([self._sync], [], [], 0)[0]:
                 return None
@@ -1362,18 +1373,21 @@ class Instrument:
 
     def trigger(self) -> None:
         """send a Trigger packet on the sync channel"""
+        self._discard_pending_sync_payload()
         send_msg(self._sync, "Trigger", self._rmt, self._message_id)
         self.last_message_id = self._message_id
         self._message_id = (self._message_id + 2) & 0xFFFF_FFFF
 
     def _send_data_packet(self, payload: BytesBuffer) -> None:
         """send a Data packet on the sync channel"""
+        self._discard_pending_sync_payload()
         send_msg(self._sync, "Data", self._rmt, self._message_id, payload)
         self.last_message_id = self._message_id
         self._message_id = (self._message_id + 2) & 0xFFFF_FFFF
 
     def _send_data_end_packet(self, payload: BytesBuffer) -> None:
         """send a DataEnd packet on the sync channel"""
+        self._discard_pending_sync_payload()
         send_msg(self._sync, "DataEnd", self._rmt, self._message_id, payload)
         self.last_message_id = self._message_id
         self._message_id = (self._message_id + 2) & 0xFFFF_FFFF
