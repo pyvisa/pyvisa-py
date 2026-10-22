@@ -4,6 +4,7 @@ PyVISA-py Changelog
 0.9.0 (unreleased)
 ------------------
 
+- HiSLIP: HiSLIP initial/reset MessageID in lock release and remote/local control transactions #676 PR #682
 - HiSLIP: allow concurrent async transactions and events #658 PR #659
 - Fix USB RAW reads raising TypeError since the termchar is passed to the interface PR #673
 - Preserve the default 2000 ms timeout when opening USB INSTR and USB RAW resources.
