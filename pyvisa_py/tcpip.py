@@ -378,6 +378,7 @@ class TCPIPInstrHiSLIP(Session):
             # terminate() was called from another thread.  Reset the HiSLIP
             # protocol state so the session is ready for further I/O.
             self.interface.complete_terminate()
+            self._update_feature_attributes()
             data, status = b"", StatusCode.error_abort
 
         except socket.timeout:
@@ -444,8 +445,16 @@ class TCPIPInstrHiSLIP(Session):
 
         """
         self.interface.device_clear()
+        self._update_feature_attributes()
 
         return StatusCode.success
+
+    def _update_feature_attributes(self) -> None:
+        self.attrs[ResourceAttribute.tcpip_hislip_overlap_enable] = (
+            constants.VI_TRUE
+            if self.interface.feature_bitmap & 0x01
+            else constants.VI_FALSE
+        )
 
     def assert_trigger(self, protocol: constants.TriggerProtocol):
         """Asserts software or hardware trigger.
