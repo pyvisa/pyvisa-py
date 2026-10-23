@@ -260,7 +260,7 @@ class CoreClient(rpc.TCPClient):
         except socket.timeout:
             # No idea what was read before the timeout occurred
             # must reply with timeout according to VPP-4.3 6.1.1
-            return ErrorCodes.io_error, 0, b""
+            return ErrorCodes.io_timeout, 0, b""
 
     def device_read_stb(self, link, flags, lock_timeout, io_timeout):
         params = (link, flags, lock_timeout, io_timeout)
