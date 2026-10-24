@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import socket
 from unittest.mock import MagicMock
 
 import pytest
@@ -10,6 +11,15 @@ import pytest
 from pyvisa.constants import ResourceAttribute, StatusCode
 from pyvisa_py.protocols import vxi11
 from pyvisa_py.tcpip import TCPIPInstrVxi11
+
+
+@pytest.fixture
+def core_client(monkeypatch):
+    client = object.__new__(vxi11.CoreClient)
+    client.packer = vxi11.Vxi11Packer()
+    client.unpacker = vxi11.Vxi11Unpacker(b"")
+    monkeypatch.setattr(client, "make_call", MagicMock())
+    return client
 
 
 class TestTCPIPInstrVxi11Read:
@@ -29,6 +39,42 @@ class TestTCPIPInstrVxi11Read:
             ResourceAttribute.lockwait: 0,  # type: ignore[attr-defined]
         }
         return sess
+
+    def test_core_read_socket_timeout(self, core_client):
+        core_client.make_call.side_effect = socket.timeout
+
+        assert core_client.device_read(1, 10, 5000, 0, 0, 0) == (
+            vxi11.ErrorCodes.io_timeout,
+            0,
+            b"",
+        )
+
+    def test_core_write_socket_timeout(self, core_client):
+        core_client.make_call.side_effect = socket.timeout
+
+        assert core_client.device_write(1, 5000, 0, 0, b"abc") == (
+            vxi11.ErrorCodes.io_timeout,
+            0,
+        )
+
+    @pytest.mark.parametrize("prefix", [b"", b"abc"])
+    @pytest.mark.parametrize(
+        "outcome, expected_status",
+        [
+            (socket.timeout(), StatusCode.error_timeout),
+            ((vxi11.ErrorCodes.io_error, 0, b""), StatusCode.error_io),
+        ],
+    )
+    def test_read_rpc_error_preserves_data(
+        self, core_client, prefix, outcome, expected_status
+    ):
+        sess = self._make_session()
+        sess.interface = core_client
+        core_client.make_call.side_effect = (
+            [(0, 0, prefix), outcome] if prefix else [outcome]
+        )
+
+        assert sess.read(10) == (prefix, expected_status)
 
     def test_read_returns_termination_char_status_when_rx_chr_before_count(self):
         sess = self._make_session(termchar_enabled=True)

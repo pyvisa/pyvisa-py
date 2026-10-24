@@ -123,6 +123,8 @@ Functions
 
 Most functions are supported. See the FAQ page and the pyvisa documentation for more details.
 
+For VXI-11 reads, a socket timeout in the RPC call returns ``VI_ERROR_TMO``.
+
 Not or partially supported features
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
