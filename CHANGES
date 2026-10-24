@@ -4,6 +4,7 @@ PyVISA-py Changelog
 0.9.0 (unreleased)
 ------------------
 
+- HiSLIP: device clear skips required channel synchronization and ignores the final negotiated feature bitmap #677 PR #684
 - Return ``VI_ERROR_TMO`` for VXI-11 RPC read timeouts (#681).
 - HiSLIP: HiSLIP initial/reset MessageID in lock release and remote/local control transactions #676 PR #683
 - HiSLIP: allow concurrent async transactions and events #658 PR #659

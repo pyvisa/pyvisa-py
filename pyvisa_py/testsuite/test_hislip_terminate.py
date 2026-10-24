@@ -848,6 +848,7 @@ class TestInstrumentTerminate:
         inst._last_read_termchar = True
         inst._receiving = threading.Event()
         inst._receive_state_lock = threading.Lock()
+        inst._async_channel = MagicMock()
 
         # Mock the async channel methods that complete_terminate calls
         inst.async_device_clear = MagicMock(return_value=0)
