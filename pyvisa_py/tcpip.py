@@ -1847,6 +1847,13 @@ class TCPIPSocketSession(Session):
                     self._pending_buffer = self._pending_buffer[count:]
                     return out, StatusCode.success
 
+                if self.interface in r:
+                    # A readable socket that returns no data has been closed
+                    # by the peer, so no further data can arrive.
+                    out = bytes(self._pending_buffer[:count])
+                    self._pending_buffer = self._pending_buffer[count:]
+                    return out, StatusCode.error_connection_lost
+
                 if finish_time and time.time() >= finish_time:
                     # reached timeout
                     out = bytes(self._pending_buffer[:count])
