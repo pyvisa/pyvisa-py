@@ -124,7 +124,7 @@ DEFAULT_MAX_MSG_SIZE = 1 << 20  # from VISA spec
 
 
 class HiSLIPInterruptedError(Exception):
-    """Raised when a pending I/O operation is cancelled via terminate().
+    """Raised when I/O is cancelled locally or interrupted by a HiSLIP server.
 
     This is the pyvisa-py equivalent of NI-VISA's VI_ERROR_ABORT.
     """
@@ -702,11 +702,12 @@ class AsyncChannel:
                 # from the server until Interrupted is encountered.
                 # If the client detects Interrupted before it detects AsyncInterrupted, the client shall not send any further
                 # messages until AsyncInterrupted is received.
-                self._fail_pending(
-                    lambda: HiSLIPInterruptedError(message.message_parameter),
-                    preserve_responses={"AsyncDeviceClearAcknowledge"},
-                )
-                self._deliver_interrupt(message)
+                with self._send_condition:
+                    self._deliver_interrupt(message)
+                    self._fail_pending(
+                        lambda: HiSLIPInterruptedError(message.message_parameter),
+                        preserve_responses={"AsyncDeviceClearAcknowledge"},
+                    )
                 continue
 
             if message.msg_type == "FatalError":
@@ -1017,8 +1018,8 @@ class Instrument:
         # receive data, terminating after len(recv_buffer) bytes or
         # after receiving a DataEnd message.
         #
-        # note the use of receive_exact_into (which calls socket.recv_into),
-        # avoiding unnecessary copies.
+        # Track payload progress after each socket read so an interruption
+        # or timeout cannot lose the frame position.
         #
         with self.sync_lock:
             with self._receive_state_lock:
@@ -1036,17 +1037,51 @@ class Instrument:
                 self._last_read_rmt = False
                 self._last_read_termchar = False
 
-                while len(recv_buffer) < max_len:
+                if max_len <= 0:
+                    if max_len < 0:
+                        raise MemoryError("scribbled past end of recv_buffer")
+                    return b""
+
+                while True:
+                    # Commit delivery under the same lock as async interruption
+                    # detection, including count, termchar, and END stops.
+                    with self._interrupt_condition:
+                        interrupted = (
+                            self._async_interrupted_seen
+                            and not self._sync_interrupted_seen
+                        )
+                        if not interrupted:
+                            if (
+                                self._payload_remaining == 0
+                                and self._msg_type == "DataEnd"
+                            ):
+                                self._rmt = 1
+                                self._last_read_rmt = True
+                                self._msg_type = ""
+                            if (
+                                len(recv_buffer) >= max_len
+                                or self._last_read_termchar
+                                or (self._last_read_rmt and not suppress_end)
+                            ):
+                                if len(recv_buffer) > max_len:
+                                    raise MemoryError(
+                                        "scribbled past end of recv_buffer"
+                                    )
+                                return bytes(recv_buffer)
+
+                    if interrupted:
+                        recv_buffer.clear()
+                        self._rmt = 0
+                        self._last_read_rmt = False
+                        self._last_read_termchar = False
+                        self._discard_pending_sync_payload()
+
                     if self._payload_remaining <= 0:
-                        if self._msg_type == "DataEnd":
-                            self._rmt = 1
-                            self._last_read_rmt = True
-                            self._msg_type = ""
-                            if not suppress_end:
-                                break
                         self._msg_type, self._payload_remaining = (
                             self._next_data_header()
                         )
+                        if self._payload_remaining == 0:
+                            continue
 
                     # Grow the receive buffer if needed
                     start = len(recv_buffer)
@@ -1054,12 +1089,12 @@ class Instrument:
                     recv_buffer.extend(b"\x00" * request_size)
 
                     if term_byte is None:
-                        # No termination character, just receive the exact number of bytes requested.
-                        receive_exact_into(
-                            self._sync,
+                        received = self._sync.recv_into(
                             memoryview(recv_buffer)[start : start + request_size],
+                            request_size,
                         )
-                        received = request_size
+                        if received == 0:
+                            raise RuntimeError("Connection was dropped by server.")
                     else:
                         # There is a termination character, so we need to peek into the socket to check for it.
                         peeked = self._sync.recv_into(
@@ -1075,29 +1110,12 @@ class Instrument:
                             self._sync,
                             memoryview(recv_buffer)[start : start + received],
                         )
-                        del recv_buffer[start + received :]
                         self._last_read_termchar = term_index >= 0
 
                     # Update the remaining payload length after receiving data.
                     self._payload_remaining -= received
+                    del recv_buffer[start + received :]
 
-                    reached_end = (
-                        self._payload_remaining == 0 and self._msg_type == "DataEnd"
-                    )
-                    # HiSLIP DataEnd carries the END indication (RMT); VISA reads
-                    # may also finish on count or termination character (§6.1.1).
-                    if reached_end:
-                        self._rmt = 1
-                        self._last_read_rmt = True
-                        self._msg_type = ""
-
-                    if self._last_read_termchar or (reached_end and not suppress_end):
-                        break
-
-                if len(recv_buffer) > max_len:
-                    raise MemoryError("scribbled past end of recv_buffer")
-
-                return bytes(recv_buffer)
             finally:
                 with self._receive_state_lock:
                     self._receiving.clear()
@@ -1117,7 +1135,9 @@ class Instrument:
                     )
 
                 if discard_until_interrupted:
-                    receive_flush(self._sync, header.payload_length)
+                    self._msg_type = header.msg_type
+                    self._payload_remaining = header.payload_length
+                    self._discard_pending_sync_payload()
                     continue
 
                 # When receiving Data messages if the MessageID is not 0xffff ffff,
@@ -1135,9 +1155,12 @@ class Instrument:
                     break
 
             if header.msg_type == "Interrupted":
-                # Server sent Interrupted in response to AsyncDeviceClear.
-                # Per IVI-6.1, the client should discard buffered data and
-                # signal the abort to the caller.
+                # Sync-first interruptions gate sends until the async
+                # notification arrives; no buffered response may be delivered.
+                self._msg_type = ""
+                self._rmt = 0
+                self._last_read_rmt = False
+                self._last_read_termchar = False
                 self._mark_sync_interrupted()
                 raise HiSLIPInterruptedError(header.message_parameter)
 
@@ -1421,11 +1444,17 @@ class Instrument:
             return final_feature_bitmap
 
     def _discard_pending_sync_payload(self) -> None:
-        """Discard the remaining payload of an already validated message."""
+        """Discard the current payload, retaining progress if a socket read fails."""
         if self._payload_remaining > 0:
-            receive_flush(self._sync, self._payload_remaining)
-            self._payload_remaining = 0
-            self._msg_type = ""
+            buffer = bytearray(min(1 << 20, self._payload_remaining))
+            while self._payload_remaining > 0:
+                received = self._sync.recv_into(
+                    buffer, min(len(buffer), self._payload_remaining)
+                )
+                if received == 0:
+                    raise RuntimeError("Connection was dropped by server.")
+                self._payload_remaining -= received
+        self._msg_type = ""
 
     def _receive_device_clear_ack(self, wait: bool) -> Optional[int]:
         self._discard_pending_sync_payload()
