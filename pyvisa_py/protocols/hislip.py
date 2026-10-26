@@ -216,6 +216,8 @@ def receive_flush(sock: socket.socket, recv_len: int) -> None:
     while bytes_recvd < recv_len:
         request_size = min(len(recv_buffer), recv_len - bytes_recvd)
         data_len = sock.recv_into(recv_buffer, request_size)
+        if data_len == 0:
+            raise RuntimeError("Connection was dropped by server.")
         bytes_recvd += data_len
 
 
@@ -450,6 +452,7 @@ class AsyncChannel:
         self._state_lock = threading.Condition()
         self._pending_requests: Dict[str, Deque[_PendingRequest]] = defaultdict(deque)
         self._failure: Optional[Exception] = None
+        self._device_clear_in_progress = False
         self._stop = threading.Event()
         self._event_queue: queue.Queue[Optional[int]] = queue.Queue()
         self._event_thread: Optional[threading.Thread] = None
@@ -484,6 +487,22 @@ class AsyncChannel:
             self._sock.close()
         except Exception:
             pass
+
+    def begin_device_clear(self) -> None:
+        with self._state_lock:
+            self._device_clear_in_progress = True
+        while True:
+            try:
+                event = self._event_queue.get_nowait()
+            except queue.Empty:
+                break
+            if event is None:
+                self._event_queue.put(None)
+                break
+
+    def end_device_clear(self) -> None:
+        with self._state_lock:
+            self._device_clear_in_progress = False
 
     def request(
         self,
@@ -599,6 +618,10 @@ class AsyncChannel:
             # The continue here therefore drains and discards queued events until shutdown reaches the sentinel.
             if self._stop.is_set():
                 continue
+            with self._state_lock:
+                discard_event = self._device_clear_in_progress
+            if discard_event:
+                continue
             try:
                 assert self._event_callback is not None
                 self._event_callback(status_byte)
@@ -675,11 +698,27 @@ class AsyncChannel:
                 self._deliver_interrupt(message)
                 continue
 
+            if message.msg_type == "FatalError":
+                error = FATALERRORMESSAGE.get(
+                    message.control_code,
+                    f"device-defined error {message.control_code}",
+                )
+                error_message = message.payload.decode(errors="replace")
+                self._fail_pending(
+                    lambda: RuntimeError(
+                        f"HiSLIP fatal error {error}: {error_message}"
+                    ),
+                    terminal=True,
+                )
+                break
+
             if self._complete_pending(message):
                 continue
 
             if message.msg_type in {"AsyncServiceRequest"}:
-                self._deliver_event(message)
+                with self._state_lock:
+                    if not self._device_clear_in_progress:
+                        self._deliver_event(message)
                 continue
 
             LOGGER.debug("Ignoring unsolicited async message %s", message.msg_type)
@@ -785,6 +824,7 @@ class Instrument:
         self._rmt = 0
         self._message_id = 0xFFFF_FF00
         self._last_message_id: Optional[int] = None
+        self._feature_bitmap = 0
         self._msg_type: str = ""
         self._payload_remaining: int = 0
         self._last_read_rmt = False
@@ -841,6 +881,10 @@ class Instrument:
         if message_id is not None:
             return message_id
         return (self._message_id - 2) & 0xFFFF_FFFF
+
+    @property
+    def feature_bitmap(self) -> int:
+        return self._feature_bitmap
 
     @property
     def keepalive(self) -> bool:
@@ -1031,15 +1075,18 @@ class Instrument:
         return header.msg_type, header.payload_length
 
     def device_clear(self) -> None:
-        feature = self.async_device_clear()
-        # Abandon pending messages and wait for in-process synchronous messages
-        # to complete.
-        time.sleep(0.1)
-        # Indicate to server that synchronous channel is cleared out.
-        self.device_clear_complete(feature)
+        self._perform_device_clear()
         # reset messageID and resume normal opreation
         self._message_id = 0xFFFF_FF00
         self.last_message_id = None
+
+    def _perform_device_clear(self) -> None:
+        self._async_channel.begin_device_clear()
+        try:
+            feature = self.async_device_clear()
+            self._feature_bitmap = self.device_clear_complete(feature)
+        finally:
+            self._async_channel.end_device_clear()
 
     def terminate(self) -> None:
         """Cancel a pending I/O operation on the synchronous channel.
@@ -1097,31 +1144,35 @@ class Instrument:
             finally:
                 self._sync.setblocking(True)
                 self._sync.settimeout(self._timeout)
+            self._payload_remaining = 0
+            self._msg_type = ""
 
             # 3. Full device clear: AsyncDeviceClear → Interrupted →
             #    DeviceClearComplete → DeviceClearAcknowledge
-            feature = self.async_device_clear()
-
-            # Read from the sync channel until we get the Interrupted message.
-            # The server sends Interrupted after acknowledging AsyncDeviceClear.
-            saved_timeout = self._sync.gettimeout()
-            self._sync.settimeout(2.0)
+            self._async_channel.begin_device_clear()
             try:
-                while True:
-                    header = RxHeader(self._sync)
-                    if header.msg_type == "Interrupted":
-                        break
-                    # Discard payload of any other messages
-                    if header.payload_length > 0:
-                        receive_flush(self._sync, header.payload_length)
-            except socket.timeout:
-                # Server didn't send Interrupted — proceed anyway.
-                # DeviceClearComplete will still reset the protocol.
-                pass
-            finally:
-                self._sync.settimeout(saved_timeout)
+                feature = self.async_device_clear()
+                # Read from the sync channel until we get the Interrupted
+                # message. The server sends it after acknowledging the clear.
+                saved_timeout = self._sync.gettimeout()
+                self._sync.settimeout(2.0)
+                try:
+                    while True:
+                        header = RxHeader(self._sync)
+                        if header.msg_type == "Interrupted":
+                            break
+                        if header.payload_length > 0:
+                            receive_flush(self._sync, header.payload_length)
+                except socket.timeout:
+                    # DeviceClearComplete still resets the protocol if the
+                    # server does not send Interrupted.
+                    pass
+                finally:
+                    self._sync.settimeout(saved_timeout)
 
-            self.device_clear_complete(feature)
+                self._feature_bitmap = self.device_clear_complete(feature)
+            finally:
+                self._async_channel.end_device_clear()
         finally:
             self._sync._cancel_enabled = True
 
@@ -1285,24 +1336,60 @@ class Instrument:
         perform a DeviceClear transaction.
         returns the feature_bitmap from the DeviceClearAcknowledge packet.
         """
+        final_feature_bitmap = self._receive_device_clear_ack(wait=False)
         send_msg(self._sync, "DeviceClearComplete", feature_bitmap, 0)
-        response = DeviceClearAcknowledge(self._sync)
-        return response.feature_bitmap
+        if final_feature_bitmap is not None:
+            return final_feature_bitmap
+        final_feature_bitmap = self._receive_device_clear_ack(wait=True)
+        assert final_feature_bitmap is not None
+        return final_feature_bitmap
+
+    def _discard_pending_sync_payload(self) -> None:
+        if self._payload_remaining > 0:
+            receive_flush(self._sync, self._payload_remaining)
+            self._payload_remaining = 0
+            self._msg_type = ""
+
+    def _receive_device_clear_ack(self, wait: bool) -> Optional[int]:
+        self._discard_pending_sync_payload()
+        while True:
+            if not wait and not select.select([self._sync], [], [], 0)[0]:
+                return None
+
+            response = RxHeader(self._sync)
+            if response.msg_type == "DeviceClearAcknowledge":
+                if response.message_parameter != 0 or response.payload_length != 0:
+                    raise RuntimeError("invalid DeviceClearAcknowledge message")
+                return response.control_code
+
+            if response.msg_type == "FatalError":
+                error_message = receive_exact(self._sync, response.payload_length)
+                error = FATALERRORMESSAGE.get(
+                    response.control_code,
+                    f"device-defined error {response.control_code}",
+                )
+                raise RuntimeError(f"HiSLIP fatal error {error}: {error_message!r}")
+
+            if response.payload_length > 0:
+                receive_flush(self._sync, response.payload_length)
 
     def trigger(self) -> None:
         """send a Trigger packet on the sync channel"""
+        self._discard_pending_sync_payload()
         send_msg(self._sync, "Trigger", self._rmt, self._message_id)
         self.last_message_id = self._message_id
         self._message_id = (self._message_id + 2) & 0xFFFF_FFFF
 
     def _send_data_packet(self, payload: BytesBuffer) -> None:
         """send a Data packet on the sync channel"""
+        self._discard_pending_sync_payload()
         send_msg(self._sync, "Data", self._rmt, self._message_id, payload)
         self.last_message_id = self._message_id
         self._message_id = (self._message_id + 2) & 0xFFFF_FFFF
 
     def _send_data_end_packet(self, payload: BytesBuffer) -> None:
         """send a DataEnd packet on the sync channel"""
+        self._discard_pending_sync_payload()
         send_msg(self._sync, "DataEnd", self._rmt, self._message_id, payload)
         self.last_message_id = self._message_id
         self._message_id = (self._message_id + 2) & 0xFFFF_FFFF
