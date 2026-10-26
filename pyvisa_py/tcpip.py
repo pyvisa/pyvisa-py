@@ -356,38 +356,39 @@ class TCPIPInstrHiSLIP(Session):
         termchar_enabled, _ = self.get_attribute(ResourceAttribute.termchar_enabled)
         termchar, _ = self.get_attribute(ResourceAttribute.termchar)
 
-        try:
-            data = self.interface.receive(
-                count,
-                termination_char=termchar if termchar_enabled else None,
-                suppress_end=bool(suppress_end_en),
-            )
-            if not suppress_end_en and self.interface._last_read_rmt:
-                # RULE 6.1.1: END takes priority over TERMCHAR and count.
-                status = StatusCode.success
-            elif termchar_enabled and self.interface._last_read_termchar:
-                # RULE 6.1.2
-                status = StatusCode.success_termination_character_read
-            elif len(data) >= count:
-                # RULE 6.1.3
-                status = StatusCode.success_max_count_read
-            else:
-                status = StatusCode.success
-
-        except hislip.HiSLIPInterruptedError:
-            # terminate() was called from another thread.  Reset the HiSLIP
-            # protocol state so the session is ready for further I/O.
+        with self.interface.sync_lock:
             try:
-                self.interface.complete_terminate()
+                data = self.interface.receive(
+                    count,
+                    termination_char=termchar if termchar_enabled else None,
+                    suppress_end=bool(suppress_end_en),
+                )
+                if not suppress_end_en and self.interface._last_read_rmt:
+                    # RULE 6.1.1: END takes priority over TERMCHAR and count.
+                    status = StatusCode.success
+                elif termchar_enabled and self.interface._last_read_termchar:
+                    # RULE 6.1.2
+                    status = StatusCode.success_termination_character_read
+                elif len(data) >= count:
+                    # RULE 6.1.3
+                    status = StatusCode.success_max_count_read
+                else:
+                    status = StatusCode.success
+
+            except hislip.HiSLIPInterruptedError:
+                # Keep recovery in the same operation so queued calls cannot
+                # access the channel before it has been resynchronized.
+                try:
+                    self.interface.complete_terminate()
+                except socket.timeout:
+                    return b"", StatusCode.error_timeout
+                self._update_feature_attributes()
+                data, status = b"", StatusCode.error_abort
+
             except socket.timeout:
-                return b"", StatusCode.error_timeout
-            self._update_feature_attributes()
-            data, status = b"", StatusCode.error_abort
+                data, status = b"", StatusCode.error_timeout
 
-        except socket.timeout:
-            data, status = b"", StatusCode.error_timeout
-
-        return data, status
+            return data, status
 
     def write(self, data: bytes) -> Tuple[int, StatusCode]:
         """Writes data to device or interface synchronously.
@@ -447,8 +448,9 @@ class TCPIPInstrHiSLIP(Session):
         Corresponds to viClear function of the VISA library.
 
         """
-        self.interface.device_clear()
-        self._update_feature_attributes()
+        with self.interface.sync_lock:
+            self.interface.device_clear()
+            self._update_feature_attributes()
 
         return StatusCode.success
 

@@ -204,6 +204,7 @@ class TestInstrumentReceive:
         self.server, client_raw = socket.socketpair()
         self.client = CancellableSocket(client_raw)
         self.instrument = object.__new__(Instrument)
+        self.instrument.sync_lock = threading.RLock()
         self.instrument._sync = self.client
         self.instrument._receiving = threading.Event()
         self.instrument._last_message_id = None
@@ -962,6 +963,7 @@ class TestInstrumentTerminate:
         from pyvisa_py.protocols.hislip import Instrument
 
         inst = object.__new__(Instrument)
+        inst.sync_lock = threading.RLock()
         mock_sync = MagicMock(spec=CancellableSocket)
         mock_sync.gettimeout.return_value = 5.0
         # Make recv return empty to end drain loop
@@ -1015,6 +1017,7 @@ class TestInstrumentTerminate:
         server, client_raw = socket.socketpair()
         client = CancellableSocket(client_raw)
         inst = object.__new__(Instrument)
+        inst.sync_lock = threading.RLock()
         inst._sync = client
         inst._receiving = threading.Event()
         inst._receive_state_lock = threading.Lock()

@@ -4,6 +4,9 @@ PyVISA-py Changelog
 0.9.0 (unreleased)
 ------------------
 
+- HiSLIP: serialise complete HiSLIP synchronous operations and protect read status and
+  abort recovery from concurrent calls on the same session. #680
+- HiSLIP: interruption handling does not enforce the required cross-channel ordering and discard rules #678
 - HiSLIP: device clear skips required channel synchronization and ignores the final negotiated feature bitmap #677 PR #684
 - Return ``VI_ERROR_TMO`` for VXI-11 RPC read timeouts (#681).
 - HiSLIP: HiSLIP initial/reset MessageID in lock release and remote/local control transactions #676 PR #683

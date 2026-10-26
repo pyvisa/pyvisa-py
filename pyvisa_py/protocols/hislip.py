@@ -771,6 +771,10 @@ class Instrument:
     """
     this is the principal export from this module.  it opens up a HiSLIP
     connection to the instrument at the specified IP address.
+
+    Synchronous operations are serialized by sync_lock. The session layer
+    also holds this lock while reporting read status and recovering from an
+    aborted read. Async transactions and terminate() remain independent.
     """
 
     def __init__(
@@ -790,6 +794,7 @@ class Instrument:
         #     S->C: AsyncInitializeResponse
 
         timeout = timeout or 5.0
+        self.sync_lock = threading.RLock()
         # ``open_timeout`` bounds the connection attempt on both channels, as it
         # does for the other TCP transports.
         connecting = connect_timeout(open_timeout)
@@ -973,28 +978,29 @@ class Instrument:
         More than one packet may be necessary in order
         to not exceed max_payload_size.
         """
-        # print(f"send({data=})")  # uncomment for debugging
-        data_view = memoryview(data)
-        num_bytes_to_send = len(data)
-        max_payload_size = self._max_msg_size - HEADER_SIZE
+        with self.sync_lock:
+            # print(f"send({data=})")  # uncomment for debugging
+            data_view = memoryview(data)
+            num_bytes_to_send = len(data)
+            max_payload_size = self._max_msg_size - HEADER_SIZE
 
-        # send the data in chunks of max_payload_size bytes at a time
-        while num_bytes_to_send > 0:
-            if num_bytes_to_send <= max_payload_size:
-                assert len(data_view) == num_bytes_to_send
-                if send_end:
-                    self._send_data_end_packet(data_view)
+            # send the data in chunks of max_payload_size bytes at a time
+            while num_bytes_to_send > 0:
+                if num_bytes_to_send <= max_payload_size:
+                    assert len(data_view) == num_bytes_to_send
+                    if send_end:
+                        self._send_data_end_packet(data_view)
+                    else:
+                        self._send_data_packet(data_view)
+                    bytes_sent = num_bytes_to_send
                 else:
-                    self._send_data_packet(data_view)
-                bytes_sent = num_bytes_to_send
-            else:
-                self._send_data_packet(data_view[:max_payload_size])
-                bytes_sent = max_payload_size
+                    self._send_data_packet(data_view[:max_payload_size])
+                    bytes_sent = max_payload_size
 
-            data_view = data_view[bytes_sent:]
-            num_bytes_to_send -= bytes_sent
+                data_view = data_view[bytes_sent:]
+                num_bytes_to_send -= bytes_sent
 
-        return len(data)
+            return len(data)
 
     def receive(
         self,
@@ -1014,83 +1020,87 @@ class Instrument:
         # note the use of receive_exact_into (which calls socket.recv_into),
         # avoiding unnecessary copies.
         #
-        with self._receive_state_lock:
-            self._receiving.set()
-        try:
-            # This is the result of this VISA read call. The call may span
-            # multiple counted HiSLIP Data payloads, but must stop at max_len or an enabled termination character.
+        with self.sync_lock:
+            with self._receive_state_lock:
+                self._receiving.set()
+            try:
+                # This is the result of this VISA read call. The call may span
+                # multiple counted HiSLIP Data payloads, but must stop at max_len or an enabled termination character.
 
-            # This is the receive buffer that will accumulate the incoming data.
-            recv_buffer = bytearray()
+                # This is the receive buffer that will accumulate the incoming data.
+                recv_buffer = bytearray()
 
-            term_byte = (
-                bytes((termination_char,)) if termination_char is not None else None
-            )
-            self._last_read_rmt = False
-            self._last_read_termchar = False
+                term_byte = (
+                    bytes((termination_char,)) if termination_char is not None else None
+                )
+                self._last_read_rmt = False
+                self._last_read_termchar = False
 
-            while len(recv_buffer) < max_len:
-                if self._payload_remaining <= 0:
-                    if self._msg_type == "DataEnd":
+                while len(recv_buffer) < max_len:
+                    if self._payload_remaining <= 0:
+                        if self._msg_type == "DataEnd":
+                            self._rmt = 1
+                            self._last_read_rmt = True
+                            self._msg_type = ""
+                            if not suppress_end:
+                                break
+                        self._msg_type, self._payload_remaining = (
+                            self._next_data_header()
+                        )
+
+                    # Grow the receive buffer if needed
+                    start = len(recv_buffer)
+                    request_size = min(self._payload_remaining, max_len - start)
+                    recv_buffer.extend(b"\x00" * request_size)
+
+                    if term_byte is None:
+                        # No termination character, just receive the exact number of bytes requested.
+                        receive_exact_into(
+                            self._sync,
+                            memoryview(recv_buffer)[start : start + request_size],
+                        )
+                        received = request_size
+                    else:
+                        # There is a termination character, so we need to peek into the socket to check for it.
+                        peeked = self._sync.recv_into(
+                            memoryview(recv_buffer)[start : start + request_size],
+                            request_size,
+                            socket.MSG_PEEK,
+                        )
+                        if peeked == 0:
+                            raise RuntimeError("Connection was dropped by server.")
+                        term_index = recv_buffer.find(term_byte, start, start + peeked)
+                        received = term_index - start + 1 if term_index >= 0 else peeked
+                        receive_exact_into(
+                            self._sync,
+                            memoryview(recv_buffer)[start : start + received],
+                        )
+                        del recv_buffer[start + received :]
+                        self._last_read_termchar = term_index >= 0
+
+                    # Update the remaining payload length after receiving data.
+                    self._payload_remaining -= received
+
+                    reached_end = (
+                        self._payload_remaining == 0 and self._msg_type == "DataEnd"
+                    )
+                    # HiSLIP DataEnd carries the END indication (RMT); VISA reads
+                    # may also finish on count or termination character (§6.1.1).
+                    if reached_end:
                         self._rmt = 1
                         self._last_read_rmt = True
                         self._msg_type = ""
-                        if not suppress_end:
-                            break
-                    self._msg_type, self._payload_remaining = self._next_data_header()
 
-                # Grow the receive buffer if needed
-                start = len(recv_buffer)
-                request_size = min(self._payload_remaining, max_len - start)
-                recv_buffer.extend(b"\x00" * request_size)
+                    if self._last_read_termchar or (reached_end and not suppress_end):
+                        break
 
-                if term_byte is None:
-                    # No termination character, just receive the exact number of bytes requested.
-                    receive_exact_into(
-                        self._sync,
-                        memoryview(recv_buffer)[start : start + request_size],
-                    )
-                    received = request_size
-                else:
-                    # There is a termination character, so we need to peek into the socket to check for it.
-                    peeked = self._sync.recv_into(
-                        memoryview(recv_buffer)[start : start + request_size],
-                        request_size,
-                        socket.MSG_PEEK,
-                    )
-                    if peeked == 0:
-                        raise RuntimeError("Connection was dropped by server.")
-                    term_index = recv_buffer.find(term_byte, start, start + peeked)
-                    received = term_index - start + 1 if term_index >= 0 else peeked
-                    receive_exact_into(
-                        self._sync, memoryview(recv_buffer)[start : start + received]
-                    )
-                    del recv_buffer[start + received :]
-                    self._last_read_termchar = term_index >= 0
+                if len(recv_buffer) > max_len:
+                    raise MemoryError("scribbled past end of recv_buffer")
 
-                # Update the remaining payload length after receiving data.
-                self._payload_remaining -= received
-
-                reached_end = (
-                    self._payload_remaining == 0 and self._msg_type == "DataEnd"
-                )
-                # HiSLIP DataEnd carries the END indication (RMT); VISA reads
-                # may also finish on count or termination character (§6.1.1).
-                if reached_end:
-                    self._rmt = 1
-                    self._last_read_rmt = True
-                    self._msg_type = ""
-
-                if self._last_read_termchar or (reached_end and not suppress_end):
-                    break
-
-            if len(recv_buffer) > max_len:
-                raise MemoryError("scribbled past end of recv_buffer")
-
-            return bytes(recv_buffer)
-        finally:
-            with self._receive_state_lock:
-                self._receiving.clear()
+                return bytes(recv_buffer)
+            finally:
+                with self._receive_state_lock:
+                    self._receiving.clear()
 
     def _next_data_header(self) -> Tuple[str, int]:
         """
@@ -1137,10 +1147,11 @@ class Instrument:
         return header.msg_type, header.payload_length
 
     def device_clear(self) -> None:
-        self._perform_device_clear()
-        # reset messageID and resume normal opreation
-        self._message_id = 0xFFFF_FF00
-        self.last_message_id = None
+        with self.sync_lock:
+            self._perform_device_clear()
+            # reset messageID and resume normal opreation
+            self._message_id = 0xFFFF_FF00
+            self.last_message_id = None
 
     def _perform_device_clear(self) -> None:
         self._async_channel.begin_device_clear()
@@ -1184,64 +1195,65 @@ class Instrument:
         3. Full HiSLIP AsyncDeviceClear → Interrupted → DeviceClearComplete
         4. Reset message counters
         """
-        # 1. Drain the cancel pipe
-        self._sync.drain_cancel()
+        with self.sync_lock:
+            # 1. Drain the cancel pipe
+            self._sync.drain_cancel()
 
-        # Disable cancellation for all cleanup I/O — we don't want the
-        # cancel pipe interfering with the device-clear handshake.
-        self._sync._cancel_enabled = False
-        try:
-            # 2. Drain any bytes left in the sync socket buffer.
-            #    After terminate() interrupted a read mid-stream, there may be
-            #    partial HiSLIP message data in the buffer.
-            self._sync.setblocking(False)
+            # Disable cancellation for all cleanup I/O — we don't want the
+            # cancel pipe interfering with the device-clear handshake.
+            self._sync._cancel_enabled = False
             try:
-                while True:
-                    try:
-                        chunk = self._sync.recv(65536)
-                        if not chunk:
-                            break
-                    except BlockingIOError:
-                        break
-            finally:
-                self._sync.setblocking(True)
-                self._sync.settimeout(self._timeout)
-            self._payload_remaining = 0
-            self._msg_type = ""
-
-            # 3. Full device clear: AsyncDeviceClear → Interrupted →
-            #    DeviceClearComplete → DeviceClearAcknowledge
-            self._async_channel.begin_device_clear()
-            try:
-                feature = self.async_device_clear()
-                # Read from the sync channel until we get the Interrupted
-                # message. The server sends it after acknowledging the clear.
-                saved_timeout = self._sync.gettimeout()
-                self._sync.settimeout(2.0)
+                # 2. Drain any bytes left in the sync socket buffer.
+                #    After terminate() interrupted a read mid-stream, there may be
+                #    partial HiSLIP message data in the buffer.
+                self._sync.setblocking(False)
                 try:
                     while True:
-                        header = RxHeader(self._sync)
-                        if header.msg_type == "Interrupted":
-                            self._mark_sync_interrupted()
+                        try:
+                            chunk = self._sync.recv(65536)
+                            if not chunk:
+                                break
+                        except BlockingIOError:
                             break
-                        if header.payload_length > 0:
-                            receive_flush(self._sync, header.payload_length)
-                except socket.timeout:
-                    # DeviceClearComplete still resets the protocol if the
-                    # server does not send Interrupted.
-                    pass
                 finally:
-                    self._sync.settimeout(saved_timeout)
+                    self._sync.setblocking(True)
+                    self._sync.settimeout(self._timeout)
+                self._payload_remaining = 0
+                self._msg_type = ""
 
-                self._feature_bitmap = self.device_clear_complete(feature)
+                # 3. Full device clear: AsyncDeviceClear → Interrupted →
+                #    DeviceClearComplete → DeviceClearAcknowledge
+                self._async_channel.begin_device_clear()
+                try:
+                    feature = self.async_device_clear()
+                    # Read from the sync channel until we get the Interrupted
+                    # message. The server sends it after acknowledging the clear.
+                    saved_timeout = self._sync.gettimeout()
+                    self._sync.settimeout(2.0)
+                    try:
+                        while True:
+                            header = RxHeader(self._sync)
+                            if header.msg_type == "Interrupted":
+                                self._mark_sync_interrupted()
+                                break
+                            if header.payload_length > 0:
+                                receive_flush(self._sync, header.payload_length)
+                    except socket.timeout:
+                        # DeviceClearComplete still resets the protocol if the
+                        # server does not send Interrupted.
+                        pass
+                    finally:
+                        self._sync.settimeout(saved_timeout)
+
+                    self._feature_bitmap = self.device_clear_complete(feature)
+                finally:
+                    self._async_channel.end_device_clear()
             finally:
-                self._async_channel.end_device_clear()
-        finally:
-            self._sync._cancel_enabled = True
+                self._sync._cancel_enabled = True
 
-        # 4. Reset all protocol state
-        self._message_id = 0xFFFF_FF00
-        self.last_message_id = None
+            # 4. Reset all protocol state
+            self._message_id = 0xFFFF_FF00
+            self.last_message_id = None
 
     def initialize(
         self,
@@ -1399,15 +1411,17 @@ class Instrument:
         perform a DeviceClear transaction.
         returns the feature_bitmap from the DeviceClearAcknowledge packet.
         """
-        final_feature_bitmap = self._receive_device_clear_ack(wait=False)
-        self._send_sync_message("DeviceClearComplete", feature_bitmap, 0)
-        if final_feature_bitmap is not None:
+        with self.sync_lock:
+            final_feature_bitmap = self._receive_device_clear_ack(wait=False)
+            self._send_sync_message("DeviceClearComplete", feature_bitmap, 0)
+            if final_feature_bitmap is not None:
+                return final_feature_bitmap
+            final_feature_bitmap = self._receive_device_clear_ack(wait=True)
+            assert final_feature_bitmap is not None
             return final_feature_bitmap
-        final_feature_bitmap = self._receive_device_clear_ack(wait=True)
-        assert final_feature_bitmap is not None
-        return final_feature_bitmap
 
     def _discard_pending_sync_payload(self) -> None:
+        """Discard the remaining payload of an already validated message."""
         if self._payload_remaining > 0:
             receive_flush(self._sync, self._payload_remaining)
             self._payload_remaining = 0
@@ -1438,10 +1452,11 @@ class Instrument:
 
     def trigger(self) -> None:
         """send a Trigger packet on the sync channel"""
-        self._discard_pending_sync_payload()
-        self._send_sync_message("Trigger", self._rmt, self._message_id)
-        self.last_message_id = self._message_id
-        self._message_id = (self._message_id + 2) & 0xFFFF_FFFF
+        with self.sync_lock:
+            self._discard_pending_sync_payload()
+            self._send_sync_message("Trigger", self._rmt, self._message_id)
+            self.last_message_id = self._message_id
+            self._message_id = (self._message_id + 2) & 0xFFFF_FFFF
 
     def _send_sync_message(
         self,
@@ -1450,23 +1465,25 @@ class Instrument:
         message_parameter: int,
         payload: BytesBuffer = b"",
     ) -> None:
-        with self._interrupt_condition:
+        with self.sync_lock, self._interrupt_condition:
             self._wait_for_async_interrupted()
             send_msg(self._sync, msg_type, control_code, message_parameter, payload)
 
     def _send_data_packet(self, payload: BytesBuffer) -> None:
         """send a Data packet on the sync channel"""
-        self._discard_pending_sync_payload()
-        self._send_sync_message("Data", self._rmt, self._message_id, payload)
-        self.last_message_id = self._message_id
-        self._message_id = (self._message_id + 2) & 0xFFFF_FFFF
+        with self.sync_lock:
+            self._discard_pending_sync_payload()
+            self._send_sync_message("Data", self._rmt, self._message_id, payload)
+            self.last_message_id = self._message_id
+            self._message_id = (self._message_id + 2) & 0xFFFF_FFFF
 
     def _send_data_end_packet(self, payload: BytesBuffer) -> None:
         """send a DataEnd packet on the sync channel"""
-        self._discard_pending_sync_payload()
-        self._send_sync_message("DataEnd", self._rmt, self._message_id, payload)
-        self.last_message_id = self._message_id
-        self._message_id = (self._message_id + 2) & 0xFFFF_FFFF
+        with self.sync_lock:
+            self._discard_pending_sync_payload()
+            self._send_sync_message("DataEnd", self._rmt, self._message_id, payload)
+            self.last_message_id = self._message_id
+            self._message_id = (self._message_id + 2) & 0xFFFF_FFFF
 
     def fatal_error(self, error: str, error_message: str = "") -> None:
         err_msg = (error_message or error).encode()

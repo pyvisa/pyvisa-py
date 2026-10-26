@@ -27,6 +27,7 @@ def test_device_clear_discards_pending_messages_and_uses_final_features():
         server_thread.start()
 
         instrument = object.__new__(Instrument)
+        instrument.sync_lock = threading.RLock()
         instrument._sync = client
         instrument._async_channel = MagicMock()
         instrument._message_id = 0xFFFF_FF00
@@ -76,6 +77,7 @@ def test_device_clear_discards_partially_read_message():
         server_thread.start()
 
         instrument = object.__new__(Instrument)
+        instrument.sync_lock = threading.RLock()
         instrument._sync = client
         instrument._async_channel = MagicMock()
         instrument._message_id = 0xFFFF_FF00
@@ -110,14 +112,17 @@ def test_device_clear_discards_partially_read_message():
         client.close()
 
 
-def test_send_discards_partially_read_message():
+@pytest.mark.parametrize("operation", ["send", "trigger"])
+@pytest.mark.parametrize("termination_char", [None, ord("\n")])
+def test_send_and_trigger_discard_partially_read_message(operation, termination_char):
     server, client = socket.socketpair()
     server.settimeout(1)
     client.settimeout(1)
     try:
-        send_msg(server, "DataEnd", 0, 0xFFFF_FFFF, b"partial-and-remaining-payload")
+        send_msg(server, "DataEnd", 0, 0xFFFF_FFFF, b"partial\nremaining-payload")
 
         instrument = object.__new__(Instrument)
+        instrument.sync_lock = threading.RLock()
         instrument._sync = client
         instrument._max_msg_size = 4096
         instrument._message_id = 0xFFFF_FF00
@@ -133,13 +138,19 @@ def test_send_discards_partially_read_message():
         instrument._async_interrupted_seen = False
         instrument._sync_interrupted_seen = False
 
-        assert instrument.receive(7) == b"partial"
+        count = 7 if termination_char is None else 4096
+        expected = b"partial" if termination_char is None else b"partial\n"
+        assert instrument.receive(count, termination_char=termination_char) == expected
         assert instrument._payload_remaining > 0
 
-        instrument.send(b"*IDN?\n")
+        if operation == "send":
+            instrument.send(b"*IDN?\n")
+        else:
+            instrument.trigger()
         sent_header = RxHeader(server)
-        assert sent_header.msg_type == "DataEnd"
-        assert server.recv(sent_header.payload_length) == b"*IDN?\n"
+        assert sent_header.msg_type == ("DataEnd" if operation == "send" else "Trigger")
+        if sent_header.payload_length:
+            assert server.recv(sent_header.payload_length) == b"*IDN?\n"
 
         send_msg(server, "DataEnd", 0, sent_header.message_parameter, b"fresh\n")
         assert instrument.receive(4096) == b"fresh\n"
@@ -156,6 +167,7 @@ def test_device_clear_does_not_discard_fatal_error():
         send_msg(server, "FatalError", 0, 0, b"device failed")
 
         instrument = object.__new__(Instrument)
+        instrument.sync_lock = threading.RLock()
         instrument._payload_remaining = 0
         instrument._sync = client
 
