@@ -377,7 +377,10 @@ class TCPIPInstrHiSLIP(Session):
         except hislip.HiSLIPInterruptedError:
             # terminate() was called from another thread.  Reset the HiSLIP
             # protocol state so the session is ready for further I/O.
-            self.interface.complete_terminate()
+            try:
+                self.interface.complete_terminate()
+            except socket.timeout:
+                return b"", StatusCode.error_timeout
             self._update_feature_attributes()
             data, status = b"", StatusCode.error_abort
 

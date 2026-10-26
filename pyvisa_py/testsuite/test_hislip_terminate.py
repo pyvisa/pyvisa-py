@@ -5,6 +5,7 @@ Tests the CancellableSocket, HiSLIPInterruptedError, and the terminate/
 complete_terminate flow without requiring a real instrument.
 """
 
+import select
 import socket
 import struct
 import threading
@@ -212,6 +213,10 @@ class TestInstrumentReceive:
         self.instrument._last_read_rmt = False
         self.instrument._last_read_termchar = False
         self.instrument._receive_state_lock = threading.Lock()
+        self.instrument._interrupt_condition = threading.Condition(threading.RLock())
+        self.instrument._async_interrupted_seen = False
+        self.instrument._sync_interrupted_seen = False
+        self.instrument._timeout = 1.0
 
     def teardown_method(self):
         self.client.close()
@@ -265,6 +270,57 @@ class TestInstrumentReceive:
         assert self.instrument.receive(4, termination_char=ord("\n")) == b"abc\n"
         assert self.instrument._last_read_rmt is True
         assert self.instrument._last_read_termchar is True
+
+    def test_async_interrupted_discards_data_until_sync_interrupted(self):
+        from pyvisa_py.protocols.hislip import HiSLIPInterruptedError
+
+        self.instrument._async_interrupted_seen = True
+        self._send_packet("DataEnd", b"stale response")
+        self.server.sendall(
+            struct.pack(
+                HEADER_FORMAT,
+                b"HS",
+                MESSAGETYPE["Interrupted"],
+                0,
+                0x1234,
+                0,
+            )
+        )
+
+        with pytest.raises(HiSLIPInterruptedError):
+            self.instrument._next_data_header()
+
+        assert self.instrument._async_interrupted_seen is False
+        assert self.instrument._sync_interrupted_seen is False
+
+    def test_sync_interrupted_gates_sync_sends_until_async_interrupted(self):
+        inst = self.instrument
+        inst._sync_interrupted_seen = True
+        inst._rmt = 0
+        inst._message_id = 0xFFFF_FF00
+        inst._interrupt_callback = None
+        send_done = threading.Event()
+
+        def send_trigger():
+            inst.trigger()
+            send_done.set()
+
+        thread = threading.Thread(target=send_trigger)
+        thread.start()
+        try:
+            assert not send_done.wait(timeout=0.05)
+            assert not select.select([self.server], [], [], 0)[0]
+
+            inst._handle_async_interrupted(0x1234)
+
+            assert send_done.wait(timeout=1.0)
+            header = self.server.recv(HEADER_SIZE)
+            assert struct.unpack(HEADER_FORMAT, header)[1] == MESSAGETYPE["Trigger"]
+            assert inst._async_interrupted_seen is False
+            assert inst._sync_interrupted_seen is False
+        finally:
+            thread.join(timeout=1.0)
+            assert not thread.is_alive()
 
 
 class TestAsyncChannelDispatcher:
@@ -787,6 +843,79 @@ class TestAsyncChannelDispatcher:
         channel.close()
         server.close()
 
+    def test_async_interrupted_preserves_device_clear_acknowledgement(self):
+        from pyvisa_py.protocols.hislip import AsyncChannel
+
+        server, client_raw = socket.socketpair()
+        channel = AsyncChannel(client_raw)
+        result = {}
+
+        def request_device_clear():
+            result["response"] = channel.request(
+                "AsyncDeviceClear",
+                0,
+                0,
+                expected_response="AsyncDeviceClearAcknowledge",
+            )
+
+        thread = threading.Thread(target=request_device_clear)
+        thread.start()
+        try:
+            self._recv_exact(server, HEADER_SIZE)
+            server.sendall(self._make_hislip_header("AsyncInterrupted", 0, 0xBEEF, 0))
+            server.sendall(
+                self._make_hislip_header("AsyncDeviceClearAcknowledge", 0x42, 0, 0)
+            )
+
+            thread.join(timeout=1.0)
+            assert not thread.is_alive()
+            assert result["response"].control_code == 0x42
+        finally:
+            channel.close()
+            server.close()
+
+    def test_sync_interrupted_gates_async_requests_until_async_interrupted(self):
+        from pyvisa_py.protocols.hislip import AsyncChannel, Instrument
+
+        server, client_raw = socket.socketpair()
+        inst = object.__new__(Instrument)
+        inst._interrupt_condition = threading.Condition(threading.RLock())
+        inst._async_interrupted_seen = False
+        inst._sync_interrupted_seen = True
+        inst._timeout = 1.0
+        inst._interrupt_callback = None
+        channel = AsyncChannel(
+            client_raw,
+            send_condition=inst._interrupt_condition,
+            before_send=inst._wait_for_async_interrupted,
+        )
+        result = {}
+
+        def request_status():
+            result["response"] = channel.request(
+                "AsyncStatusQuery", 0, 0, expected_response="AsyncStatusResponse"
+            )
+
+        thread = threading.Thread(target=request_status)
+        thread.start()
+        try:
+            assert not select.select([server], [], [], 0.05)[0]
+
+            inst._handle_async_interrupted(0xBEEF)
+            request_header = self._recv_exact(server, HEADER_SIZE)
+            assert (
+                struct.unpack(HEADER_FORMAT, request_header)[1]
+                == MESSAGETYPE["AsyncStatusQuery"]
+            )
+            server.sendall(self._make_hislip_header("AsyncStatusResponse", 0x55, 0, 0))
+
+            thread.join(timeout=1.0)
+            assert not thread.is_alive()
+            assert result["response"].control_code == 0x55
+        finally:
+            channel.close()
+            server.close()
+
 
 class TestInstrumentTerminate:
     """Test Instrument.terminate() and complete_terminate() via mocking."""
@@ -848,6 +977,9 @@ class TestInstrumentTerminate:
         inst._last_read_termchar = True
         inst._receiving = threading.Event()
         inst._receive_state_lock = threading.Lock()
+        inst._interrupt_condition = threading.Condition(threading.RLock())
+        inst._async_interrupted_seen = True
+        inst._sync_interrupted_seen = False
         inst._async_channel = MagicMock()
 
         # Mock the async channel methods that complete_terminate calls
@@ -892,6 +1024,9 @@ class TestInstrumentTerminate:
         inst._rmt = 0
         inst._last_read_rmt = False
         inst._last_read_termchar = False
+        inst._interrupt_condition = threading.Condition(threading.RLock())
+        inst._async_interrupted_seen = False
+        inst._sync_interrupted_seen = False
 
         terminate_started = threading.Event()
         terminate_done = threading.Event()
@@ -1042,6 +1177,18 @@ class TestTCPIPInstrHiSLIPTerminate:
         assert data == b""
         assert status == StatusCode.error_abort
         sess.interface.complete_terminate.assert_called_once()
+
+    def test_read_abort_cleanup_timeout_returns_timeout(self):
+        from pyvisa.constants import StatusCode
+
+        sess = self._make_session()
+        sess.interface.receive.side_effect = HiSLIPInterruptedError(0)
+        sess.interface.complete_terminate.side_effect = socket.timeout("timed out")
+
+        data, status = sess.read(1024)
+
+        assert data == b""
+        assert status == StatusCode.error_timeout
 
     def test_read_timeout(self):
         from pyvisa.constants import StatusCode

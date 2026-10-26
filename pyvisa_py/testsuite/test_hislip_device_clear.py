@@ -36,6 +36,9 @@ def test_device_clear_discards_pending_messages_and_uses_final_features():
         instrument._msg_type = ""
         instrument._last_read_rmt = False
         instrument._last_read_termchar = False
+        instrument._interrupt_condition = threading.Condition(threading.RLock())
+        instrument._async_interrupted_seen = False
+        instrument._sync_interrupted_seen = False
         instrument.async_device_clear = MagicMock(return_value=0x03)
 
         instrument.device_clear()
@@ -85,6 +88,9 @@ def test_device_clear_discards_partially_read_message():
         instrument._last_read_termchar = False
         instrument._receiving = threading.Event()
         instrument._receive_state_lock = threading.Lock()
+        instrument._interrupt_condition = threading.Condition(threading.RLock())
+        instrument._async_interrupted_seen = False
+        instrument._sync_interrupted_seen = False
         instrument.async_device_clear = MagicMock(return_value=0)
 
         assert instrument.receive(7) == b"partial"
@@ -123,6 +129,9 @@ def test_send_discards_partially_read_message():
         instrument._last_read_termchar = False
         instrument._receiving = threading.Event()
         instrument._receive_state_lock = threading.Lock()
+        instrument._interrupt_condition = threading.Condition(threading.RLock())
+        instrument._async_interrupted_seen = False
+        instrument._sync_interrupted_seen = False
 
         assert instrument.receive(7) == b"partial"
         assert instrument._payload_remaining > 0

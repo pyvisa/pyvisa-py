@@ -444,11 +444,14 @@ class AsyncChannel:
         sock: socket.socket,
         event_callback: Optional[Callable[[int], None]] = None,
         interrupt_callback: Optional[Callable[[int], None]] = None,
+        send_condition: Optional[threading.Condition] = None,
+        before_send: Optional[Callable[[], None]] = None,
     ) -> None:
         self._sock = sock
         self._event_callback = event_callback
         self._interrupt_callback = interrupt_callback
-        self._send_lock = threading.Lock()
+        self._send_condition = send_condition or threading.Condition()
+        self._before_send = before_send
         self._state_lock = threading.Condition()
         self._pending_requests: Dict[str, Deque[_PendingRequest]] = defaultdict(deque)
         self._failure: Optional[Exception] = None
@@ -509,7 +512,7 @@ class AsyncChannel:
         msg_type: str,
         control_code: int,
         message_parameter: int,
-        payload: bytes = b"",
+        payload: BytesBuffer = b"",
         expected_response: Optional[str] = None,
     ) -> AsyncMessage:
         if expected_response is None:
@@ -519,7 +522,9 @@ class AsyncChannel:
         pending = _PendingRequest(expected_response)
 
         try:
-            with self._send_lock:
+            with self._send_condition:
+                if self._before_send is not None:
+                    self._before_send()
                 with self._state_lock:
                     if self._failure is not None:
                         raise self._failure
@@ -649,17 +654,22 @@ class AsyncChannel:
             return True
 
     def _fail_pending(
-        self, error_factory: Callable[[], Exception], terminal: bool = False
+        self,
+        error_factory: Callable[[], Exception],
+        terminal: bool = False,
+        preserve_responses: Optional[set[str]] = None,
     ) -> None:
         with self._state_lock:
             if terminal and self._failure is None:
                 self._failure = error_factory()
-            for requests in self._pending_requests.values():
+            for response_type, requests in list(self._pending_requests.items()):
+                if preserve_responses and response_type in preserve_responses:
+                    continue
                 for pending in requests:
                     if not pending.abandoned:
                         pending.error = error_factory()
                         pending.done = True
-            self._pending_requests.clear()
+                del self._pending_requests[response_type]
             self._state_lock.notify_all()
 
     def _run(self) -> None:
@@ -693,7 +703,8 @@ class AsyncChannel:
                 # If the client detects Interrupted before it detects AsyncInterrupted, the client shall not send any further
                 # messages until AsyncInterrupted is received.
                 self._fail_pending(
-                    lambda: HiSLIPInterruptedError(message.message_parameter)
+                    lambda: HiSLIPInterruptedError(message.message_parameter),
+                    preserve_responses={"AsyncDeviceClearAcknowledge"},
                 )
                 self._deliver_interrupt(message)
                 continue
@@ -809,10 +820,17 @@ class Instrument:
         # We set the user timeout once we managed to initialize the connection.
         self._async.settimeout(timeout)
 
+        self._timeout = timeout
+        self._interrupt_callback = interrupt_callback
+        self._interrupt_condition = threading.Condition(threading.RLock())
+        self._async_interrupted_seen = False
+        self._sync_interrupted_seen = False
         self._async_channel = AsyncChannel(
             self._async,
             event_callback=event_callback,
-            interrupt_callback=interrupt_callback,
+            interrupt_callback=self._handle_async_interrupted,
+            send_condition=self._interrupt_condition,
+            before_send=self._wait_for_async_interrupted,
         )
         # The thread is started in the AsyncChannel constructor,
         # so we don't need to start it here.
@@ -881,6 +899,40 @@ class Instrument:
         if message_id is not None:
             return message_id
         return (self._message_id - 2) & 0xFFFF_FFFF
+
+    def _handle_async_interrupted(self, message_id: int) -> None:
+        with self._interrupt_condition:
+            self._async_interrupted_seen = True
+            self._interrupt_condition.notify_all()
+
+        if self._interrupt_callback is not None:
+            self._interrupt_callback(message_id)
+
+    def _mark_sync_interrupted(self) -> None:
+        with self._interrupt_condition:
+            self._sync_interrupted_seen = True
+            if self._async_interrupted_seen:
+                self._sync_interrupted_seen = False
+                self._async_interrupted_seen = False
+            self._interrupt_condition.notify_all()
+
+    def _wait_for_async_interrupted(self) -> None:
+        timeout = getattr(self, "_timeout", None)
+        deadline = None if timeout is None else time.monotonic() + timeout
+        with self._interrupt_condition:
+            while self._sync_interrupted_seen and not self._async_interrupted_seen:
+                if deadline is None:
+                    self._interrupt_condition.wait()
+                    continue
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise socket.timeout("timed out waiting for AsyncInterrupted")
+                self._interrupt_condition.wait(remaining)
+
+            if self._sync_interrupted_seen and self._async_interrupted_seen:
+                self._sync_interrupted_seen = False
+                self._async_interrupted_seen = False
+                self._interrupt_condition.notify_all()
 
     @property
     def feature_bitmap(self) -> int:
@@ -1049,6 +1101,15 @@ class Instrument:
             header = RxHeader(self._sync)
 
             if header.msg_type in ("Data", "DataEnd"):
+                with self._interrupt_condition:
+                    discard_until_interrupted = (
+                        self._async_interrupted_seen and not self._sync_interrupted_seen
+                    )
+
+                if discard_until_interrupted:
+                    receive_flush(self._sync, header.payload_length)
+                    continue
+
                 # When receiving Data messages if the MessageID is not 0xffff ffff,
                 # then verify that the MessageID indicated in the Data message is
                 # the MessageID that the client sent to the server with the most
@@ -1067,6 +1128,7 @@ class Instrument:
                 # Server sent Interrupted in response to AsyncDeviceClear.
                 # Per IVI-6.1, the client should discard buffered data and
                 # signal the abort to the caller.
+                self._mark_sync_interrupted()
                 raise HiSLIPInterruptedError(header.message_parameter)
 
             # we're out of sync.  flush this message and continue.
@@ -1160,6 +1222,7 @@ class Instrument:
                     while True:
                         header = RxHeader(self._sync)
                         if header.msg_type == "Interrupted":
+                            self._mark_sync_interrupted()
                             break
                         if header.payload_length > 0:
                             receive_flush(self._sync, header.payload_length)
@@ -1337,7 +1400,7 @@ class Instrument:
         returns the feature_bitmap from the DeviceClearAcknowledge packet.
         """
         final_feature_bitmap = self._receive_device_clear_ack(wait=False)
-        send_msg(self._sync, "DeviceClearComplete", feature_bitmap, 0)
+        self._send_sync_message("DeviceClearComplete", feature_bitmap, 0)
         if final_feature_bitmap is not None:
             return final_feature_bitmap
         final_feature_bitmap = self._receive_device_clear_ack(wait=True)
@@ -1376,31 +1439,42 @@ class Instrument:
     def trigger(self) -> None:
         """send a Trigger packet on the sync channel"""
         self._discard_pending_sync_payload()
-        send_msg(self._sync, "Trigger", self._rmt, self._message_id)
+        self._send_sync_message("Trigger", self._rmt, self._message_id)
         self.last_message_id = self._message_id
         self._message_id = (self._message_id + 2) & 0xFFFF_FFFF
+
+    def _send_sync_message(
+        self,
+        msg_type: str,
+        control_code: int,
+        message_parameter: int,
+        payload: BytesBuffer = b"",
+    ) -> None:
+        with self._interrupt_condition:
+            self._wait_for_async_interrupted()
+            send_msg(self._sync, msg_type, control_code, message_parameter, payload)
 
     def _send_data_packet(self, payload: BytesBuffer) -> None:
         """send a Data packet on the sync channel"""
         self._discard_pending_sync_payload()
-        send_msg(self._sync, "Data", self._rmt, self._message_id, payload)
+        self._send_sync_message("Data", self._rmt, self._message_id, payload)
         self.last_message_id = self._message_id
         self._message_id = (self._message_id + 2) & 0xFFFF_FFFF
 
     def _send_data_end_packet(self, payload: BytesBuffer) -> None:
         """send a DataEnd packet on the sync channel"""
         self._discard_pending_sync_payload()
-        send_msg(self._sync, "DataEnd", self._rmt, self._message_id, payload)
+        self._send_sync_message("DataEnd", self._rmt, self._message_id, payload)
         self.last_message_id = self._message_id
         self._message_id = (self._message_id + 2) & 0xFFFF_FFFF
 
     def fatal_error(self, error: str, error_message: str = "") -> None:
         err_msg = (error_message or error).encode()
-        send_msg(self._sync, "FatalError", FATALERRORCODE[error], 0, err_msg)
+        self._send_sync_message("FatalError", FATALERRORCODE[error], 0, err_msg)
 
     def error(self, error: str, error_message: str = "") -> None:
         err_msg = (error_message or error).encode()
-        send_msg(self._sync, "Error", ERRORCODE[error], 0, err_msg)
+        self._send_sync_message("Error", ERRORCODE[error], 0, err_msg)
 
 
 # the following two routines are only used for debugging.
