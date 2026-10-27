@@ -1,7 +1,15 @@
 """Implement HiSLIP instrument communication over two TCP channels.
 
-Message names and field layouts refer to IVI-6.1 HiSLIP 2.0 (2020-04-23):
+HiSLIP references identify sections, tables, or locally numbered rules in
+IVI-6.1 HiSLIP 2.0 (2020-04-23):
 https://www.ivifoundation.org/downloads/Protocol%20Specifications/IVI-6.1_HiSLIP-2.0-2020-04-23.pdf
+
+VPP-4.3 references retain the document's RULE, RECOMMENDATION, PERMISSION,
+and OBSERVATION labels, using revision 7.2.1 (2024-01-04):
+https://www.ivifoundation.org/downloads/VISA/vpp43_2024-01-04.pdf
+
+The client advertises HiSLIP 1.0 by default. Citing the 2.0 specification does
+not imply that its secure-connection capability is implemented.
 
 Response classes accept a connected ``sock`` and inherit the transport and
 validation errors documented by ``RxHeader``. Unless stated otherwise, they
@@ -20,8 +28,10 @@ from typing import Callable, Deque, Dict, Optional, Tuple
 
 from pyvisa_py.common import LOGGER, BytesBuffer, MutableBytesBuffer, connect_timeout
 
+# HiSLIP 2.2 assigns this default port but permits other configured ports.
 PORT = 4880
 
+# HiSLIP 2.5, Table 4; the maximum-message-size names are abbreviated locally.
 MESSAGETYPE_STR: Dict[int, str] = {
     0: "Initialize",
     1: "InitializeResponse",
@@ -66,6 +76,7 @@ MESSAGETYPE_STR: Dict[int, str] = {
 }
 MESSAGETYPE: Dict[str, int] = {value: key for (key, value) in MESSAGETYPE_STR.items()}
 
+# HiSLIP 6.2, Table 14.
 FATALERRORMESSAGE: Dict[int, str] = {
     0: "Unidentified error",
     1: "Poorly formed message header",
@@ -79,6 +90,7 @@ FATALERRORCODE: Dict[str, int] = {
     value: key for (key, value) in FATALERRORMESSAGE.items()
 }
 
+# HiSLIP 6.3, Table 16.
 ERRORMESSAGE: Dict[int, str] = {
     0: "Unidentified error",
     1: "Unrecognized Message Type",
@@ -90,6 +102,7 @@ ERRORMESSAGE: Dict[int, str] = {
 }
 ERRORCODE: Dict[str, int] = {value: key for (key, value) in ERRORMESSAGE.items()}
 
+# HiSLIP 6.5, Table 21 defines both operation and response control codes.
 LOCKCONTROLCODE: Dict[str, int] = {
     "release": 0,
     "request": 1,
@@ -97,11 +110,12 @@ LOCKCONTROLCODE: Dict[str, int] = {
 
 LOCKRESPONSE: Dict[int, str] = {
     0: "failure",
-    1: "success",  # Also denotes exclusive-lock success.
+    1: "success",  # For release, this specifically means exclusive-lock success.
     2: "success shared",
     3: "error",
 }
 
+# HiSLIP 6.7, Table 25 maps these operations to VISA remote/local controls.
 REMOTELOCALCONTROLCODE: Dict[str, int] = {
     "disableRemote": 0,
     "enableRemote": 1,
@@ -113,11 +127,12 @@ REMOTELOCALCONTROLCODE: Dict[str, int] = {
 }
 
 HEADER_FORMAT = "!2sBBIQ"
-# Network byte order: "HS", type (8 bits), control (8 bits), parameter (32 bits),
-# and payload length (64 bits), as defined by the HiSLIP message header.
+# HiSLIP 2.3, Table 2: network-order "HS", type (8 bits), control (8 bits),
+# parameter (32 bits), and payload length (64 bits).
 HEADER_SIZE = struct.calcsize(HEADER_FORMAT)
 
-DEFAULT_MAX_MSG_SIZE = 1 << 20  # Includes the header when limiting payload size.
+# VPP-4.3 5.1.2: VI_ATTR_TCPIP_HISLIP_MAX_MESSAGE_KB defaults to 1024 KiB.
+DEFAULT_MAX_MSG_SIZE = 1 << 20
 
 
 class HiSLIPInterruptedError(Exception):
@@ -128,7 +143,8 @@ class HiSLIPInterruptedError(Exception):
     message_id : int
         Interrupted message ID, or zero for local cancellation.
 
-    The session layer translates this exception to VISA ``VI_ERROR_ABORT``.
+    The session layer translates this exception to VISA ``VI_ERROR_ABORT``;
+    VPP-4.3 3.5.1.1 describes that result for local operation termination.
     """
 
     def __init__(self, message_id: int = 0):
@@ -148,6 +164,9 @@ class CancellableSocket(socket.socket):
     A socket pair implements the self-pipe technique portably: ``cancel()``
     wakes ``recv_into()``, which raises ``HiSLIPInterruptedError``. Socket
     creation and configuration errors propagate as ``OSError``.
+
+    This is a local mechanism for VPP-4.3 3.5.1.1 ``viTerminate`` behaviour with
+    a VI_NULL job ID, not a HiSLIP Interrupted transaction (HiSLIP 6.11).
     """
 
     def __init__(self, sock: socket.socket) -> None:
@@ -384,6 +403,9 @@ class RxHeader:
         A read on a ``CancellableSocket`` was cancelled.
     OSError
         Receiving failed, including a socket timeout.
+
+    The layout and reserved-field defaults are defined by HiSLIP 2.3, Table 2.
+    Server Data/DataEnd control codes are zero per HiSLIP 6.4, Table 18.
     """
 
     def __init__(
@@ -402,17 +424,19 @@ class RxHeader:
         ) = struct.unpack(HEADER_FORMAT, self.header)
 
         if prologue != b"HS":
-            # TODO: Send FatalError and close both channels before raising.
+            # TODO (HiSLIP 6.2): Send FatalError on both channels and close them;
+            # this parser currently only raises.
             raise RuntimeError("protocol synchronization error")
 
         if msg_type not in MESSAGETYPE_STR:
-            # TODO: Send Error and discard the unrecognised frame's payload.
+            # TODO (HiSLIP 6.3): Discard the payload, then reply with Error on
+            # the channel that received the unrecognised message.
             raise RuntimeError("unrecognized message type: %d" % msg_type)
 
         self.msg_type = MESSAGETYPE_STR[msg_type]
 
         if expected_message_type is not None and self.msg_type != expected_message_type:
-            # TODO: Report an unidentified Error before discarding this payload.
+            # TODO (HiSLIP 6.3): Reply with Error after discarding this payload.
             payload = (
                 (": " + str(receive_exact(sock, self.payload_length)))
                 if self.payload_length > 0
@@ -429,9 +453,10 @@ class RxHeader:
 
 
 class InitializeResponse(RxHeader):
-    """Read the server's overlap preference, encoded version, and session ID.
+    """Read the server's reported mode, encoded version, and session ID.
 
-    ``sock`` is the synchronous channel awaiting an InitializeResponse.
+    ``sock`` is the synchronous channel awaiting an InitializeResponse
+    (HiSLIP 6.1, Table 12).
     """
 
     def __init__(self, sock: socket.socket) -> None:
@@ -442,10 +467,13 @@ class InitializeResponse(RxHeader):
 
 
 class AsyncInitializeResponse(RxHeader):
-    """Read server capability and vendor bytes from ``sock``.
+    """Read the async initialisation reply from ``sock``.
 
-    HiSLIP 2.0 splits the message parameter into two 16-bit fields. Capability
-    bit zero advertises secure connections, which this client does not implement.
+    HiSLIP 6.1, Table 12 places capability bits in the control code and the vendor
+    ID in the message parameter. This parser requires a zero control code and
+    retains the upper parameter word as ``server_capabilities`` instead; that
+    attribute is not the HiSLIP 2.0 capability field. Secure connections are not
+    implemented.
     """
 
     def __init__(self, sock: socket.socket) -> None:
@@ -458,7 +486,10 @@ class AsyncInitializeResponse(RxHeader):
 
 
 class AsyncMaxMsgSizeResponse(RxHeader):
-    """Read the server's maximum message size from ``sock``, consuming its payload."""
+    """Read the server's receive limit from ``sock``, consuming its payload.
+
+    HiSLIP 6.10, Table 28 defines the payload as an eight-byte network-order size.
+    """
 
     def __init__(self, sock: socket.socket) -> None:
         super().__init__(sock, "AsyncMaxMsgSizeResponse")
@@ -470,7 +501,10 @@ class AsyncMaxMsgSizeResponse(RxHeader):
 
 
 class AsyncDeviceClearAcknowledge(RxHeader):
-    """Read the async device-clear feature bitmap from ``sock``."""
+    """Read the server's preferred device-clear features from ``sock``.
+
+    See HiSLIP 6.12, Table 30 and feature negotiation in 6.12.1, Table 31.
+    """
 
     def __init__(self, sock: socket.socket) -> None:
         super().__init__(sock, "AsyncDeviceClearAcknowledge")
@@ -480,7 +514,10 @@ class AsyncDeviceClearAcknowledge(RxHeader):
 
 
 class AsyncInterrupted(RxHeader):
-    """Read the interrupted message ID from the async channel ``sock``."""
+    """Read the interrupted message ID from the async channel ``sock``.
+
+    This is one half of the HiSLIP 6.11, Table 29 interruption transaction.
+    """
 
     def __init__(self, sock: socket.socket) -> None:
         super().__init__(sock, "AsyncInterrupted")
@@ -490,7 +527,10 @@ class AsyncInterrupted(RxHeader):
 
 
 class AsyncLockInfoResponse(RxHeader):
-    """Read exclusive-lock status and the number of lock-holding clients from ``sock``."""
+    """Read exclusive-lock status and the lock-holding client count from ``sock``.
+
+    HiSLIP 6.6, Table 23 counts each client once, even if it holds both lock types.
+    """
 
     def __init__(self, sock: socket.socket) -> None:
         super().__init__(sock, "AsyncLockInfoResponse")
@@ -502,6 +542,7 @@ class AsyncLockInfoResponse(RxHeader):
 class AsyncLockResponse(RxHeader):
     """Read a lock result from ``sock`` and translate it through ``LOCKRESPONSE``.
 
+    HiSLIP 6.5, Table 21 defines the result codes for requests and releases.
     An unknown result code raises ``KeyError``.
     """
 
@@ -513,7 +554,10 @@ class AsyncLockResponse(RxHeader):
 
 
 class AsyncRemoteLocalResponse(RxHeader):
-    """Read and validate a remote/local-control acknowledgement from ``sock``."""
+    """Read a remote/local-control acknowledgement from ``sock``.
+
+    The fixed zero fields are defined by HiSLIP 6.7, Table 24.
+    """
 
     def __init__(self, sock: socket.socket) -> None:
         super().__init__(sock, "AsyncRemoteLocalResponse")
@@ -523,7 +567,11 @@ class AsyncRemoteLocalResponse(RxHeader):
 
 
 class AsyncServiceRequest(RxHeader):
-    """Read an unsolicited service request's status byte from ``sock``."""
+    """Read an unsolicited service request's status byte from ``sock``.
+
+    HiSLIP 6.13, Table 32 specifies no acknowledgement. Receipt alone does not
+    clear RQS; an AsyncStatusQuery is needed to enable further requests.
+    """
 
     def __init__(self, sock: socket.socket) -> None:
         super().__init__(sock, "AsyncServiceRequest")
@@ -533,7 +581,10 @@ class AsyncServiceRequest(RxHeader):
 
 
 class AsyncStatusResponse(RxHeader):
-    """Read the server's status byte from an AsyncStatusResponse on ``sock``."""
+    """Read the server's status byte from an AsyncStatusResponse on ``sock``.
+
+    HiSLIP 6.14, Table 33 places the status byte in the control code.
+    """
 
     def __init__(self, sock: socket.socket) -> None:
         super().__init__(sock, "AsyncStatusResponse")
@@ -593,6 +644,9 @@ class AsyncChannel:
     event dispatcher prevents user callbacks from blocking reply reception.
     Callback exceptions are logged; callers must use ``close()`` to release
     the socket and request worker shutdown.
+
+    HiSLIP 6.13 service requests are unsolicited and unacknowledged, so they
+    are dispatched independently of request/reply traffic.
     """
 
     def __init__(
@@ -650,8 +704,9 @@ class AsyncChannel:
     def begin_device_clear(self) -> None:
         """Suppress queued service requests during a device-clear handshake.
 
-        Events already queued are discarded; callbacks already running are not
-        cancelled.
+        Discard queued events as part of HiSLIP 6.12 client step 4, which clears
+        traffic other than FatalError and the two clear acknowledgements.
+        Callbacks already running are not cancelled.
         """
         with self._state_lock:
             self._device_clear_in_progress = True
@@ -894,8 +949,8 @@ class AsyncChannel:
                 break
 
             if message.msg_type == "AsyncInterrupted":
-                # Preserve the clear acknowledgement needed to finish HiSLIP's
-                # two-channel recovery handshake; other pending calls are aborted.
+                # HiSLIP 3.1.2 rule 4 invalidates buffered data. Pending calls are
+                # aborted here, but 6.12 client step 4 preserves clear acknowledgements.
                 with self._send_condition:
                     self._deliver_interrupt(message)
                     self._fail_pending(
@@ -931,7 +986,10 @@ class AsyncChannel:
 
 
 class DeviceClearAcknowledge(RxHeader):
-    """Read the synchronous device-clear feature bitmap from ``sock``."""
+    """Read the final device-clear feature bitmap from synchronous ``sock``.
+
+    HiSLIP 6.12.1, Table 31 requires the client to use this final feature setting.
+    """
 
     def __init__(self, sock: socket.socket) -> None:
         super().__init__(sock, "DeviceClearAcknowledge")
@@ -941,7 +999,10 @@ class DeviceClearAcknowledge(RxHeader):
 
 
 class Interrupted(RxHeader):
-    """Read the interrupted message ID from the synchronous channel ``sock``."""
+    """Read the interrupted message ID from the synchronous channel ``sock``.
+
+    This is the synchronous half of HiSLIP 6.11, Table 29.
+    """
 
     def __init__(self, sock: socket.socket) -> None:
         super().__init__(sock, "Interrupted")
@@ -953,7 +1014,8 @@ class Interrupted(RxHeader):
 class Error(RxHeader):
     """Read a non-fatal error name and its raw payload from ``sock``.
 
-    An unknown error code raises ``KeyError``.
+    HiSLIP 6.3, Tables 15-16 define the frame and error codes. An unknown code
+    raises ``KeyError``.
     """
 
     def __init__(self, sock: socket.socket) -> None:
@@ -966,7 +1028,8 @@ class Error(RxHeader):
 class FatalError(RxHeader):
     """Read a fatal error name and its raw payload from ``sock``.
 
-    An unknown error code raises ``KeyError``.
+    HiSLIP 6.2, Tables 13-14 define the frame and error codes. An unknown code
+    raises ``KeyError``.
     """
 
     def __init__(self, sock: socket.socket) -> None:
@@ -985,7 +1048,7 @@ class Instrument:
         Instrument host name or IPv4 address.
     open_timeout : Optional[float]
         Connection and initialisation timeout in milliseconds for each channel.
-        ``None`` or zero selects the transport default.
+        ``None`` or zero selects the 2000 ms transport default.
     timeout : Optional[float]
         Subsequent I/O timeout in seconds; ``None`` or zero selects five seconds.
     port : int
@@ -1010,6 +1073,10 @@ class Instrument:
 
     Notes
     -----
+    Initialisation follows HiSLIP 6.1, Table 12. Applying the open timeout to
+    network connection setup is optional under VPP-4.3 PERMISSION 4.3.2 and
+    OBSERVATION 4.3.8; the zero-timeout default follows RECOMMENDATION 4.3.3.
+
     Synchronous operations are serialised by ``sync_lock``. The session layer
     also holds this lock while reporting read status and recovering from an
     aborted read. Async transactions and ``terminate()`` remain independent.
@@ -1037,7 +1104,7 @@ class Instrument:
         self.sync_lock = threading.RLock()
         connecting = connect_timeout(open_timeout)
 
-        # HiSLIP requires sync initialisation before the async channel can attach.
+        # HiSLIP 6.1, Table 12: initialise sync first to obtain the async SessionID.
         raw_sync = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         raw_sync.settimeout(connecting)
         raw_sync.connect((ip_addr, port))
@@ -1074,6 +1141,7 @@ class Instrument:
         self.keepalive = False
         self.timeout = timeout
         self._rmt = 0
+        # HiSLIP 3.1.2 and 3.2.2 prescribe this initial ID and unsigned +2 updates.
         self._message_id = 0xFFFF_FF00
         self._last_message_id: Optional[int] = None
         self._feature_bitmap = 0
@@ -1107,13 +1175,15 @@ class Instrument:
 
     @property
     def max_msg_size(self) -> int:
-        """int: Negotiated maximum message size in bytes, including the header."""
+        """int: Maximum synchronous frame size the server accepts, including header."""
         return self._max_msg_size
 
     @max_msg_size.setter
     def max_msg_size(self, size: int) -> None:
-        """Negotiate ``size`` bytes and store the server's returned limit.
+        """Advertise a receive limit of ``size`` bytes and store the server's limit.
 
+        HiSLIP 6.10, Table 28 negotiates the two directions independently. The
+        stored server receive limit bounds outgoing synchronous frames.
         Propagates errors from ``async_maximum_message_size()``.
         """
         self._max_msg_size = self.async_maximum_message_size(size)
@@ -1125,7 +1195,11 @@ class Instrument:
 
     @last_message_id.setter
     def last_message_id(self, message_id: Optional[int]) -> None:
-        """Store ``message_id`` and reset read state, including RMT and END flags."""
+        """Store ``message_id`` and reset read state, including RMT and END flags.
+
+        HiSLIP 3.1.2 rule 3 clears buffered responses on Data/DataEnd/Trigger sends;
+        HiSLIP 6.4 defines the RMT-delivered flag reported by the next such message.
+        """
         self._last_message_id = message_id
         self._rmt = 0
         self._payload_remaining = 0
@@ -1134,7 +1208,10 @@ class Instrument:
         self._last_read_termchar = False
 
     def _message_id_for_async_request(self) -> int:
-        """Use the last sent ID, or the predecessor of the next ID before any send."""
+        """Use the last sent ID, or the predecessor of the next ID before any send.
+
+        HiSLIP 6.5, 6.7, and 6.14 require 0xfffffefe after initialisation/clear.
+        """
         message_id = self.last_message_id
         if message_id is not None:
             return message_id
@@ -1157,7 +1234,10 @@ class Instrument:
             self._interrupt_condition.notify_all()
 
     def _wait_for_async_interrupted(self) -> None:
-        """Gate sends after a sync-first interruption until both channels agree."""
+        """Gate sends after a sync-first interruption until both channels agree.
+
+        HiSLIP 3.1.2 rule 4 prohibits sends until AsyncInterrupted arrives.
+        """
         timeout = getattr(self, "_timeout", None)
         deadline = None if timeout is None else time.monotonic() + timeout
         with self._interrupt_condition:
@@ -1177,12 +1257,15 @@ class Instrument:
 
     @property
     def feature_bitmap(self) -> int:
-        """int: Features from the latest device-clear handshake, initially zero."""
+        """int: Final device-clear features (HiSLIP 6.12.1, Table 31), initially zero."""
         return self._feature_bitmap
 
     @property
     def keepalive(self) -> bool:
-        """bool: Whether TCP keepalive probes are enabled on both channels."""
+        """bool: Whether TCP keepalive probes are enabled on both channels.
+
+        Corresponds to VPP-4.3 5.1.2 ``VI_ATTR_TCPIP_KEEPALIVE``.
+        """
         return self._keepalive
 
     @keepalive.setter
@@ -1194,7 +1277,10 @@ class Instrument:
 
     @property
     def nodelay(self) -> bool:
-        """bool: Whether Nagle's algorithm is disabled on both channels."""
+        """bool: Whether Nagle's algorithm is disabled on both channels.
+
+        Corresponds to VPP-4.3 5.1.2 ``VI_ATTR_TCPIP_NODELAY``.
+        """
         return bool(self._sync.getsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY))
 
     @nodelay.setter
@@ -1224,6 +1310,9 @@ class Instrument:
             Sending or discarding a pending response failed.
         RuntimeError
             The peer closed the connection while a pending payload was discarded.
+
+        HiSLIP 6.4, Table 17 defines Data/DataEnd and the final-byte END indication.
+        HiSLIP 6.10 limits complete synchronous frames, including the 2.3 header.
         """
         with self.sync_lock:
             data_view = memoryview(data)
@@ -1283,6 +1372,12 @@ class Instrument:
             ``max_len`` is negative or a read exceeded the requested count.
         ValueError
             ``termination_char`` is outside the byte range.
+
+        The stop conditions correspond to VPP-4.3 OBSERVATION 6.1.1 and
+        RULES 6.1.1-6.1.5. OBSERVATION 6.1.3 notes that count/termchar completion
+        remains possible with END suppressed; the session layer selects the VISA
+        status code when multiple conditions coincide. HiSLIP 6.4, Table 18
+        associates END with the final DataEnd payload byte.
         """
         with self.sync_lock:
             with self._receive_state_lock:
@@ -1302,8 +1397,8 @@ class Instrument:
                     return b""
 
                 while True:
-                    # Make return decisions atomically with async interruption
-                    # detection so buffered data cannot escape after an abort.
+                    # HiSLIP 3.1.2 rule 4 invalidates buffered data on interruption;
+                    # make the return decision atomic with async notification.
                     with self._interrupt_condition:
                         interrupted = (
                             self._async_interrupted_seen
@@ -1390,13 +1485,16 @@ class Instrument:
                     )
 
                 if discard_until_interrupted:
+                    # HiSLIP 3.1.2 rule 4: async-first interruption discards data
+                    # until the synchronous Interrupted marker is encountered.
                     self._msg_type = header.msg_type
                     self._payload_remaining = header.payload_length
                     self._discard_pending_sync_payload()
                     continue
 
-                # HiSLIP permits the wildcard ID; other IDs must match the latest
-                # Data, DataEnd, or Trigger sent by this client.
+                # HiSLIP 3.1.2 rules 1-2 require the latest sent ID; only Data may
+                # use the wildcard. This check also accepts wildcard DataEnd IDs,
+                # an existing leniency rather than a specification permission.
                 if (
                     header.message_parameter == 0xFFFF_FFFF
                     or header.message_parameter == self.last_message_id
@@ -1404,8 +1502,8 @@ class Instrument:
                     break
 
             if header.msg_type == "Interrupted":
-                # Sync-first interruptions gate sends until the async
-                # notification arrives; no buffered response may be delivered.
+                # HiSLIP 3.1.2 rule 4: sync-first interruption clears buffered data
+                # and gates sends until AsyncInterrupted arrives.
                 self._msg_type = ""
                 self._rmt = 0
                 self._last_read_rmt = False
@@ -1421,6 +1519,7 @@ class Instrument:
     def device_clear(self) -> None:
         """Complete a two-channel device clear and reset message/read state.
 
+        HiSLIP 6.12 client steps 1-9 specify the handshake; step 8 resets MessageID.
         Propagates errors from ``async_device_clear()`` and
         ``device_clear_complete()``.
         """
@@ -1444,6 +1543,9 @@ class Instrument:
         ``HiSLIPInterruptedError``, translated to ``VI_ERROR_ABORT`` by the
         session layer. An idle session is left unchanged.
 
+        VPP-4.3 3.5.1.1 recommends aborting active calls for a VI_NULL job ID.
+        Local cancellation is distinct from the server's HiSLIP 6.11 interruption.
+
         Call ``complete_terminate()`` after the read thread has exited and before
         reusing the session. This method deliberately does not take ``sync_lock``,
         which the blocked read holds.
@@ -1463,6 +1565,10 @@ class Instrument:
         Discard cancellation signals and buffered frame fragments, perform the
         HiSLIP device-clear handshake, and reset message/read state before reuse.
         Transport and protocol errors propagate from the recovery operations.
+
+        HiSLIP 6.12 specifies the clear handshake. The fragment drain and bounded
+        Interrupted wait are local cancellation-recovery choices, not extra
+        requirements of that transaction.
         """
         with self.sync_lock:
             self._sync.drain_cancel()
@@ -1489,7 +1595,8 @@ class Instrument:
                 self._async_channel.begin_device_clear()
                 try:
                     feature = self.async_device_clear()
-                    # Discard sync traffic until the interruption marker arrives.
+                    # Local recovery wait: HiSLIP 6.12 does not require the server
+                    # to send Interrupted during a clear.
                     saved_timeout = self._sync.gettimeout()
                     self._sync.settimeout(2.0)
                     try:
@@ -1543,6 +1650,9 @@ class Instrument:
             A version component does not fit its wire field.
         OSError, RuntimeError, AssertionError
             Sending or validating the response failed.
+
+        HiSLIP 6.1, Table 12 steps 2-3 define this synchronous exchange and the
+        session ID subsequently used to attach the async channel.
         """
         major, minor = version
         header = struct.pack(
@@ -1569,7 +1679,7 @@ class Instrument:
         Returns
         -------
         AsyncInitializeResponse
-            Server capability and vendor fields.
+            Decoded reply; see ``AsyncInitializeResponse`` for its layout limitation.
 
         Raises
         ------
@@ -1577,6 +1687,8 @@ class Instrument:
             ``session_id`` does not fit the message parameter.
         OSError, RuntimeError, AssertionError
             Sending or validating the response failed.
+
+        HiSLIP 6.1, Table 12 steps 5-6 bind this channel to the synchronous session.
         """
         send_msg(self._async, "AsyncInitialize", 0, session_id)
         return AsyncInitializeResponse(self._async)
@@ -1587,12 +1699,12 @@ class Instrument:
         Parameters
         ----------
         size : int
-            Requested limit in bytes, including the header.
+            Maximum synchronous frame size this client accepts, including the header.
 
         Returns
         -------
         int
-            Server's returned message-size limit.
+            Maximum synchronous frame size the server accepts, including the header.
 
         Raises
         ------
@@ -1601,6 +1713,8 @@ class Instrument:
         AssertionError
             The response payload is not eight bytes long.
 
+        HiSLIP 6.10, Table 28 defines these independent receive limits. HiSLIP 2.7
+        recommends negotiating shortly after initialisation to avoid buffer overflow.
         Other async transaction errors propagate from ``AsyncChannel.request``.
         """
         payload = struct.pack("!Q", size)
@@ -1622,7 +1736,8 @@ class Instrument:
         int
             Zero if no exclusive lock is held, otherwise one.
 
-        The shared-lock client count in the response parameter is not exposed.
+        HiSLIP 6.6, Table 23 also returns a count of all lock-holding clients in
+        the response parameter; that count is not exposed by this method.
         Async transaction errors propagate from ``AsyncChannel.request``.
         """
         response = self._async_channel.request(
@@ -1642,7 +1757,9 @@ class Instrument:
             Server-side lock wait in milliseconds. Reply waiting still uses the
             channel's I/O timeout.
         lock_string : str
-            Lock string encoded as UTF-8 in the request payload.
+            Shared-lock identifier; an empty string requests an exclusive lock
+            (HiSLIP 6.5, Tables 19 and 21). The protocol specifies ASCII, but this
+            method uses UTF-8 encoding without validating that restriction.
 
         Returns
         -------
@@ -1656,6 +1773,7 @@ class Instrument:
         struct.error
             ``timeout_ms`` does not fit the message parameter.
 
+        HiSLIP 6.5, Table 19 defines the request and Table 21 the result codes.
         Other async transaction errors propagate from ``AsyncChannel.request``.
         """
         ctrl_code = LOCKCONTROLCODE["request"]
@@ -1676,6 +1794,7 @@ class Instrument:
         str
             Named lock result; an unknown result code raises ``KeyError``.
 
+        HiSLIP 6.5, Tables 20-21 distinguish exclusive and shared release results.
         Async transaction errors propagate from ``AsyncChannel.request``.
         """
         ctrl_code = LOCKCONTROLCODE["release"]
@@ -1700,6 +1819,8 @@ class Instrument:
         KeyError
             The operation name is unknown.
 
+        HiSLIP 6.7, Table 24 defines the exchange; Table 25 defines the controls.
+        The server may acknowledge before acting if another client holds a lock.
         Async transaction errors propagate from ``AsyncChannel.request``.
         """
         ctrl_code = REMOTELOCALCONTROLCODE[remotelocalcontrol]
@@ -1720,8 +1841,12 @@ class Instrument:
 
         The RMT flag is reset only after a successful response. Async transaction
         errors propagate from ``AsyncChannel.request``.
+
+        HiSLIP 6.14, Table 33 reports RMT-delivered once. The query uses the
+        synchronised-mode last-sent MessageID; overlapped mode instead needs the
+        last fully delivered response ID (HiSLIP 3.2.2 rule 1).
         """
-        # Serialise the RMT report and reset so concurrent queries cannot reuse it.
+        # HiSLIP 6.14 reports RMT only once; serialise the report and reset.
         with self._status_query_lock:
             response = self._async_channel.request(
                 "AsyncStatusQuery",
@@ -1738,9 +1863,10 @@ class Instrument:
         Returns
         -------
         int
-            Feature bitmap from AsyncDeviceClearAcknowledge.
+            Server's preferred features from AsyncDeviceClearAcknowledge.
 
-        The caller must finish with ``device_clear_complete()``. Async transaction
+        HiSLIP 6.12 client steps 2 and 5 require this acknowledgement before the
+        caller finishes with ``device_clear_complete()``. Async transaction
         errors propagate from ``AsyncChannel.request``.
         """
         response = self._async_channel.request(
@@ -1757,7 +1883,8 @@ class Instrument:
         Parameters
         ----------
         feature_bitmap : int
-            Feature flags returned by the async phase.
+            Client feature request, normally the server preference from the
+            async phase.
 
         Returns
         -------
@@ -1771,8 +1898,10 @@ class Instrument:
         RuntimeError
             The peer closed, sent a fatal error, or supplied an invalid response.
 
-        An acknowledgement already queued before DeviceClearComplete is accepted
-        as well as one received afterwards.
+        HiSLIP 6.12 client steps 6-7 order completion before acknowledgement;
+        6.12.1 defines feature negotiation. This implementation also accepts an
+        acknowledgement queued before DeviceClearComplete, a compatibility
+        leniency rather than the specified ordering.
         """
         with self.sync_lock:
             final_feature_bitmap = self._receive_device_clear_ack(wait=False)
@@ -1784,7 +1913,11 @@ class Instrument:
             return final_feature_bitmap
 
     def _discard_pending_sync_payload(self) -> None:
-        """Discard the current payload, retaining progress if a socket read fails."""
+        """Discard the current payload, retaining progress if a socket read fails.
+
+        Used for buffered-response clearing in HiSLIP 3.1.2 rule 3 and 6.12
+        client step 4, while preserving the next header boundary.
+        """
         if self._payload_remaining > 0:
             buffer = bytearray(min(1 << 20, self._payload_remaining))
             while self._payload_remaining > 0:
@@ -1822,6 +1955,8 @@ class Instrument:
     def trigger(self) -> None:
         """Send a synchronous Trigger with the current RMT flag and advance its ID.
 
+        HiSLIP 6.8, Table 26 defines Trigger. HiSLIP 3.1.2 and 3.2.2 prescribe
+        advancing MessageID by two with unsigned 32-bit wrap-around.
         Discards any unread payload first. Transport, interruption, and protocol
         errors propagate from the synchronous I/O helpers.
         """
@@ -1838,6 +1973,7 @@ class Instrument:
         message_parameter: int,
         payload: BytesBuffer = b"",
     ) -> None:
+        """Serialise writes with the HiSLIP 3.1.2 rule 4 interruption send gate."""
         with self.sync_lock, self._interrupt_condition:
             self._wait_for_async_interrupted()
             send_msg(self._sync, msg_type, control_code, message_parameter, payload)
@@ -1873,6 +2009,10 @@ class Instrument:
         KeyError
             The error name is unknown.
 
+        HiSLIP 6.2, Table 13 requires FatalError on both channels followed by
+        closure; this helper sends only on sync and does not complete recovery.
+        The specification requires ASCII diagnostics; UTF-8 encoding here does
+        not validate that restriction.
         Synchronous transport and interruption errors propagate to the caller.
         """
         err_msg = (error_message or error).encode()
@@ -1893,6 +2033,9 @@ class Instrument:
         KeyError
             The error name is unknown.
 
+        HiSLIP 6.3, Table 15 requires a reply on the offending message's channel;
+        this helper addresses only sync. ASCII diagnostics are required by the
+        specification, but UTF-8 encoding here does not validate that restriction.
         Synchronous transport and interruption errors propagate to the caller.
         """
         err_msg = (error_message or error).encode()
