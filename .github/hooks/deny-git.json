@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "hooks": {
+    "preToolUse": [
+      {
+        "type": "command",
+        "command": "python3 .github/hooks/deny-git.py",
+        "windows": "py -3 .github/hooks/deny-git.py"
+      }
+    ]
+  }
+}
