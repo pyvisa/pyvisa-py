@@ -72,21 +72,23 @@ resource implementations are available.
 - Strive for consistency with existing code patterns and conventions within the project.
 - Document any deviations from established patterns and conventions.
 - Ensure that all code changes are accompanied by appropriate tests to verify correctness and prevent regressions.
+- Only make decisions when there is a clear and justified reason to do so, and document the rationale behind them. Ignore low confidence suggestions from tools or external sources unless verified.
 
 ## Comment guidelines
 
 - Comment the reasoning behind non-obvious design decisions and implementation choices.
 - Comment all public functions, classes, and modules with docstrings explaining their purpose, parameters, return values, and any exceptions raised.
 - Use type hints for function parameters and return values to improve code readability and facilitate static analysis.
-- Remove or adapt existing comments only if they are proven to be untrue or redundant.
 - In the comments, when applicable, note the references to the relevant rules, recommendations, permissions and observations, as defined in the reference documents.
+- Remove or adapt existing comments only if there is a high confidence that they are untrue or redundant.
 
 ## Reference documents
 
-- Unless provided in `references/`, use the following documents as standards references:
+- Unless provided in `references/`, only use the following documents as standards references:
   - VISA specification: https://www.ivifoundation.org/downloads/VISA/vpp43_2024-01-04.pdf
-  - VXI-11 specification: https://web.archive.org/web/20211021230242/http://www.vxibus.org/files/VXI_Specs/VXI-11.zip or https://www.eevblog.com/forum/testgear/vxibus-org-gone-who-maintainspublishes-the-vxi-11-specs/?action=dlattach;attach=2834422
+  - VXI-11 specification: these documents are provided in `references/` within the project.
   - HiSLIP specification: https://www.ivifoundation.org/downloads/Protocol%20Specifications/IVI-6.1_HiSLIP-2.0-2020-04-23.pdf
+  - do not use other documents or comments as authoritative standards references.
 
 ## Ask and plan
 
