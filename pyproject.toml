@@ -72,6 +72,9 @@ del namedtuple, _version_info, parts
 __version__ = "{version}"
 """
 
+[tool.setuptools.packages.find]
+  include = ["pyvisa_py*"]
+
 [tool.ruff]
   src            = ["src"]
   extend-exclude = ["pyvisa/thirdparty/*"]
