@@ -4,11 +4,7 @@
 These tests drive a real CoreClient over a loopback socket and make the
 "instrument" end of the connection fail in different ways. Each test asserts
 the behaviour a VISA user needs: a status code that identifies a lost
-connection rather than a timeout or a raw OSError, or an accurate write count.
-
-Tests marked ``xfail(strict=True)`` describe behaviour pyvisa-py does not
-provide yet. Once it is fixed, the strict xfail makes the test fail, so remove
-the marker along with the fix.
+connection rather than a timeout or a raw OSError.
 
 :copyright: 2014-2024 by PyVISA-py Authors, see AUTHORS for more details.
 :license: MIT, see LICENSE for more details.
@@ -21,7 +17,6 @@ import socket
 import struct
 import threading
 import time
-from unittest.mock import MagicMock
 
 import pytest
 
@@ -156,21 +151,3 @@ def test_write_reports_connection_lost_when_link_was_reset(link):
     _, status = _make_session(client).write(b"*IDN?\n")
 
     assert status == StatusCode.error_connection_lost
-
-
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "When device_write accepts fewer bytes than sent but returns error 0, "
-        "write() returns VI_SUCCESS and a count that leaves out the bytes the "
-        "device did accept."
-    ),
-)
-def test_short_write_is_not_reported_as_success():
-    interface = MagicMock()
-    interface.device_write.return_value = (vxi11.ErrorCodes.no_error, 2)
-
-    count, status = _make_session(interface).write(b"*RST\n")
-
-    assert status != StatusCode.success
-    assert count == 2

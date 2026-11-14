@@ -1150,10 +1150,20 @@ class TCPIPInstrVxi11(Session):
                 error, size = self.interface.device_write(
                     self.link, self._io_timeout, lock_timeout, flags, block
                 )
+                # size is how many bytes of this block the device accepted;
+                # never count more than were sent.
+                size = min(size, len(block))
 
-                if error or size < len(block):
-                    return offset, vxi11_error_to_visa(error)
+                if error:
+                    return offset + size, vxi11_error_to_visa(error)
 
+                if size == 0:
+                    # No error but no progress either: retrying would loop
+                    # forever.
+                    return offset, StatusCode.error_io
+
+                # The device may accept only part of a block without an error.
+                # Continue from where it stopped.
                 offset += size
                 num -= size
 
