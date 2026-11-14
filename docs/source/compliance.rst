@@ -125,6 +125,11 @@ Most functions are supported. See the FAQ page and the pyvisa documentation for 
 
 For VXI-11 reads, a socket timeout in the RPC call returns ``VI_ERROR_TMO``.
 
+For VXI-11 reads and writes, a connection closed or reset by the instrument
+returns ``VI_ERROR_CONN_LOST``. If the instrument accepts only part of a
+write without reporting an error, the rest is sent; if it accepts nothing,
+``VI_ERROR_IO`` is returned.
+
 Not or partially supported features
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
