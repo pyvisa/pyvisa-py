@@ -57,6 +57,43 @@ class TestTCPIPInstrVxi11Read:
             0,
         )
 
+    @pytest.mark.parametrize(
+        "error",
+        [EOFError(), ConnectionResetError(), BrokenPipeError(), OSError()],
+        ids=["peer-closed", "reset", "broken-pipe", "other-oserror"],
+    )
+    def test_core_read_connection_lost(self, core_client, error):
+        core_client.make_call.side_effect = error
+
+        assert core_client.device_read(1, 10, 5000, 0, 0, 0) == (
+            vxi11.ErrorCodes.device_not_accessible,
+            0,
+            b"",
+        )
+
+    @pytest.mark.parametrize(
+        "error",
+        [EOFError(), ConnectionResetError(), BrokenPipeError(), OSError()],
+        ids=["peer-closed", "reset", "broken-pipe", "other-oserror"],
+    )
+    def test_core_write_connection_lost(self, core_client, error):
+        core_client.make_call.side_effect = error
+
+        assert core_client.device_write(1, 5000, 0, 0, b"abc") == (
+            vxi11.ErrorCodes.device_not_accessible,
+            0,
+        )
+
+    @pytest.mark.parametrize("prefix", [b"", b"abc"])
+    def test_read_connection_lost_preserves_data(self, core_client, prefix):
+        sess = self._make_session()
+        sess.interface = core_client
+        core_client.make_call.side_effect = (
+            [(0, 0, prefix), EOFError()] if prefix else [EOFError()]
+        )
+
+        assert sess.read(10) == (prefix, StatusCode.error_connection_lost)
+
     @pytest.mark.parametrize("prefix", [b"", b"abc"])
     @pytest.mark.parametrize(
         "outcome, expected_status",
