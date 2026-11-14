@@ -355,10 +355,34 @@ def _recvrecord(sock, timeout, read_fun=None, min_packages=0):
             read_data = b""
             if sock in r:
                 read_data = read_fun(exp_length)
+                if not read_data:
+                    # select() reported the socket readable but there was
+                    # nothing to read: the peer closed the connection. Waiting
+                    # longer cannot help, and select() would keep returning
+                    # immediately, so stop now rather than at the timeout.
+                    if min_packages != 0 and packages_received >= min_packages:
+                        LOGGER.debug(
+                            "Connection closed after %i of %i requested "
+                            "packages. Received record through %s: %r",
+                            packages_received,
+                            min_packages,
+                            sock,
+                            record,
+                        )
+                        return bytes(record)
+                    LOGGER.debug(
+                        "Connection closed by peer in %s. Already received %d "
+                        "bytes of the record and %d of a %d byte fragment.",
+                        sock,
+                        len(record),
+                        len(buffer),
+                        exp_length,
+                    )
+                    raise EOFError("Connection closed by peer.")
                 buffer.extend(read_data)
                 LOGGER.debug("received %r" % read_data)
             # Timeout was reached
-            if not read_data:  # no response or empty response
+            if not read_data:  # no response
                 if timeout is not None and time.time() >= finish_time:
                     LOGGER.debug(
                         (
