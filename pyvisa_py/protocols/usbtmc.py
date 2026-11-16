@@ -565,7 +565,11 @@ class USBTMC(USBRaw):
         available afterwards in :attr:`last_read_eom`.
         """
         usbtmc_header_size = BulkInMessage.HEADER_SIZE
-        # Bulk-IN transfers are padded to a multiple of 4 bytes (USBTMC 3.3).
+        # Alignment bytes are optional on Bulk-IN (USBTMC 3.3), but some devices
+        # (e.g. Siglent SNA5000A) pad to a multiple of 4. This only sizes the
+        # read request so that a padded transfer ending on a packet boundary
+        # still has its terminating ZLP consumed by the same read; devices that
+        # do not pad end the read earlier with their short packet.
         max_alignment_bytes = 3
         eom = False
         self.last_read_eom = False
