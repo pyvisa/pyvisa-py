@@ -630,7 +630,8 @@ class RawBroadcastUDPClient(RawUDPClient):
             if xid != self.lastxid:
                 continue
             reply = unpack_func()
-            self.unpacker.done()
+            # Like Client.make_call, allow padding beyond XDR's 4-byte alignment.
+            # Some port mappers include it in broadcast replies (issue #694).
             replies.append((reply, fromaddr))
             if self.reply_handler:
                 self.reply_handler(reply, fromaddr)
@@ -676,7 +677,8 @@ class RawBroadcastUDPClient(RawUDPClient):
             if xid != self.lastxid:
                 continue
             reply = unpack_func()
-            self.unpacker.done()
+            # Like Client.make_call, allow padding beyond XDR's 4-byte alignment.
+            # Some port mappers include it in broadcast replies (issue #694).
             replies.append((reply, fromaddr))
             if self.reply_handler:
                 self.reply_handler(reply, fromaddr)

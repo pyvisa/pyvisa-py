@@ -34,6 +34,73 @@ def listening_port():
     server.close()
 
 
+@pytest.fixture(params=["get_port", "recv_port"])
+def broadcast_portmapper(request):
+    """Exercise both broadcast APIs with real loopback UDP datagrams."""
+    with closing(socket.socket(socket.AF_INET, socket.SOCK_DGRAM)) as server:
+        server.bind(("127.0.0.1", 0))
+        with closing(rpc.BroadcastUDPPortMapperClient("127.0.0.1")) as client:
+            client.port = server.getsockname()[1]
+            client.sock.bind(("127.0.0.1", 0))
+            client.set_timeout(0.1)
+            client.lastxid = 41
+
+            def receive():
+                mapping = (0x0607AF, 1, rpc.IPPROTO_TCP, 0)
+                if request.param == "recv_port":
+                    client.send_port(mapping)
+                return getattr(client, request.param)(mapping)
+
+            def send(data):
+                server.sendto(data, client.sock.getsockname())
+
+            yield client, server.getsockname(), send, receive
+
+
+def portmapper_reply(port, xid=42):
+    packer = rpc.Packer()
+    packer.pack_replyheader(xid, (0, b""))
+    packer.pack_uint(port)
+    return packer.get_buf()
+
+
+@pytest.mark.parametrize("padding", [b"", b"\0" * 4, b"\0" * 12])
+def test_broadcast_portmapper_reply_padding(broadcast_portmapper, padding):
+    client, address, send, receive = broadcast_portmapper
+    callbacks = []
+    client.set_reply_handler(lambda port, addr: callbacks.append((port, addr)))
+    send(portmapper_reply(1024) + padding)
+
+    assert receive() == [(1024, address)]
+    assert callbacks == [(1024, address)]
+
+
+def test_broadcast_portmapper_multiple_replies(broadcast_portmapper):
+    _client, address, send, receive = broadcast_portmapper
+    send(portmapper_reply(9999, xid=43) + b"\0" * 4)
+    send(portmapper_reply(1024) + b"\0" * 12)
+    send(portmapper_reply(2048))
+
+    assert receive() == [(1024, address), (2048, address)]
+
+
+@pytest.mark.parametrize("truncated", [True, False])
+def test_broadcast_portmapper_invalid_reply(broadcast_portmapper, truncated):
+    _client, _address, send, receive = broadcast_portmapper
+    reply = portmapper_reply(1024)
+    if truncated:
+        # A valid header does not make an incomplete port value acceptable.
+        send(reply[:-1])
+        expected = EOFError
+    else:
+        # The second word must identify an RPC reply, not an RPC call.
+        send(reply[:4] + b"\0" * 4 + reply[8:] + b"\0" * 4)
+        expected = rpc.RPCUnpackError
+
+    with pytest.raises(expected):
+        receive()
+
+
 def test_connect_reports_failure_for_a_refused_port(closed_port):
     """A refused connection must not be reported as a connected socket.
 
