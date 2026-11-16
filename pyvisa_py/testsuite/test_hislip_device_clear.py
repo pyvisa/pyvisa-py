@@ -62,7 +62,7 @@ def test_device_clear_discards_partially_read_message():
     server.settimeout(1)
     client.settimeout(1)
     try:
-        send_msg(server, "DataEnd", 0, 0xFFFF_FFFF, b"partial-and-remaining-payload")
+        send_msg(server, "DataEnd", 0, 0xFFFF_FF00, b"partial-and-remaining-payload")
         received_messages = []
 
         def acknowledge_device_clear():
@@ -109,7 +109,7 @@ def test_send_discards_partially_read_message():
     server.settimeout(1)
     client.settimeout(1)
     try:
-        send_msg(server, "DataEnd", 0, 0xFFFF_FFFF, b"partial-and-remaining-payload")
+        send_msg(server, "DataEnd", 0, 0xFFFF_FF00, b"partial-and-remaining-payload")
 
         instrument = object.__new__(Instrument)
         instrument._sync = client

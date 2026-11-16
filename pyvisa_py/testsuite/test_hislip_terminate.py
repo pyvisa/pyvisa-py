@@ -205,7 +205,7 @@ class TestInstrumentReceive:
         self.instrument = object.__new__(Instrument)
         self.instrument._sync = self.client
         self.instrument._receiving = threading.Event()
-        self.instrument._last_message_id = None
+        self.instrument._last_message_id = 0x1234
         self.instrument._msg_type = ""
         self.instrument._payload_remaining = 0
         self.instrument._rmt = 0
@@ -223,7 +223,7 @@ class TestInstrumentReceive:
             b"HS",
             MESSAGETYPE[msg_type],
             0,
-            0xFFFF_FFFF,
+            self.instrument.last_message_id,
             len(payload),
         )
         self.server.sendall(header + payload)
@@ -888,7 +888,7 @@ class TestInstrumentTerminate:
         inst._receive_state_lock = threading.Lock()
         inst._msg_type = ""
         inst._payload_remaining = 0
-        inst._last_message_id = None
+        inst._last_message_id = 0x1234
         inst._rmt = 0
         inst._last_read_rmt = False
         inst._last_read_termchar = False
@@ -924,7 +924,7 @@ class TestInstrumentTerminate:
                     b"HS",
                     MESSAGETYPE["DataEnd"],
                     0,
-                    0xFFFF_FFFF,
+                    inst.last_message_id,
                     2,
                 )
                 + b"ok"
