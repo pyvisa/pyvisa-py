@@ -18,7 +18,7 @@ from pyvisa import attributes, constants
 from pyvisa.constants import ResourceAttribute, StatusCode
 from pyvisa.rname import USBInstr, USBRaw
 
-from .common import LOGGER
+from .common import LOGGER, BytesBuffer
 from .sessions import OpenError, Session, UnknownAttribute
 
 try:
@@ -191,10 +191,27 @@ class USBSession(Session):
         term_char, _ = self.get_attribute(ResourceAttribute.termchar)
         term_char_en, _ = self.get_attribute(ResourceAttribute.termchar_enabled)
 
+        term_byte = bytes([term_char]) if term_char is not None else b""
+
+        def _usb_end_indicator(current: BytesBuffer) -> bool:
+            """Report END only when the device marked the end of the message.
+
+            A USBTMC read stops either on EOM or once ``count`` bytes have been
+            received; in the latter case the rest of the message is still on the
+            device and must be fetched by further reads (VI_SUCCESS_MAX_CNT).
+            Interfaces that do not track EOM (USB RAW) always report END.
+            If the termination character is enabled and present, report END as
+            well since bytes following it have already been consumed from the
+            device and must not be discarded.
+            """
+            if getattr(self.interface, "last_read_eom", True):
+                return True
+            return bool(term_char_en and term_byte and term_byte in current)
+
         return self._read(
             _usb_reader,
             count,
-            lambda current: True,  # USB always returns a complete message
+            _usb_end_indicator,
             supress_end_en,
             term_char,
             term_char_en,
