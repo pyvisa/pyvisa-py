@@ -1131,36 +1131,42 @@ class TCPIPInstrVxi11(Session):
             Return value of the library call.
 
         """
-        try:
-            flags = 0
-            num = len(data)
-            offset = 0
+        flags = 0
+        num = len(data)
+        offset = 0
 
-            flags, lock_timeout = self._adapt_flags_and_lock_timeout(flags)
+        flags, lock_timeout = self._adapt_flags_and_lock_timeout(flags)
 
-            while num > 0:
-                if (
-                    num <= self.max_recv_size
-                    and self.attrs[ResourceAttribute.send_end_enabled]
-                ):
-                    flags |= vxi11.OP_FLAG_END
+        while num > 0:
+            if (
+                num <= self.max_recv_size
+                and self.attrs[ResourceAttribute.send_end_enabled]
+            ):
+                flags |= vxi11.OP_FLAG_END
 
-                block = data[offset : offset + self.max_recv_size]
+            block = data[offset : offset + self.max_recv_size]
 
-                error, size = self.interface.device_write(
-                    self.link, self._io_timeout, lock_timeout, flags, block
-                )
+            error, size = self.interface.device_write(
+                self.link, self._io_timeout, lock_timeout, flags, block
+            )
+            # size is how many bytes of this block the device accepted;
+            # never count more than were sent.
+            size = min(size, len(block))
 
-                if error or size < len(block):
-                    return offset, vxi11_error_to_visa(error)
+            if error:
+                return offset + size, vxi11_error_to_visa(error)
 
-                offset += size
-                num -= size
+            if size == 0:
+                # No error but no progress either: retrying would loop
+                # forever.
+                return offset, StatusCode.error_io
 
-            return offset, StatusCode.success
+            # The device may accept only part of a block without an error.
+            # Continue from where it stopped.
+            offset += size
+            num -= size
 
-        except vxi11.Vxi11Error:
-            return 0, StatusCode.error_timeout
+        return offset, StatusCode.success
 
     def gpib_control_ren(self, mode: constants.RENLineOperation) -> StatusCode:
         """Controls the state of the GPIB Remote Enable (REN) interface line.

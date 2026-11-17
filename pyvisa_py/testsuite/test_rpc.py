@@ -6,7 +6,11 @@
 """
 
 import socket
+import struct
+import threading
+import time
 from contextlib import closing
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -116,3 +120,114 @@ def test_resource_manager_reports_synchronous_failure(synchronous_failure_socket
         assert exc.value.error_code == constants.StatusCode.error_resource_not_found
         assert set(manager.visalib.sessions) == sessions
     assert sock.fileno() == -1
+
+
+def _fragment(payload: bytes, last: bool = True) -> bytes:
+    """Frame payload as one ONC RPC record-marking fragment."""
+    return struct.pack(">I", len(payload) | (0x80000000 if last else 0)) + payload
+
+
+@pytest.fixture
+def peer():
+    """A connected socket pair: (our end, the remote end)."""
+    ours, theirs = socket.socketpair()
+    yield ours, theirs
+    ours.close()
+    theirs.close()
+
+
+def _run_in_thread(target, timeout=2.0):
+    """Run target in a daemon thread; return (finished, result or exception)."""
+    outcome = {}
+
+    def runner():
+        try:
+            outcome["result"] = target()
+        except BaseException as exc:
+            outcome["error"] = exc
+
+    thread = threading.Thread(target=runner, daemon=True)
+    thread.start()
+    thread.join(timeout)
+    return not thread.is_alive(), outcome
+
+
+@pytest.mark.parametrize(
+    "sent",
+    [
+        b"",
+        b"\x80\x00",
+        _fragment(b"abcd", last=False),
+        struct.pack(">I", 0x80000008) + b"abc",
+    ],
+    ids=["nothing", "partial-header", "non-final-fragment", "partial-fragment"],
+)
+def test_recvrecord_raises_eof_promptly_when_peer_closes(peer, sent):
+    """A closed connection is reported at once, not after the timeout.
+
+    select() reports a closed socket as readable and recv() then returns
+    b"". That used to be treated as "no data yet", so the loop spun until
+    the timeout and raised socket.timeout, making a dropped connection look
+    like a slow instrument.
+    """
+    ours, theirs = peer
+    theirs.sendall(sent)
+    theirs.close()
+
+    start = time.monotonic()
+    with pytest.raises(EOFError):
+        rpc._recvrecord(ours, 5.0)
+    assert time.monotonic() - start < 1.0
+
+
+def test_recvrecord_without_timeout_raises_eof_when_peer_closes(peer):
+    """With no timeout (as TCPServer.session uses), EOF must still end the call."""
+    ours, theirs = peer
+    theirs.close()
+
+    finished, outcome = _run_in_thread(lambda: rpc._recvrecord(ours, None))
+
+    assert finished, "_recvrecord kept waiting on a closed connection"
+    assert isinstance(outcome.get("error"), EOFError)
+
+
+def test_recvrecord_returns_complete_record_sent_before_close(peer):
+    ours, theirs = peer
+    theirs.sendall(_fragment(b"abcd"))
+    theirs.close()
+
+    assert rpc._recvrecord(ours, 5.0) == b"abcd"
+
+
+def test_recvrecord_keeps_min_packages_workaround_on_close(peer):
+    """A close after the requested packages still returns what arrived.
+
+    min_packages exists for instruments that never send the final fragment
+    of a portmapper reply; that must keep working if they also close.
+    """
+    ours, theirs = peer
+    theirs.sendall(_fragment(b"abcd", last=False))
+    theirs.close()
+
+    assert rpc._recvrecord(ours, 5.0, min_packages=1) == b"abcd"
+
+
+def test_recvrecord_still_times_out_when_peer_is_silent(peer):
+    ours, _theirs = peer
+
+    with pytest.raises(socket.timeout):
+        rpc._recvrecord(ours, 0.2)
+
+
+def test_tcp_server_session_ends_when_client_disconnects(peer):
+    """TCPServer.session relies on _recvrecord raising EOFError to exit."""
+    ours, theirs = peer
+    server = object.__new__(rpc.TCPServer)
+    server.handle = MagicMock()
+    theirs.close()
+
+    finished, outcome = _run_in_thread(lambda: server.session((ours, ("127.0.0.1", 0))))
+
+    assert finished, "TCPServer.session kept running after the client left"
+    assert "error" not in outcome
+    server.handle.assert_not_called()

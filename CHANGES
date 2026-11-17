@@ -4,6 +4,10 @@ PyVISA-py Changelog
 0.9.0 (unreleased)
 ------------------
 
+- VXI-11: report a connection closed or reset by the instrument during a read
+  or write as ``VI_ERROR_CONN_LOST``, instead of ``VI_ERROR_TMO`` after the full
+  timeout or a raw ``OSError``. Send the rest of a write when the instrument
+  accepts only part of it, instead of returning ``VI_SUCCESS`` (#695).
 - HiSLIP: device clear skips required channel synchronization and ignores the final negotiated feature bitmap #677 PR #684
 - Return ``VI_ERROR_TMO`` for VXI-11 RPC read timeouts (#681).
 - HiSLIP: HiSLIP initial/reset MessageID in lock release and remote/local control transactions #676 PR #683

@@ -92,6 +92,12 @@ RX_END    = 4
 # fmt: on
 
 
+#: Exceptions from the RPC layer meaning the link to the instrument is gone:
+#: EOFError when the peer closed the connection (see rpc._recvrecord), OSError
+#: for a reset or broken connection.
+_CONNECTION_LOST_ERRORS = (EOFError, OSError)
+
+
 class Vxi11Error(Exception):
     pass
 
@@ -244,6 +250,10 @@ class CoreClient(rpc.TCPClient):
             # No idea how many bytes were successfully written before the timeout occurred
             # must reply with timeout according to VPP-4.3 6.1.4
             return ErrorCodes.io_timeout, 0
+        except _CONNECTION_LOST_ERRORS:
+            # Must follow the socket.timeout clause: socket.timeout is an OSError.
+            LOGGER.debug("VXI-11 connection lost during device_write", exc_info=True)
+            return ErrorCodes.device_not_accessible, 0
 
     def device_read(
         self, link, request_size, io_timeout, lock_timeout, flags, term_char
@@ -261,6 +271,10 @@ class CoreClient(rpc.TCPClient):
             # No idea what was read before the timeout occurred
             # must reply with timeout according to VPP-4.3 6.1.1
             return ErrorCodes.io_timeout, 0, b""
+        except _CONNECTION_LOST_ERRORS:
+            # Must follow the socket.timeout clause: socket.timeout is an OSError.
+            LOGGER.debug("VXI-11 connection lost during device_read", exc_info=True)
+            return ErrorCodes.device_not_accessible, 0, b""
 
     def device_read_stb(self, link, flags, lock_timeout, io_timeout):
         params = (link, flags, lock_timeout, io_timeout)
