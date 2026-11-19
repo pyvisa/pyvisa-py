@@ -4,6 +4,8 @@ PyVISA-py Changelog
 0.9.0 (unreleased)
 ------------------
 
+- Fail opening TCPIP SOCKET resources when the connection is refused or fails
+  instead of reporting the error on the first read or write (#701).
 - HiSLIP: device clear skips required channel synchronization and ignores the final negotiated feature bitmap #677 PR #684
 - Return ``VI_ERROR_TMO`` for VXI-11 RPC read timeouts (#681).
 - HiSLIP: HiSLIP initial/reset MessageID in lock release and remote/local control transactions #676 PR #683

@@ -1,5 +1,6 @@
 """Tests for VISA resource attributes."""
 
+import errno
 import socket
 from unittest.mock import MagicMock, patch
 
@@ -85,6 +86,8 @@ def instr_session(request):
     elif request.param == "socket":
         resource_name = "TCPIP::localhost::1234::SOCKET"
         interface = MagicMock()
+        interface.connect_ex.return_value = errno.EINPROGRESS
+        interface.getsockopt.return_value = 0  # SO_ERROR: connected
         with (
             patch("pyvisa_py.tcpip.socket.socket", return_value=interface),
             patch("pyvisa_py.tcpip.select.select", return_value=([], [interface], [])),

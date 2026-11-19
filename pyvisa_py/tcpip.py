@@ -9,7 +9,9 @@
 
 from __future__ import annotations
 
+import errno
 import ipaddress
+import os
 import random
 import select
 import socket
@@ -1740,12 +1742,25 @@ class TCPIPSocketSession(Session):
         try:
             self.interface = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.interface.setblocking(False)
-            self.interface.connect_ex((self.parsed.host_address, int(self.parsed.port)))
+            ret = self.interface.connect_ex(
+                (self.parsed.host_address, int(self.parsed.port))
+            )
         except Exception as e:
             LOGGER.exception("could not connect: {0}".format(str(e)))
             raise OpenError()
         finally:
             self.interface.setblocking(True)
+
+        # A non-blocking connect normally reports that it is still in progress.
+        # Any other error is final, and leaves SO_ERROR unset.
+        if ret not in (0, errno.EINPROGRESS, errno.EWOULDBLOCK, errno.EAGAIN):
+            LOGGER.debug(
+                "Connect to %s:%s failed: %s",
+                self.parsed.host_address,
+                self.parsed.port,
+                os.strerror(ret),
+            )
+            return StatusCode.error_resource_not_found
 
         # minimum is in interval 100 - 500ms based on timeout
         min_select_timeout = max(min(timeout / 10.0, 0.5), 0.1)
@@ -1760,6 +1775,18 @@ class TCPIPSocketSession(Session):
                 [self.interface], [self.interface], [], select_timout
             )
             if self.interface in r or self.interface in w:
+                # Readiness alone does not mean the connection was established.
+                # A refused connect also makes the socket ready, with the reason
+                # in SO_ERROR.
+                err = self.interface.getsockopt(socket.SOL_SOCKET, socket.SO_ERROR)
+                if err != 0:
+                    LOGGER.debug(
+                        "Connect to %s:%s failed: %s",
+                        self.parsed.host_address,
+                        self.parsed.port,
+                        os.strerror(err),
+                    )
+                    return StatusCode.error_resource_not_found
                 return StatusCode.success
 
             if time.time() >= finish_time:
