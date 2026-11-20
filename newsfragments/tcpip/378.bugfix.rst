@@ -1,0 +1,2 @@
+Warn instead of failing to list resources when the mDNS socket used for TCPIP
+discovery cannot be opened, for example when avahi holds the port.

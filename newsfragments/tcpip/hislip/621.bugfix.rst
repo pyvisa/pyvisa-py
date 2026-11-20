@@ -1,0 +1,1 @@
+Fix crashes on ``DEVICE_ENABLE_SRQ(off)`` and accept malformed SRQ packets.

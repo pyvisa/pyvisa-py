@@ -1,0 +1,2 @@
+Allow TCPIP::SOCKET resources to be found via
+``list_resources(query="TCPIP?*")``.

@@ -1,0 +1,2 @@
+Add support for HiSLIP ``TERMCHAR``, ``TERMCHAR_EN``, ``SEND_END_EN``, and
+``SUPPRESS_END_EN``.

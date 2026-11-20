@@ -1,0 +1,3 @@
+Implement ``viTerminate()`` for HiSLIP sessions using ``CancellableSocket``,
+allowing cross-thread I/O cancellation, and handle HiSLIP Interrupted messages
+in the receive path.
