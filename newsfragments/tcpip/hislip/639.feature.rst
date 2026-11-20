@@ -1,0 +1,1 @@
+Add trigger support to HiSLIP resources.

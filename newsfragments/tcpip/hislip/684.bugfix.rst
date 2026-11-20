@@ -1,0 +1,2 @@
+Fix HiSLIP device clear so it performs the required channel synchronization and
+preserves the final negotiated feature bitmap.

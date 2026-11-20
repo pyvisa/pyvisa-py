@@ -1,0 +1,2 @@
+Preserve synchronous RPC connection errors instead of masking them with an error
+from restoring blocking mode on an already-closed socket.
