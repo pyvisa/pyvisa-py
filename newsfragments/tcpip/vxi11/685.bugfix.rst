@@ -1,0 +1,1 @@
+Return ``VI_ERROR_TMO`` for VXI-11 RPC read timeouts.

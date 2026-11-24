@@ -1,0 +1,2 @@
+Apply ``open_timeout`` consistently to TCPIP::SOCKET connections. The timeout now
+defaults to 2000 ms.
