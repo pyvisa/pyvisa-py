@@ -12,7 +12,6 @@ This file is an offspring of the Lantz Project.
 """
 
 import enum
-import math
 import struct
 import time
 import warnings
@@ -139,8 +138,23 @@ class BulkInMessage(
 
     """
 
+    #: Size of the Bulk-IN header (USBTMC 1.0 Table 9).
+    HEADER_SIZE = 12
+
+    @classmethod
+    def _check_header_size(cls, data):
+        # A Bulk-IN transfer always starts with a 12 byte header (USBTMC 3.3).
+        # Raise ValueError (rather than letting struct.error escape) so that
+        # USBTMC.read aborts the Bulk-IN transfer.
+        if len(data) < cls.HEADER_SIZE:
+            raise ValueError(
+                f"Bulk-IN transfer too short to contain a USBTMC header: "
+                f"got {len(data)} bytes, expected at least {cls.HEADER_SIZE}."
+            )
+
     @classmethod
     def from_bytes(cls, data):
+        cls._check_header_size(data)
         msgid, btag, btaginverse = struct.unpack_from("BBBx", data)
         if msgid != MsgID.dev_dep_msg_in:
             warnings.warn(
@@ -159,6 +173,7 @@ class BulkInMessage(
     @classmethod
     def from_quirky(cls, data):
         """Constructs a correct response for quirky devices."""
+        cls._check_header_size(data)
         msgid, btag, btaginverse = struct.unpack_from("BBBx", data)
         data = data.rstrip(b"\x00")
         # check whether it contains a ';' and if throw away the first 12 bytes
@@ -463,8 +478,13 @@ class USBTMC(USBRaw):
             # Abort Bulk-IN failed. Ignore it.
             return
 
-        # Read remaining data from Bulk-IN endpoint.
-        self.usb_recv_ep.read(self.usb_recv_ep.wMaxPacketSize, abort_timeout_ms)
+        # Read remaining data from Bulk-IN endpoint. The device terminates the
+        # aborted transfer with a short packet (USBTMC 1.0 4.2.1.4), so keep
+        # reading until one is received.
+        max_packet = self.usb_recv_ep.wMaxPacketSize
+        for _ in range(1024):
+            if len(self.usb_recv_ep.read(max_packet, abort_timeout_ms)) < max_packet:
+                break
 
         # Send CHECK_ABORT_BULK_IN_STATUS until it completes.
         # According to USBTMC 1.00 4.2.1.5:
@@ -515,71 +535,100 @@ class USBTMC(USBRaw):
 
         return size
 
+    #: Whether the last call to :meth:`read` ended with the device's EOM
+    #: (End Of Message) bit. False means ``size`` bytes were read and the
+    #: rest of the message is still pending on the device.
+    last_read_eom: bool = True
+
+    #: Maximum number of zero-length packets skipped while waiting for a
+    #: Bulk-IN header.
+    MAX_ZLP_BEFORE_HEADER = 4
+
+    def _bulk_in_chunk_size(self, max_transfer_length):
+        """Length to request from the Bulk-IN endpoint for one transfer.
+
+        Returns the smallest multiple of wMaxPacketSize strictly larger than
+        the longest transfer the device may send. A transfer that ends exactly
+        on a packet boundary is terminated by a zero-length packet (USB 2.0
+        5.8.3, USBTMC 1.0 3.3); requesting more than the transfer length makes
+        that ZLP complete this read instead of being left queued and later
+        mistaken for the next Bulk-IN header.
+        """
+        max_packet = self.usb_recv_ep.wMaxPacketSize
+        return (max_transfer_length // max_packet + 1) * max_packet
+
     def read(self, size, termchar):
-        usbtmc_header_size = 12
+        """Read up to ``size`` bytes of a USBTMC response message.
+
+        Reading stops when the device signals the end of the message (EOM) or
+        when ``size`` bytes have been received. Whether EOM was received is
+        available afterwards in :attr:`last_read_eom`.
+        """
+        usbtmc_header_size = BulkInMessage.HEADER_SIZE
+        # Alignment bytes are optional on Bulk-IN (USBTMC 3.3), but some devices
+        # (e.g. Siglent SNA5000A) pad to a multiple of 4. This only sizes the
+        # read request so that a padded transfer ending on a packet boundary
+        # still has its terminating ZLP consumed by the same read; devices that
+        # do not pad end the read earlier with their short packet.
+        max_alignment_bytes = 3
         eom = False
+        self.last_read_eom = False
 
         raw_read = super().read
         raw_write = super().write
 
         received_message = bytearray()
 
-        while not eom:
+        while True:
             received_transfer = bytearray()
             btag = self._btag.next()
 
-            req = BulkInMessage.build_array(btag, size, termchar)
+            # Only request what is still missing so that we never get more
+            # than ``size`` bytes back (the caller would discard the excess).
+            transfer_size = max(size - len(received_message), 1)
+            req = BulkInMessage.build_array(btag, transfer_size, termchar)
             raw_write(req)
 
             try:
-                # make sure the data request is in multitudes of wMaxPacketSize.
-                # + 1 * wMaxPacketSize for message sizes that equals wMaxPacketSize == size + usbtmc_header_size.
-                # This to be able to retrieve a short package to end communication
-                # (see USB 2.0 Section 5.8.3 and USBTMC Section 3.3)
-                chunk_size = (
-                    math.floor(
-                        (size + usbtmc_header_size) / self.usb_recv_ep.wMaxPacketSize
-                    )
-                    + 1
-                ) * self.usb_recv_ep.wMaxPacketSize
+                chunk_size = self._bulk_in_chunk_size(
+                    usbtmc_header_size + transfer_size + max_alignment_bytes
+                )
                 resp = raw_read(chunk_size, termchar)
+
+                # A zero-length packet cannot carry the header: it terminates a
+                # previous transfer that ended on a packet boundary. Discard it.
+                for _ in range(self.MAX_ZLP_BEFORE_HEADER):
+                    if resp:
+                        break
+                    LOGGER.debug("Discarding zero-length packet before Bulk-IN header")
+                    resp = raw_read(chunk_size, termchar)
 
                 response = BulkInMessage.from_bytes(resp)
                 received_transfer.extend(response.data)
 
-                # Detect EOM only when device sends all expected bytes.
-                if len(received_transfer) >= response.transfer_size:
-                    eom = response.transfer_attributes & 1
-                if not eom and len(received_transfer) >= size:
-                    # Read asking for 'size' bytes from the device.
-                    # This may be less then the device wants to send back in a message
-                    # Therefore the request does not mean that we must receive a EOM.
-                    # Multiple `transfers` will be required to retrieve the remaining bytes.
-                    eom = True
-                else:
-                    while (
-                        (len(resp) % self.usb_recv_ep.wMaxPacketSize) == 0
-                        or len(received_transfer) < response.transfer_size
-                    ) and not eom:
-                        # USBTMC Section 3.3 specifies that the first usb packet
-                        # must contain the header. the remaining packets do not need
-                        # the header the message is finished when a "short packet"
-                        # is sent (one whose length is less than wMaxPacketSize)
-                        # wMaxPacketSize may be incorrectly reported by certain drivers.
-                        # Therefore, continue reading until the transfer_size is reached.
-                        chunk_size = (
-                            math.floor(
-                                (size - len(received_transfer))
-                                / self.usb_recv_ep.wMaxPacketSize
-                            )
-                            + 1
-                        ) * self.usb_recv_ep.wMaxPacketSize
-                        resp = raw_read(chunk_size, termchar)
-                        received_transfer.extend(resp)
-                    if len(received_transfer) >= response.transfer_size:
-                        eom = response.transfer_attributes & 1
-                    if not eom and len(received_transfer) >= size:
-                        eom = True
+                # USBTMC Section 3.3 specifies that the first usb packet
+                # must contain the header. The remaining packets do not need
+                # the header. The transfer is finished when a "short packet"
+                # is sent (one whose length is less than wMaxPacketSize), which
+                # ends the raw read. wMaxPacketSize may be incorrectly reported
+                # by certain drivers. Therefore, continue reading until the
+                # transfer_size is reached.
+                while len(received_transfer) < response.transfer_size:
+                    chunk_size = self._bulk_in_chunk_size(
+                        response.transfer_size
+                        - len(received_transfer)
+                        + max_alignment_bytes
+                    )
+                    resp = raw_read(chunk_size, termchar)
+                    if not resp:
+                        raise ValueError(
+                            "Bulk-IN transfer terminated after "
+                            f"{len(received_transfer)} of "
+                            f"{response.transfer_size} bytes."
+                        )
+                    received_transfer.extend(resp)
+
+                eom = bool(response.transfer_attributes & 1)
                 # Truncate data to the specified length (discard padding)
                 # USBTMC header (12 bytes) has already truncated
                 received_message.extend(received_transfer[: response.transfer_size])
@@ -588,6 +637,14 @@ class USBTMC(USBRaw):
                 self._abort_bulk_in(btag)
                 raise
 
+            # Stop at the end of the message, or once ``size`` bytes have been
+            # read: a response may be longer than ``size`` and the remainder
+            # is fetched by the next call (EOM not received). An empty transfer
+            # without EOM is returned to the caller, which owns the timeout.
+            if eom or len(received_message) >= size or not response.transfer_size:
+                break
+
+        self.last_read_eom = eom
         return bytes(received_message)
 
     def read_stb(self) -> Tuple[int, StatusCode]:

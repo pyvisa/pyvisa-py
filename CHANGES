@@ -4,6 +4,16 @@ PyVISA-py Changelog
 0.9.0 (unreleased)
 ------------------
 
+- USBTMC: only report END when the device sent EOM. A read that stops because
+  ``count`` bytes were received now returns ``VI_SUCCESS_MAX_CNT`` so that
+  responses longer than ``chunk_size`` are read completely instead of being
+  truncated (leaving the rest of the response queued in the device).
+- USBTMC: size Bulk-IN reads to include the alignment padding so the
+  zero-length packet ending a transfer on a packet boundary is consumed,
+  discard stray zero-length packets where a Bulk-IN header is expected, stop
+  waiting for more data once a transfer is complete, raise ``ValueError``
+  (and abort the transfer) on Bulk-IN packets too short for a header, and
+  drain the Bulk-IN endpoint until a short packet when aborting.
 - HiSLIP: device clear skips required channel synchronization and ignores the final negotiated feature bitmap #677 PR #684
 - Return ``VI_ERROR_TMO`` for VXI-11 RPC read timeouts (#681).
 - HiSLIP: HiSLIP initial/reset MessageID in lock release and remote/local control transactions #676 PR #683
