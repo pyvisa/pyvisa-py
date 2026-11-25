@@ -1,0 +1,1 @@
+Correct HiSLIP ordering issues, cross channel and in-session
