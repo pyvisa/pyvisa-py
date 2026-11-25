@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import socket
 from unittest.mock import MagicMock
 
 import pytest
@@ -12,6 +13,15 @@ from pyvisa_py.protocols import vxi11
 from pyvisa_py.tcpip import TCPIPInstrVxi11
 
 
+@pytest.fixture
+def core_client(monkeypatch):
+    client = object.__new__(vxi11.CoreClient)
+    client.packer = vxi11.Vxi11Packer()
+    client.unpacker = vxi11.Vxi11Unpacker(b"")
+    monkeypatch.setattr(client, "make_call", MagicMock())
+    return client
+
+
 class TestTCPIPInstrVxi11Read:
     def _make_session(
         self, *, termchar_enabled: bool = False, suppress_end_enabled: bool = False
@@ -19,7 +29,6 @@ class TestTCPIPInstrVxi11Read:
         sess = object.__new__(TCPIPInstrVxi11)
         sess.interface = MagicMock()
         sess.link = 1
-        sess.lock_timeout = 10000
         sess.max_recv_size = 1024
         sess._io_timeout = 5000
         sess.timeout = 5
@@ -27,8 +36,45 @@ class TestTCPIPInstrVxi11Read:
             ResourceAttribute.termchar_enabled: termchar_enabled,
             ResourceAttribute.termchar: ord("\n"),
             ResourceAttribute.suppress_end_enabled: suppress_end_enabled,
+            ResourceAttribute.lockwait: 0,  # type: ignore[attr-defined]
         }
         return sess
+
+    def test_core_read_socket_timeout(self, core_client):
+        core_client.make_call.side_effect = socket.timeout
+
+        assert core_client.device_read(1, 10, 5000, 0, 0, 0) == (
+            vxi11.ErrorCodes.io_timeout,
+            0,
+            b"",
+        )
+
+    def test_core_write_socket_timeout(self, core_client):
+        core_client.make_call.side_effect = socket.timeout
+
+        assert core_client.device_write(1, 5000, 0, 0, b"abc") == (
+            vxi11.ErrorCodes.io_timeout,
+            0,
+        )
+
+    @pytest.mark.parametrize("prefix", [b"", b"abc"])
+    @pytest.mark.parametrize(
+        "outcome, expected_status",
+        [
+            (socket.timeout(), StatusCode.error_timeout),
+            ((vxi11.ErrorCodes.io_error, 0, b""), StatusCode.error_io),
+        ],
+    )
+    def test_read_rpc_error_preserves_data(
+        self, core_client, prefix, outcome, expected_status
+    ):
+        sess = self._make_session()
+        sess.interface = core_client
+        core_client.make_call.side_effect = (
+            [(0, 0, prefix), outcome] if prefix else [outcome]
+        )
+
+        assert sess.read(10) == (prefix, expected_status)
 
     def test_read_returns_termination_char_status_when_rx_chr_before_count(self):
         sess = self._make_session(termchar_enabled=True)
@@ -194,3 +240,62 @@ class TestTCPIPInstrVxi11Read:
 
         assert data == b"ab"
         assert status == StatusCode.error_io
+
+    def test_read_gives_end_priority_over_termination_character(self):
+        # VPP-4.3 RULE 6.1.1: END is answered regardless of whether the
+        # termination character was also read.
+        sess = self._make_session(termchar_enabled=True)
+        sess.interface.device_read.return_value = (
+            0,
+            vxi11.RX_END | vxi11.RX_CHR,
+            b"abc",
+        )
+
+        data, status = sess.read(10)
+
+        assert data == b"abc"
+        assert status == StatusCode.success
+
+    def test_read_gives_end_priority_when_count_is_exhausted(self):
+        # Same rule on the path that leaves the loop because count ran out.
+        sess = self._make_session(termchar_enabled=True)
+        sess.interface.device_read.return_value = (
+            0,
+            vxi11.RX_END | vxi11.RX_CHR,
+            b"abc",
+        )
+
+        data, status = sess.read(3)
+
+        assert data == b"abc"
+        assert status == StatusCode.success
+
+    def test_read_ignores_rx_chr_when_termchar_is_disabled(self):
+        # VPP-4.3 RULE 6.1.5: VI_SUCCESS_TERM_CHAR is withheld while
+        # VI_ATTR_TERMCHAR_EN is clear, even if the device reports RX_CHR.
+        sess = self._make_session(termchar_enabled=False)
+        sess.interface.device_read.return_value = (
+            0,
+            vxi11.RX_CHR,
+            b"abc",
+        )
+
+        data, status = sess.read(3)
+
+        assert data == b"abc"
+        assert status == StatusCode.success_max_count_read
+
+    def test_read_withholds_success_when_end_is_suppressed(self):
+        # VPP-4.3 RULE 6.1.4: VI_SUCCESS is withheld while
+        # VI_ATTR_SUPPRESS_END_EN is set, so the termination character answers.
+        sess = self._make_session(termchar_enabled=True, suppress_end_enabled=True)
+        sess.interface.device_read.return_value = (
+            0,
+            vxi11.RX_END | vxi11.RX_CHR,
+            b"abc",
+        )
+
+        data, status = sess.read(10)
+
+        assert data == b"abc"
+        assert status == StatusCode.success_termination_character_read

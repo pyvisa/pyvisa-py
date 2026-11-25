@@ -28,18 +28,21 @@ using the NI-VISA backend for PyVISA.
 
 Currently Pyvisa-py support the following resources:
 
+- ASRL INSTR
+- GPIB INSTR
+- GPIB INTFC
 - TCPIP INSTR
 - TCPIP SOCKET
-- GPIB INSTR
-- ASRL INSTR
+- VICP INSTR
 - USB INSTR
 - USB RAW
+- Prologix (Serial or TCP-IP)
 
     Note:
     ASRL INSTR supports also URL Handlers like 
     
-    - loop:// --> ASLRloop://::INSTR
-    - socket:// --> ASRLsocket://::INSTR
+    - loop:// --> ASRLloop://::INSTR
+    - socket://localhost:7777 --> ASRLsocket://localhost:7777::INSTR
 
     These entries will not be listed during the device discovery `rm.list_resources()`.
     For further details see https://pyserial.readthedocs.io/en/latest/url_handlers.html
@@ -53,6 +56,7 @@ Or get the code in GitHub_.
 
     Installation <installation.rst>
     FAQ <faq.rst>
+    Compatibility and specific features <compliance.rst>
 
 .. _PyVISA: http://pyvisa.readthedocs.org/
 .. _GitHub: https://github.com/pyvisa/pyvisa-py

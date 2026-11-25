@@ -1,0 +1,1 @@
+Add trigger support to serial resources.

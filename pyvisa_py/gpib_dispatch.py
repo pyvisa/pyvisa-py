@@ -82,6 +82,7 @@ class GPIBInstrDispatch(Session):
         resource_manager_session: VISARMSession,
         resource_name: str,
         parsed: rname.ResourceName | None = None,
+        access_mode: constants.AccessModes = constants.AccessModes.no_lock,
         open_timeout: int | None = None,
     ) -> Session:
         if parsed is None:
@@ -93,7 +94,11 @@ class GPIBInstrDispatch(Session):
             newcls = resolve(gpib_parsed)
             if newcls is not None:
                 return newcls(
-                    resource_manager_session, resource_name, parsed, open_timeout
+                    resource_manager_session,
+                    resource_name,
+                    parsed,
+                    access_mode,
+                    open_timeout,
                 )
 
         raise OpenError(StatusCode.error_resource_not_found)

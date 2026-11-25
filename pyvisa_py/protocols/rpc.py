@@ -19,6 +19,7 @@ Original source:
 """
 
 import enum
+import os
 import select
 import socket
 import struct
@@ -419,8 +420,7 @@ def _connect(sock, host, port, timeout=0):
     except Exception:
         sock.close()
         return False
-    finally:
-        sock.setblocking(1)
+    sock.setblocking(1)
 
     # minimum is in interval 100 - 500ms based on timeout
     min_select_timeout = max(min(timeout / 10.0, 0.5), 0.1)
@@ -434,6 +434,17 @@ def _connect(sock, host, port, timeout=0):
         # use select to wait for socket ready, max `select_timout` seconds
         r, w, _x = select.select([sock], [sock], [], select_timout)
         if sock in r or sock in w:
+            # Readiness alone does not mean the connection was established. A
+            # refused connect also makes the socket ready, with the reason in
+            # SO_ERROR. Without this check the failure surfaces later, as an
+            # OSError from the first send, which is not a VISA error.
+            err = sock.getsockopt(socket.SOL_SOCKET, socket.SO_ERROR)
+            if err != 0:
+                LOGGER.debug(
+                    "Connect to %s:%s failed: %s", host, port, os.strerror(err)
+                )
+                sock.close()
+                return False
             return True
 
         if time.time() >= finish_time:

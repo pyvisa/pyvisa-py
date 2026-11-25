@@ -7,6 +7,7 @@
 """
 
 import logging
+import socket
 from typing import TYPE_CHECKING, Iterator, Optional
 
 from pyvisa import logger
@@ -19,6 +20,34 @@ if TYPE_CHECKING:
 else:
     BytesBuffer = bytes | bytearray | memoryview
     MutableBytesBuffer = bytearray | memoryview
+
+
+def set_keepalive(sock: socket.socket, keepalive: bool) -> None:
+    """Turn TCP keepalive on/off, tuning the probe timers where possible.
+
+    ``TCP_KEEPIDLE``/``TCP_KEEPINTVL``/``TCP_KEEPCNT`` are not available on
+    every platform (notably ``TCP_KEEPIDLE`` is missing on macOS, which spells
+    it ``TCP_KEEPALIVE``), so each one is applied only if the running
+    interpreter exposes it.
+
+    """
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1 if keepalive else 0)
+    if not keepalive:
+        return
+
+    for name, value in (
+        ("TCP_KEEPIDLE", 60),
+        ("TCP_KEEPALIVE", 60),  # macOS spelling of TCP_KEEPIDLE
+        ("TCP_KEEPINTVL", 60),
+        ("TCP_KEEPCNT", 5),
+    ):
+        option = getattr(socket, name, None)
+        if option is None:
+            continue
+        try:
+            sock.setsockopt(socket.IPPROTO_TCP, option, value)
+        except OSError:
+            LOGGER.debug("could not set socket option %s", name, exc_info=True)
 
 
 class NamedObject(object):

@@ -55,9 +55,12 @@ class _PrologixIntfcSession(Session):  # pylint: disable=W0223
         resource_manager_session: VISARMSession,
         resource_name: str,
         parsed: rname.ResourceName | None = None,
+        access_mode: constants.AccessModes = constants.AccessModes.no_lock,
         open_timeout: int | None = None,
     ) -> None:
-        super().__init__(resource_manager_session, resource_name, parsed, open_timeout)
+        super().__init__(
+            resource_manager_session, resource_name, parsed, access_mode, open_timeout
+        )
 
         # store this instance in the dictionary of Prologix interfaces
         self.boards[self.parsed.board] = self
@@ -223,6 +226,7 @@ if SerialSession is not None:
                 "TERMCHAR",
                 "TERMCHAR_EN",
                 "SUPPRESS_END_EN",
+                "RSRC_LOCK_STATE",
             ):
                 attribute = getattr(constants, "VI_ATTR_" + name)
                 self.attrs[attribute] = attributes.AttributesByID[attribute].default

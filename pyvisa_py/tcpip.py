@@ -16,13 +16,14 @@ import socket
 import threading
 import time
 import warnings
-from typing import Any, Dict, List, Optional, Tuple, Type, cast
+from typing import Any, Dict, Final, List, Optional, Tuple, Type
 
 from pyvisa import attributes, constants, errors, rname
 from pyvisa.constants import BufferOperation, ResourceAttribute, StatusCode
 from pyvisa.typing import VISAJobID
 
-from .common import LOGGER, connect_timeout, int_to_byte
+from .common import LOGGER, connect_timeout, int_to_byte, set_keepalive
+from .events import EventContext
 from .protocols import hislip, rpc, vxi11
 from .sessions import OpenError, Session, UnknownAttribute, VISARMSession
 
@@ -50,7 +51,7 @@ except ImportError:
 VXI11_ERRORS_TO_VISA = {
     0: StatusCode.success,  # no_error
     1: StatusCode.error_invalid_format,  # syntax_error
-    3: StatusCode.error_connection_lost,  # device_no_accessible
+    3: StatusCode.error_connection_lost,  # device_not_accessible
     4: StatusCode.error_invalid_access_key,  # invalid_link_identifier
     5: StatusCode.error_invalid_parameter,  # parameter_error
     6: StatusCode.error_handler_not_installed,  # channel_not_established
@@ -65,6 +66,27 @@ VXI11_ERRORS_TO_VISA = {
 }
 
 
+def vxi11_error_to_visa(error_code: int) -> StatusCode:
+    """Translate a VXI-11 return code into a VISA status code.
+
+    Unknown VXI-11 error codes are translated to ``VI_ERROR_IO`` because
+    VISA has no standard status code for them.
+    """
+    return VXI11_ERRORS_TO_VISA.get(int(error_code), StatusCode.error_io)
+
+
+def calculate_lock_timeout_from_open_timeout(open_timeout: Optional[int]) -> int:
+    # lock_timeout can be 0 for immediate
+    lock_timeout = open_timeout
+    if lock_timeout is None:
+        lock_timeout = 10000  # default lock timeout in ms. This shouldn't happen
+    if lock_timeout == constants.VI_TMO_INFINITE:
+        lock_timeout = 2**32 - 1  # This is dangerous, but hey, the caller wanted it.
+    if lock_timeout == constants.VI_TMO_IMMEDIATE:
+        lock_timeout = 0  # This is NOP, but makes the code more readable
+    return lock_timeout
+
+
 @Session.register(constants.InterfaceType.tcpip, "INSTR")
 class TCPIPInstrSession(Session):
     """A class to dispatch to VXI11 or HiSLIP, based on the protocol."""
@@ -74,6 +96,7 @@ class TCPIPInstrSession(Session):
         resource_manager_session: VISARMSession,
         resource_name: str,
         parsed=None,
+        access_mode: constants.AccessModes = constants.AccessModes.no_lock,
         open_timeout: Optional[int] = None,
     ):
         newcls: Type
@@ -87,7 +110,9 @@ class TCPIPInstrSession(Session):
         else:
             newcls = TCPIPInstrVxi11
 
-        return newcls(resource_manager_session, resource_name, parsed, open_timeout)
+        return newcls(
+            resource_manager_session, resource_name, parsed, access_mode, open_timeout
+        )
 
     @staticmethod
     def list_resources(wait_time=1.0) -> List[str]:
@@ -112,9 +137,35 @@ class TCPIPInstrHiSLIP(Session):
     # need to define session_type to make the set_attribute machinery work.
     session_type = (constants.InterfaceType.tcpip, "INSTR")
 
+    _supported_event_types = {constants.EventType.service_request}
+
+    REMOTELOCALOPCODE: Final[dict[constants.RENLineOperation, str]] = {
+        constants.RENLineOperation.address_gtl: "justGTL",
+        constants.RENLineOperation.asrt: "enableRemote",
+        constants.RENLineOperation.asrt_address: "enableAndGotoRemote",
+        constants.RENLineOperation.asrt_address_llo: "enableAndGTRLLO",
+        constants.RENLineOperation.asrt_llo: "enableAndLockoutLocal",
+        constants.RENLineOperation.deassert: "disableRemote",
+        constants.RENLineOperation.deassert_gtl: "disableAndGTL",
+    }
+
+    LOCKRESPONSE_TO_STATUSCODE: Final[dict[str, constants.StatusCode]] = {
+        hislip.LOCKRESPONSE[0]: constants.StatusCode.error_resource_locked,
+        hislip.LOCKRESPONSE[1]: constants.StatusCode.success,
+        hislip.LOCKRESPONSE[2]: constants.StatusCode.success,
+        hislip.LOCKRESPONSE[3]: constants.StatusCode.error_nonsupported_operation,
+    }
+
     # Override parsed to take into account the fact that this class is only used
     # for a specific kind of resource
     parsed: rname.TCPIPInstr
+
+    # extend the fixed attributes from the base Session class.
+    # Contrary to serial and socket, io_prot is not used, because VPP-4.3 does not explicitly demands it.
+    _hardcoded_attrs = {
+        **Session._hardcoded_attrs,
+        ResourceAttribute.io_prot: constants.VI_PROT_NORMAL,
+    }
 
     default_tcpip_port = 4880
 
@@ -140,49 +191,47 @@ class TCPIPInstrHiSLIP(Session):
     def after_parsing(self) -> None:
         # TODO: board_number not handled
 
-        if "," in self.parsed.lan_device_name:
-            sub_address, port_str = self.parsed.lan_device_name.split(",")
+        parsed = self.parsed
+
+        if "," in parsed.lan_device_name:
+            sub_address, port_str = parsed.lan_device_name.split(",")
             port = int(port_str)
         else:
-            sub_address = self.parsed.lan_device_name
+            sub_address = parsed.lan_device_name
             port = self.default_tcpip_port
 
         try:
+            self._async_interrupted_message_id: Optional[int] = None
             self.interface = hislip.Instrument(
-                self.parsed.host_address,
+                parsed.host_address,
                 # ``open_timeout`` is already in milliseconds, which is what
                 # hislip.Instrument expects.
                 open_timeout=self.open_timeout,
                 timeout=self.timeout,
                 port=port,
                 sub_address=sub_address,
+                event_callback=self._handle_async_service_request,
+                interrupt_callback=self._handle_async_interrupted,
             )
         except Exception as e:
             LOGGER.exception(
-                f"Failed to open HiSLIP connection to {self.parsed.host_address} "
+                f"Failed to open HiSLIP connection to {parsed.host_address} "
                 f"on port {port} with lan device name {sub_address}"
             )
             raise OpenError() from e
 
         # initialize the constant attributes
-        self.attrs[ResourceAttribute.dma_allow_enabled] = constants.VI_FALSE
-        self.attrs[ResourceAttribute.file_append_enabled] = constants.VI_FALSE
         self.attrs[ResourceAttribute.interface_instrument_name] = "TCPIP0 (HiSLIP)"
         self.attrs[ResourceAttribute.interface_number] = 0
-        self.attrs[ResourceAttribute.io_prot] = constants.VI_PROT_NORMAL
-        self.attrs[ResourceAttribute.read_buffer_operation_mode] = (
-            constants.VI_FLUSH_DISABLE
-        )
-        self.attrs[ResourceAttribute.resource_lock_state] = constants.VI_NO_LOCK
+        # do NOT set the resource_lock_state manually; it will be managed by the remote locking mechanism.
         self.attrs[ResourceAttribute.send_end_enabled] = constants.VI_TRUE
         self.attrs[ResourceAttribute.suppress_end_enabled] = constants.VI_FALSE
-        self.attrs[ResourceAttribute.tcpip_address] = self.parsed.host_address
-        self.attrs[ResourceAttribute.tcpip_device_name] = self.parsed.lan_device_name
+        self.attrs[ResourceAttribute.tcpip_address] = parsed.host_address
+        self.attrs[ResourceAttribute.tcpip_device_name] = parsed.lan_device_name
         self.attrs[ResourceAttribute.tcpip_hislip_overlap_enable] = constants.VI_FALSE
         self.attrs[ResourceAttribute.tcpip_hislip_version] = 0x0010_0000
-        self.attrs[ResourceAttribute.tcpip_hostname] = self.parsed.host_address
+        self.attrs[ResourceAttribute.tcpip_hostname] = parsed.host_address
         self.attrs[ResourceAttribute.tcpip_is_hislip] = constants.VI_TRUE
-        self.attrs[ResourceAttribute.tcpip_nodelay] = constants.VI_TRUE
         self.attrs[ResourceAttribute.tcpip_port] = port
         self.attrs[ResourceAttribute.termchar] = ord("\n")
         self.attrs[ResourceAttribute.termchar_enabled] = constants.VI_FALSE
@@ -199,17 +248,34 @@ class TCPIPInstrHiSLIP(Session):
             self.get_keepalive,
             self.set_keepalive,
         )
+        self.attrs[ResourceAttribute.tcpip_nodelay] = (
+            self.get_nodelay,
+            self.set_nodelay,
+        )
 
-        # TODO: additional attributes (someday)
-        # self.attrs[ResourceAttribute.manufacturer_id] = 16711
-        # self.attrs[ResourceAttribute.max_queue_length] = 50
-        # self.attrs[ResourceAttribute.read_buffer_size] = 4096
-        # self.attrs[ResourceAttribute.resource_impl_version] = 0x0050_0c01
-        # self.attrs[ResourceAttribute.resource_manufacturer_id] = 4015
-        # self.attrs[ResourceAttribute.resource_manufacturer_name] = 'Rohde & Schwarz GmbH'
-        # self.attrs[ResourceAttribute.resource_spec_version] = 0x0050_0800
-        # self.attrs[ResourceAttribute.user_data] = 0
-        # self.attrs[ResourceAttribute.write_buffer_size] = 4096
+        # and now handle the lock
+        if self.access_mode & constants.AccessModes.exclusive_lock:
+            # It wouldn't be too hard to implement shared locking, since
+            # the interface likely supports it, but for now we only handle exclusive locks.
+
+            # about the timeout: Found nothing in the spec that says how to handle this.
+            # Do what is done by VXI-11
+            lock_timeout = calculate_lock_timeout_from_open_timeout(self.open_timeout)
+            _k, rv = self.lock(constants.Lock.exclusive, lock_timeout, "")
+            if rv != StatusCode.success:
+                self.close()  # the operation was open_with_lock. If the lock fails, the open should also be reversed.
+                raise RuntimeError("Failed to acquire exclusive lock")
+
+    def _handle_async_service_request(self, status_byte: int) -> None:
+        ctx = EventContext(
+            event_type=constants.EventType.service_request,
+            context_id=status_byte,
+        )
+        self._fire_event(constants.EventType.service_request, ctx)
+
+    def _handle_async_interrupted(self, message_id: int) -> None:
+        self._async_interrupted_message_id = message_id
+        # TODO: fire an event for this, but there is no INTR event type for HiSLIP in VPP-4.3
 
     def get_max_message_kb(
         self, attribute: ResourceAttribute
@@ -242,6 +308,15 @@ class TCPIPInstrHiSLIP(Session):
         self.interface.keepalive = keepalive
         return StatusCode.success
 
+    def get_nodelay(self, attribute: ResourceAttribute) -> Tuple[bool, StatusCode]:
+        """Return whether the Nagle algorithm is disabled."""
+        return self.interface.nodelay, StatusCode.success
+
+    def set_nodelay(self, attribute: ResourceAttribute, nodelay: bool) -> StatusCode:
+        """Enable or disable the Nagle algorithm for this connection."""
+        self.interface.nodelay = nodelay
+        return StatusCode.success
+
     def close(self) -> StatusCode:
         self.interface.close()
         self.interface = None
@@ -272,20 +347,38 @@ class TCPIPInstrHiSLIP(Session):
             Return value of the library call.
 
         """
+        if count < 0:
+            return b"", StatusCode.error_invalid_parameter
+        if count == 0:
+            return b"", StatusCode.success_max_count_read
+
+        suppress_end_en, _ = self.get_attribute(ResourceAttribute.suppress_end_enabled)
+        termchar_enabled, _ = self.get_attribute(ResourceAttribute.termchar_enabled)
+        termchar, _ = self.get_attribute(ResourceAttribute.termchar)
+
         try:
-            data = self.interface.receive(count)
-            status = (
-                StatusCode.success_termination_character_read
-                if self.interface._rmt
-                else StatusCode.success_max_count_read
-                if len(data) >= count
-                else StatusCode.success
+            data = self.interface.receive(
+                count,
+                termination_char=termchar if termchar_enabled else None,
+                suppress_end=bool(suppress_end_en),
             )
+            if not suppress_end_en and self.interface._last_read_rmt:
+                # RULE 6.1.1: END takes priority over TERMCHAR and count.
+                status = StatusCode.success
+            elif termchar_enabled and self.interface._last_read_termchar:
+                # RULE 6.1.2
+                status = StatusCode.success_termination_character_read
+            elif len(data) >= count:
+                # RULE 6.1.3
+                status = StatusCode.success_max_count_read
+            else:
+                status = StatusCode.success
 
         except hislip.HiSLIPInterruptedError:
             # terminate() was called from another thread.  Reset the HiSLIP
             # protocol state so the session is ready for further I/O.
             self.interface.complete_terminate()
+            self._update_feature_attributes()
             data, status = b"", StatusCode.error_abort
 
         except socket.timeout:
@@ -311,9 +404,39 @@ class TCPIPInstrHiSLIP(Session):
             Return value of the library call.
 
         """
-        self.interface.send(data)
+        send_end_en, _ = self.get_attribute(ResourceAttribute.send_end_enabled)
+        self.interface.send(data, send_end=bool(send_end_en))
 
         return len(data), StatusCode.success
+
+    def gpib_control_ren(self, mode: constants.RENLineOperation) -> StatusCode:
+        """Controls the state of the GPIB Remote Enable (REN) interface line.
+
+        Optionally the remote/local state of the device is also controlled.
+
+        Corresponds to viGpibControlREN function of the VISA library.
+
+        Parameters
+        ----------
+        mode : constants.RENLineOperation
+            Specifies the state of the REN line and optionally the device
+            remote/local state.
+
+        Returns
+        -------
+        StatusCode
+            Return value of the library call.
+
+        """
+        try:
+            method = self.REMOTELOCALOPCODE[mode]
+        except KeyError:
+            # unknown value?
+            return StatusCode.error_nonsupported_operation
+
+        self.interface.async_remote_local_control(method)
+
+        return StatusCode.success
 
     def clear(self) -> StatusCode:
         """Clears a device.
@@ -322,7 +445,37 @@ class TCPIPInstrHiSLIP(Session):
 
         """
         self.interface.device_clear()
+        self._update_feature_attributes()
 
+        return StatusCode.success
+
+    def _update_feature_attributes(self) -> None:
+        self.attrs[ResourceAttribute.tcpip_hislip_overlap_enable] = (
+            constants.VI_TRUE
+            if self.interface.feature_bitmap & 0x01
+            else constants.VI_FALSE
+        )
+
+    def assert_trigger(self, protocol: constants.TriggerProtocol):
+        """Asserts software or hardware trigger.
+
+        Corresponds to viAssertTrigger function of the VISA library.
+
+        Parameters
+        ----------
+        protocol : constants.TriggerProtocol
+            Trigger protocol to use during assertion. Only default is supported.
+
+        Returns
+        -------
+        StatusCode
+            Return value of the library call.
+
+        """
+        if protocol != constants.TriggerProtocol.default:
+            return StatusCode.error_nonsupported_operation
+
+        self.interface.trigger()
         return StatusCode.success
 
     def read_stb(self) -> Tuple[int, StatusCode]:
@@ -339,12 +492,74 @@ class TCPIPInstrHiSLIP(Session):
 
         """
 
-        interface = cast(hislip.Instrument, self.interface)
         # According to IVI-6.1 Rev.2 status query corresponds to viReadSTB.
-        stb = interface.async_status_query()
+        stb = self.interface.async_status_query()
         errorcode = StatusCode.success
 
         return stb, errorcode
+
+    def lock(
+        self,
+        lock_type: constants.Lock,
+        timeout: int,
+        requested_key: Optional[str] = None,
+    ) -> Tuple[str, constants.StatusCode]:
+        """Establishes an access mode to the specified resources.
+
+        Corresponds to viLock function of the VISA library.
+
+        Parameters
+        ----------
+        session : VISASession
+            Unique logical identifier to a session.
+        lock_type : constants.Lock
+            Specifies the type of lock requested.
+        timeout : int
+            Absolute time period (in milliseconds) that a resource waits to get
+            unlocked by the locking session before returning an error.
+        requested_key : Optional[str], optional
+            Requested locking key in the case of a shared lock. For an exclusive
+            lock it should be None.
+
+        Returns
+        -------
+        Optional[str]
+            Key that can then be passed to other sessions to share the lock, or
+            None for an exclusive lock.
+        StatusCode
+            Return value of the library call.
+
+        """
+        # For now, we only handle exclusive locks.
+        # It could be possible to handle shared locks in the future
+        if lock_type != constants.Lock.exclusive:
+            return "", StatusCode.error_nonsupported_operation
+
+        # requested_key is ignored for exclusive locks.
+        # Note to future: requested_key None is invalid: make it an empty string
+        rv = self.interface.async_lock_request(timeout, "")
+        # rv is from LOCKRESPONSE
+
+        return "", self.LOCKRESPONSE_TO_STATUSCODE.get(
+            rv, StatusCode.error_nonsupported_operation
+        )
+
+    def unlock(self) -> constants.StatusCode:
+        """Relinquish a lock for the specified resource.
+
+        Corresponds to viUnlock function of the VISA library.
+
+        Returns
+        -------
+        StatusCode
+            Return value of the library call.
+
+        """
+        rv = self.interface.async_lock_release()
+        # rv is from LOCKRESPONSE
+        return self.LOCKRESPONSE_TO_STATUSCODE.get(
+            rv, StatusCode.error_nonsupported_operation
+        )
 
     def terminate(self, job_id: VISAJobID | None = None) -> StatusCode:
         """Cancel a pending I/O operation on this session.
@@ -379,8 +594,7 @@ class TCPIPInstrHiSLIP(Session):
             Return value of the library call.
 
         """
-        interface = cast(hislip.Instrument, self.interface)
-        interface.terminate()
+        self.interface.terminate()
         return StatusCode.success
 
     def _get_attribute(self, attribute: ResourceAttribute) -> Tuple[Any, StatusCode]:
@@ -401,6 +615,22 @@ class TCPIPInstrHiSLIP(Session):
             Return value of the library call.
 
         """
+        # get the lock state from the instrument itself:
+        # RULE 3.6.6
+        # IF a session uses HiSLIP, THEN a VISA implementation SHALL return the HiSLIP remote lock state
+        # for VI_ATTR_RSRC_LOCK_STATE.
+        if attribute == constants.VI_ATTR_RSRC_LOCK_STATE:
+            exclusive_lock = self.interface.async_lock_info()
+            # exclusive_lock: 0: No exclusive lock granted
+            #                 1: Exclusive lock granted
+            # we do not do shared locks (yet)
+            if exclusive_lock not in (0, 1):
+                raise ValueError(f"Unexpected exclusive_lock value: {exclusive_lock}")
+            else:
+                if exclusive_lock == 0:
+                    return constants.VI_NO_LOCK, StatusCode.success
+                else:
+                    return constants.VI_EXCLUSIVE_LOCK, StatusCode.success
         raise UnknownAttribute(attribute)
 
     def _set_attribute(
@@ -437,7 +667,11 @@ class Vxi11CoreClient(vxi11.CoreClient):
     """
 
     def __init__(
-        self, host: str, port: Optional[int], open_timeout: Optional[int] = None
+        self,
+        host: str,
+        port: Optional[int],
+        access_mode: constants.AccessModes = constants.AccessModes.no_lock,
+        open_timeout: Optional[int] = None,
     ) -> None:
         self._lock = threading.Lock()
         self.packer = vxi11.Vxi11Packer()
@@ -468,9 +702,6 @@ class TCPIPInstrVxi11(Session):
     #: Maximum size of a chunk of data in bytes.
     max_recv_size: int
 
-    #: Time to wait in ms before erroring with a timeout when trying to acquire a lock
-    lock_timeout: int = 10000
-
     #: Unique ID of the client used to authenticate messages.
     client_id: int
 
@@ -483,6 +714,13 @@ class TCPIPInstrVxi11(Session):
 
     # Setting if keepalive has been activated
     keepalive: bool
+
+    # extend the fixed attributes from the base Session class.
+    # Contrary to serial and socket, io_prot is not used, because VPP-4.3 does not explicitly demands it.
+    _hardcoded_attrs = {
+        **Session._hardcoded_attrs,
+        ResourceAttribute.io_prot: constants.VI_PROT_NORMAL,
+    }
 
     @staticmethod
     def list_resources() -> List[str]:
@@ -505,37 +743,56 @@ class TCPIPInstrVxi11(Session):
                 UserWarning,
             )
 
-        pmap_list = [rpc.BroadcastUDPPortMapperClient(ip) for ip in broadcast_addr]
-        for pmap in list(pmap_list):
-            pmap.set_timeout(0)
-            try:
-                pmap.send_port(
-                    (vxi11.DEVICE_CORE_PROG, vxi11.DEVICE_CORE_VERS, rpc.IPPROTO_TCP, 0)
-                )
-            except rpc.RPCError:
-                pmap_list.remove(pmap)
+        pmap_list = []
+        try:
+            for ip in broadcast_addr:
+                pmap_list.append(rpc.BroadcastUDPPortMapperClient(ip))
 
-        # Timeout for responses
-        time.sleep(1)
+            active_pmaps = []
+            for pmap in pmap_list:
+                pmap.set_timeout(0)
+                try:
+                    pmap.send_port(
+                        (
+                            vxi11.DEVICE_CORE_PROG,
+                            vxi11.DEVICE_CORE_VERS,
+                            rpc.IPPROTO_TCP,
+                            0,
+                        )
+                    )
+                except rpc.RPCError:
+                    continue
+                active_pmaps.append(pmap)
 
-        all_res = []
-        for pmap in pmap_list:
-            try:
-                resp = pmap.recv_port(
-                    (vxi11.DEVICE_CORE_PROG, vxi11.DEVICE_CORE_VERS, rpc.IPPROTO_TCP, 0)
-                )
-            except rpc.RPCError:
-                pass
-            else:
-                res = [r[1][0] for r in resp if r[0] > 0]
-                res = sorted(
-                    res, key=lambda ip: tuple(int(part) for part in ip.split("."))
-                )
-                # TODO: Detect GPIB over TCPIP
-                res = ["TCPIP::{}::INSTR".format(host) for host in res]
-                all_res.extend(res)
+            # Timeout for responses
+            time.sleep(1)
 
-        return all_res
+            all_res = []
+            for pmap in active_pmaps:
+                try:
+                    resp = pmap.recv_port(
+                        (
+                            vxi11.DEVICE_CORE_PROG,
+                            vxi11.DEVICE_CORE_VERS,
+                            rpc.IPPROTO_TCP,
+                            0,
+                        )
+                    )
+                except rpc.RPCError:
+                    pass
+                else:
+                    res = [r[1][0] for r in resp if r[0] > 0]
+                    res = sorted(
+                        res, key=lambda ip: tuple(int(part) for part in ip.split("."))
+                    )
+                    # TODO: Detect GPIB over TCPIP
+                    res = ["TCPIP::{}::INSTR".format(host) for host in res]
+                    all_res.extend(res)
+
+            return all_res
+        finally:
+            for pmap in pmap_list:
+                pmap.close()
 
     def after_parsing(self) -> None:
         # TODO: board_number not handled
@@ -547,7 +804,9 @@ class TCPIPInstrVxi11(Session):
         else:
             port = None
         try:
-            self.interface = Vxi11CoreClient(host_address, port, self.open_timeout)
+            self.interface = Vxi11CoreClient(
+                host_address, port, self.access_mode, self.open_timeout
+            )
         except rpc.RPCError:
             LOGGER.exception(
                 f"Failed to open VX11 connection to {host_address} on port {port}"
@@ -559,23 +818,61 @@ class TCPIPInstrVxi11(Session):
         self._srq_server: vxi11.SrqInterruptTCPServer | None = None
         self._srq_lifecycle_lock = threading.Lock()
 
+        # RULE B.6.6:
+        # The operation of create_link SHALL ignore locks if lockDevice is false.
+        # RULE B.6.7:
+        # If lockDevice is true and the lock is not freed after at least lock_timeout milliseconds, create_link
+        # SHALL terminate without creating a link and return with error set to 11, device locked by another link.
+
+        # However, some devices, even from the big brands, once they are locked, will respect nothing of the above.
+        # If there is already a lock, expect some devices to act as if lockDevice is True,
+        # to use arbitrarily longer timeouts, and expect a reply of "timeout" instead of "device locked by another link".
+        # Comparable liberties are likely to be taken on device_lock().
+
+        if self.access_mode & constants.AccessModes.exclusive_lock:
+            lock_device = 1
+            lock_timeout = calculate_lock_timeout_from_open_timeout(self.open_timeout)
+        else:
+            lock_device = 0
+            lock_timeout = 0  # time is not used now.
+
         error, link, _abort_port, max_recv_size = self.interface.create_link(
-            self.client_id, 0, self.lock_timeout, self.parsed.lan_device_name
+            self.client_id, lock_device, lock_timeout, self.parsed.lan_device_name
         )
 
         if error:
-            raise Exception("error creating link: %d" % error)
+            LOGGER.exception("Error creating link: %d", error)
+            raise OpenError()
 
         self.link = link
-        self.max_recv_size = min(max_recv_size, 2**30)  # 1GB
+        # Although VXI-11 RULE B.6.3 says min 1kB, I accept from 64B to accomodate unit tests,
+        # and bad behaving VXI devices that might report small max_recv_size values.
+        # This is mainly to avoid hangups due to too low values (< 4B). Max 1GB is reasonable.
+        self.max_recv_size = min(max(max_recv_size, 64), 2**30)
 
+        self.attrs[ResourceAttribute.interface_instrument_name] = "TCPIP0 (VXI-11)"
+        self.attrs[ResourceAttribute.interface_number] = 0
         self.attrs[ResourceAttribute.tcpip_is_hislip] = False
         self.attrs[ResourceAttribute.tcpip_address] = self.parsed.host_address
-        self.attrs[ResourceAttribute.tcpip_hostname] = ""
+        self.attrs[ResourceAttribute.tcpip_hostname] = self.parsed.host_address
         self.attrs[ResourceAttribute.tcpip_device_name] = self.parsed.lan_device_name
+        self.attrs[ResourceAttribute.tcpip_port] = (
+            port if port is not None else self.interface.sock.getpeername()[1]
+        )
         for name in ("SEND_END_EN", "TERMCHAR", "TERMCHAR_EN", "SUPPRESS_END_EN"):
             attribute = getattr(constants, "VI_ATTR_" + name)
             self.attrs[attribute] = attributes.AttributesByID[attribute].default
+
+        if lock_device:
+            self.attrs[ResourceAttribute.resource_lock_state] = (
+                constants.VI_EXCLUSIVE_LOCK
+            )
+        else:
+            self.attrs[ResourceAttribute.resource_lock_state] = constants.VI_NO_LOCK
+
+        # add the Keysight and PyVISA-Py specific lock wait attribute, which is a boolean that
+        # controls whether to wait for the lock or not
+        self.attrs[ResourceAttribute.lockwait] = constants.VI_FALSE  # type: ignore[attr-defined]
 
     def close(self) -> StatusCode:
         self._stop_event_monitor()
@@ -628,7 +925,7 @@ class TCPIPInstrVxi11(Session):
                     server.sock.close()
                 except Exception:
                     pass
-                return StatusCode.error_nonsupported_operation
+                return vxi11_error_to_visa(error)
 
             error = self.interface.device_enable_srq(self.link, True, b"srq")
             if error:
@@ -641,7 +938,7 @@ class TCPIPInstrVxi11(Session):
                     server.sock.close()
                 except Exception:
                     pass
-                return StatusCode.error_io
+                return vxi11_error_to_visa(error)
 
             with self._event_state._lock:
                 if (
@@ -692,13 +989,31 @@ class TCPIPInstrVxi11(Session):
             except Exception:
                 pass
 
+    def _adapt_flags_and_lock_timeout(self, flags: int) -> Tuple[int, int]:
+        # Do as Keysight does it:
+
+        lock_timeout = constants.VI_TMO_IMMEDIATE
+        if self.attrs[ResourceAttribute.lockwait] == constants.VI_TRUE:  # type: ignore[attr-defined]
+            # Get the timeout as cleaned up by the upper layers
+            lock_timeout = self._io_timeout  # is in ms
+            flags |= vxi11.OP_FLAG_WAIT_BLOCK
+        return flags, lock_timeout
+
     def _read_status_from_reason(
-        self, reason: int, suppress_end_en: bool
+        self, reason: int, suppress_end_en: bool, termchar_en: bool
     ) -> StatusCode:
-        if reason & vxi11.RX_CHR:
-            return StatusCode.success_termination_character_read
-        if reason & vxi11.RX_END and not suppress_end_en:
+        """Completion status for a read, from the reason the device gave.
+
+        VPP-4.3 RULE 6.1.1 gives the END indicator priority: it is answered
+        regardless of whether the termination character was also read, so it
+        is tested first. RULE 6.1.4 withholds VI_SUCCESS while
+        VI_ATTR_SUPPRESS_END_EN is set, and RULE 6.1.5 withholds
+        VI_SUCCESS_TERM_CHAR while VI_ATTR_TERMCHAR_EN is clear.
+        """
+        if not suppress_end_en and (reason & vxi11.RX_END):
             return StatusCode.success
+        if termchar_en and (reason & vxi11.RX_CHR):
+            return StatusCode.success_termination_character_read
         return StatusCode.success_max_count_read
 
     def read(self, count: int) -> Tuple[bytes, StatusCode]:
@@ -726,11 +1041,14 @@ class TCPIPInstrVxi11(Session):
 
         chunk_length = min(count, self.max_recv_size)
 
-        if self.get_attribute(ResourceAttribute.termchar_enabled)[0]:
+        termchar_en, _ = self.get_attribute(ResourceAttribute.termchar_enabled)
+        if termchar_en:
             term_char, _ = self.get_attribute(ResourceAttribute.termchar)
             flags = vxi11.OP_FLAG_TERMCHAR_SET
         else:
             term_char = flags = 0
+
+        flags, lock_timeout = self._adapt_flags_and_lock_timeout(flags)
 
         suppress_end_en, _ = self.get_attribute(ResourceAttribute.suppress_end_enabled)
 
@@ -771,27 +1089,27 @@ class TCPIPInstrVxi11(Session):
                 self.link,
                 chunk_length,
                 chunk_timeout,
-                self.lock_timeout,
+                lock_timeout,
                 flags,
                 term_char,
             )
 
-            if error == vxi11.ErrorCodes.io_timeout:
-                return bytes(read_data), StatusCode.error_timeout
-            elif error:
-                return bytes(read_data), StatusCode.error_io
+            if error:
+                return bytes(read_data), vxi11_error_to_visa(error)
 
             read_data.extend(data)
             count -= len(data)
 
             if count <= 0:
-                status = self._read_status_from_reason(reason, suppress_end_en)
+                status = self._read_status_from_reason(
+                    reason, suppress_end_en, termchar_en
+                )
                 break
 
             chunk_length = min(count, chunk_length)
 
         if count > 0 and (reason & stop_reason):
-            status = self._read_status_from_reason(reason, suppress_end_en)
+            status = self._read_status_from_reason(reason, suppress_end_en, termchar_en)
 
         return bytes(read_data), status
 
@@ -818,21 +1136,23 @@ class TCPIPInstrVxi11(Session):
             num = len(data)
             offset = 0
 
+            flags, lock_timeout = self._adapt_flags_and_lock_timeout(flags)
+
             while num > 0:
-                if num <= self.max_recv_size:
+                if (
+                    num <= self.max_recv_size
+                    and self.attrs[ResourceAttribute.send_end_enabled]
+                ):
                     flags |= vxi11.OP_FLAG_END
 
                 block = data[offset : offset + self.max_recv_size]
 
                 error, size = self.interface.device_write(
-                    self.link, self._io_timeout, self.lock_timeout, flags, block
+                    self.link, self._io_timeout, lock_timeout, flags, block
                 )
 
-                if error == vxi11.ErrorCodes.io_timeout:
-                    return offset, StatusCode.error_timeout
-
-                elif error or size < len(block):
-                    return offset, StatusCode.error_io
+                if error or size < len(block):
+                    return offset, vxi11_error_to_visa(error)
 
                 offset += size
                 num -= size
@@ -841,6 +1161,45 @@ class TCPIPInstrVxi11(Session):
 
         except vxi11.Vxi11Error:
             return 0, StatusCode.error_timeout
+
+    def gpib_control_ren(self, mode: constants.RENLineOperation) -> StatusCode:
+        """Controls the state of the GPIB Remote Enable (REN) interface line.
+
+        Optionally the remote/local state of the device is also controlled.
+
+        Corresponds to viGpibControlREN function of the VISA library.
+
+        Parameters
+        ----------
+        mode : constants.RENLineOperation
+            Specifies the state of the REN line and optionally the device
+            remote/local state.
+
+        Returns
+        -------
+        StatusCode
+            Return value of the library call.
+
+        """
+        flags, lock_timeout = self._adapt_flags_and_lock_timeout(0)
+        if mode in (
+            constants.RENLineOperation.asrt_address,
+            constants.RENLineOperation.asrt_address_llo,
+        ):
+            error = self.interface.device_remote(
+                self.link, flags, lock_timeout, self._io_timeout
+            )
+            return vxi11_error_to_visa(error)
+        elif mode in (
+            constants.RENLineOperation.address_gtl,
+            constants.RENLineOperation.deassert_gtl,
+        ):
+            error = self.interface.device_local(
+                self.link, flags, lock_timeout, self._io_timeout
+            )
+            return vxi11_error_to_visa(error)
+        else:
+            return constants.StatusCode.error_nonsupported_operation
 
     def _get_attribute(self, attribute: ResourceAttribute) -> Tuple[Any, StatusCode]:
         """Get the value for a given VISA attribute for this session.
@@ -863,6 +1222,15 @@ class TCPIPInstrVxi11(Session):
         # This is an abuse of the VISA standard
         if attribute == constants.VI_ATTR_TCPIP_KEEPALIVE:
             return self.keepalive, StatusCode.success
+
+        if attribute == constants.VI_ATTR_TCPIP_NODELAY:
+            value = self.interface.sock.getsockopt(
+                socket.IPPROTO_TCP, socket.TCP_NODELAY
+            )
+            return bool(value), StatusCode.success
+
+        if attribute == constants.VI_KTATTR_LOCKWAIT:  # type: ignore[attr-defined]
+            return self.attrs[ResourceAttribute.lockwait], StatusCode.success  # type: ignore[attr-defined]
 
         raise UnknownAttribute(attribute)
 
@@ -893,26 +1261,22 @@ class TCPIPInstrVxi11(Session):
         # https://tech.xing.com/a-reason-for-unexplained-connection-timeouts-on-kubernetes-docker-abd041cf7e02
         if attribute == constants.VI_ATTR_TCPIP_KEEPALIVE:
             if attribute_state is True:
-                self.interface.sock.setsockopt(
-                    socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1
-                )
-                self.interface.sock.setsockopt(
-                    socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, 60
-                )
-                self.interface.sock.setsockopt(
-                    socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, 60
-                )
-                self.interface.sock.setsockopt(
-                    socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 5
-                )
+                set_keepalive(self.interface.sock, True)
                 self.keepalive = True
             elif attribute_state is False:
-                self.interface.sock.setsockopt(
-                    socket.SOL_SOCKET, socket.SO_KEEPALIVE, 0
-                )
+                set_keepalive(self.interface.sock, False)
                 self.keepalive = False
             else:
                 return StatusCode.error_nonsupported_format
+            return StatusCode.success
+
+        if attribute == constants.VI_ATTR_TCPIP_NODELAY:
+            self.interface.sock.setsockopt(
+                socket.IPPROTO_TCP, socket.TCP_NODELAY, bool(attribute_state)
+            )
+            return StatusCode.success
+
+        if attribute == constants.VI_KTATTR_LOCKWAIT:  # type: ignore[attr-defined]
             return StatusCode.success
 
         raise UnknownAttribute(attribute)
@@ -933,12 +1297,17 @@ class TCPIPInstrVxi11(Session):
             Return value of the library call.
 
         """
-        # XXX make this nicer (either validate protocol or pass it)
+        if protocol != constants.TriggerProtocol.default:
+            return StatusCode.error_nonsupported_operation
+
+        flags = 0
+        flags, lock_timeout = self._adapt_flags_and_lock_timeout(flags)
+
         error = self.interface.device_trigger(
-            self.link, 0, self.lock_timeout, self._io_timeout
+            self.link, flags, lock_timeout, self._io_timeout
         )
 
-        return VXI11_ERRORS_TO_VISA[error]
+        return vxi11_error_to_visa(error)
 
     def clear(self) -> StatusCode:
         """Clears a device.
@@ -946,11 +1315,14 @@ class TCPIPInstrVxi11(Session):
         Corresponds to viClear function of the VISA library.
 
         """
+        flags = 0
+        flags, lock_timeout = self._adapt_flags_and_lock_timeout(flags)
+
         error = self.interface.device_clear(
-            self.link, 0, self.lock_timeout, self._io_timeout
+            self.link, flags, lock_timeout, self._io_timeout
         )
 
-        return VXI11_ERRORS_TO_VISA[error]
+        return vxi11_error_to_visa(error)
 
     def read_stb(self) -> Tuple[int, StatusCode]:
         """Reads a status byte of the service request.
@@ -965,11 +1337,14 @@ class TCPIPInstrVxi11(Session):
             Return value of the library call.
 
         """
+        flags = 0
+        flags, lock_timeout = self._adapt_flags_and_lock_timeout(flags)
+
         error, stb = self.interface.device_read_stb(
-            self.link, 0, self.lock_timeout, self._io_timeout
+            self.link, flags, lock_timeout, self._io_timeout
         )
 
-        return stb, VXI11_ERRORS_TO_VISA[error]
+        return stb, vxi11_error_to_visa(error)
 
     def lock(
         self,
@@ -1003,12 +1378,31 @@ class TCPIPInstrVxi11(Session):
             Return value of the library call.
 
         """
-        #  TODO: lock type not implemented
+        # TODO: shared lock is not implemented
+        if lock_type == constants.Lock.shared:
+            return "", StatusCode.error_nonsupported_operation
+
+        # The only remaining lock type is exclusive lock
+
+        # RULE B.6.74:
+        # If some other link has the lock, device_lock SHALL examine the waitlock
+        # flag in flags. If the flag is set, device_lock SHALL block until the
+        # lock is free. If the flag is not set, device_lock SHALL terminate with
+        # error set to 11, device locked by another link.
+
         flags = 0
+        # The waitlock flag is the only flag used here
+        if timeout != constants.VI_TMO_IMMEDIATE:
+            flags = vxi11.OP_FLAG_WAIT_BLOCK
 
-        error = self.interface.device_lock(self.link, flags, self.lock_timeout)
+        error = self.interface.device_lock(self.link, flags, timeout)
+        error = vxi11_error_to_visa(error)
+        if error == StatusCode.success:
+            self.attrs[ResourceAttribute.resource_lock_state] = (
+                constants.VI_EXCLUSIVE_LOCK
+            )
 
-        return "", VXI11_ERRORS_TO_VISA[error]
+        return "", error
 
     def unlock(self) -> constants.StatusCode:
         """Relinquish a lock for the specified resource.
@@ -1022,14 +1416,18 @@ class TCPIPInstrVxi11(Session):
 
         """
         error = self.interface.device_unlock(self.link)
+        error = vxi11_error_to_visa(error)
+        if error == StatusCode.success:
+            self.attrs[ResourceAttribute.resource_lock_state] = constants.VI_NO_LOCK
 
-        return VXI11_ERRORS_TO_VISA[error]
+        return error
 
     def _set_timeout(self, attribute: ResourceAttribute, value: int) -> StatusCode:
         """Sets timeout calculated value from python way to VI_ way"""
         # value is in milliseconds,
         # and can be VI_TMO_INFINITE (2**32 - 1) or VI_TMO_IMMEDIATE (0)
         self._io_timeout = value
+        # self.timeout comes from the superclass, is in seconds, and can be None (infinite) or 0 (immediate)
         if value == constants.VI_TMO_INFINITE:
             self.timeout = None
         elif value == constants.VI_TMO_IMMEDIATE:
@@ -1045,6 +1443,13 @@ class TCPIPInstrVicp(Session):
     # Override parsed to take into account the fact that this class is only used
     # for a specific kind of resource
     parsed: rname.VICPInstr
+
+    # extend the fixed attributes from the base Session class.
+    # Contrary to serial and socket, io_prot is not used, because VPP-4.3 does not explicitly demands it.
+    _hardcoded_attrs = {
+        **Session._hardcoded_attrs,
+        ResourceAttribute.io_prot: constants.VI_PROT_NORMAL,
+    }
 
     @staticmethod
     def list_resources(wait_time=1.0) -> List[str]:
@@ -1092,19 +1497,12 @@ class TCPIPInstrVicp(Session):
             raise OpenError() from e
 
         # initialize the constant attributes
-        for name in ("SEND_END_EN", "TERMCHAR", "TERMCHAR_EN"):
+        for name in ("SEND_END_EN", "TERMCHAR", "TERMCHAR_EN", "RSRC_LOCK_STATE"):
             attribute = getattr(constants, "VI_ATTR_" + name)
             self.attrs[attribute] = attributes.AttributesByID[attribute].default
 
-        self.attrs[ResourceAttribute.dma_allow_enabled] = constants.VI_FALSE
-        self.attrs[ResourceAttribute.file_append_enabled] = constants.VI_FALSE
         self.attrs[ResourceAttribute.interface_instrument_name] = "TCPIP0 (VICP)"
         self.attrs[ResourceAttribute.interface_number] = 0
-        self.attrs[ResourceAttribute.io_prot] = constants.VI_PROT_NORMAL
-        self.attrs[ResourceAttribute.read_buffer_operation_mode] = (
-            constants.VI_FLUSH_DISABLE
-        )
-        self.attrs[ResourceAttribute.resource_lock_state] = constants.VI_NO_LOCK
         self.attrs[ResourceAttribute.suppress_end_enabled] = constants.VI_FALSE
         self.attrs[ResourceAttribute.tcpip_address] = self.parsed.host_address
         self.attrs[ResourceAttribute.tcpip_hostname] = self.parsed.host_address
@@ -1120,17 +1518,6 @@ class TCPIPInstrVicp(Session):
             self.get_keepalive,
             self.set_keepalive,
         )
-
-        # TODO: additional attributes (someday)
-        # self.attrs[ResourceAttribute.manufacturer_id] = 16711
-        # self.attrs[ResourceAttribute.max_queue_length] = 50
-        # self.attrs[ResourceAttribute.read_buffer_size] = 4096
-        # self.attrs[ResourceAttribute.resource_impl_version] = 0x0050_0c01
-        # self.attrs[ResourceAttribute.resource_manufacturer_id] = 4015
-        # self.attrs[ResourceAttribute.resource_manufacturer_name] = 'Rohde & Schwarz GmbH'
-        # self.attrs[ResourceAttribute.resource_spec_version] = 0x0050_0800
-        # self.attrs[ResourceAttribute.user_data] = 0
-        # self.attrs[ResourceAttribute.write_buffer_size] = 4096
 
     def get_keepalive(self, attribute: ResourceAttribute) -> Tuple[bool, StatusCode]:
         """Is TCP keepalive enabled for the resource."""
@@ -1318,7 +1705,8 @@ class TCPIPSocketSession(Session):
         ret_status = self._connect()
         if ret_status != StatusCode.success:
             self.close()
-            raise Exception("could not connect: {0}".format(str(ret_status)))
+            LOGGER.exception("could not connect: {0}".format(str(ret_status)))
+            raise OpenError()
 
         self.max_recv_size = 4096
         # This buffer is used to store the bytes that appeared after
@@ -1327,20 +1715,23 @@ class TCPIPSocketSession(Session):
 
         self.attrs[ResourceAttribute.tcpip_address] = self.parsed.host_address
         self.attrs[ResourceAttribute.tcpip_port] = self.parsed.port
-        self.attrs[ResourceAttribute.interface_number] = self.parsed.board
+        self.attrs[ResourceAttribute.interface_instrument_name] = "TCPIP0 (SOCKET)"
+        self.attrs[ResourceAttribute.interface_number] = 0
         self.attrs[ResourceAttribute.tcpip_nodelay] = (
             self._get_tcpip_nodelay,
             self._set_attribute,
         )
-        self.attrs[ResourceAttribute.tcpip_hostname] = ""
+        self.attrs[ResourceAttribute.tcpip_hostname] = self.parsed.host_address
         self.attrs[ResourceAttribute.tcpip_keepalive] = (
             self._get_tcpip_keepalive,
             self._set_tcpip_keepalive,
         )
-        # to use default as ni visa driver (NI-VISA 15.0)
+        # to use same default as ni visa driver (NI-VISA 15.0)
         self.attrs[ResourceAttribute.suppress_end_enabled] = True
+        self.attrs[ResourceAttribute.send_end_enabled] = True
+        self.attrs[ResourceAttribute.io_prot] = constants.VI_PROT_NORMAL
 
-        for name in ("TERMCHAR", "TERMCHAR_EN"):
+        for name in ("TERMCHAR", "TERMCHAR_EN", "RSRC_LOCK_STATE"):
             attribute = getattr(constants, "VI_ATTR_" + name)
             self.attrs[attribute] = attributes.AttributesByID[attribute].default
 
@@ -1351,7 +1742,8 @@ class TCPIPSocketSession(Session):
             self.interface.setblocking(False)
             self.interface.connect_ex((self.parsed.host_address, int(self.parsed.port)))
         except Exception as e:
-            raise Exception("could not connect: {0}".format(str(e)))
+            LOGGER.exception("could not connect: {0}".format(str(e)))
+            raise OpenError()
         finally:
             self.interface.setblocking(True)
 
@@ -1516,18 +1908,27 @@ class TCPIPSocketSession(Session):
 
         return offset, StatusCode.success
 
-    def clear(self) -> StatusCode:
-        """Clears a device.
-
-        Corresponds to viClear function of the VISA library.
-
-        """
+    def _clear_buff(self) -> None:
+        # used by flush and clear operations
         self._pending_buffer.clear()
         while True:
             r, _w, _x = select.select([self.interface], [], [], 0.1)
             if not r:
                 break
             r[0].recv(4096)
+
+    def clear(self) -> StatusCode:
+        """Clears a device.
+
+        Corresponds to viClear function of the VISA library.
+
+        """
+        self._clear_buff()
+
+        # Send the *CLS command to clear the device if using the 488.2 STRS protocol
+        # VPP-4.3 Permission 6.14
+        if self.attrs[ResourceAttribute.io_prot] == constants.VI_PROT_4882_STRS:
+            self.write(b"*CLS\n")
 
         return StatusCode.success
 
@@ -1546,7 +1947,7 @@ class TCPIPSocketSession(Session):
             Return value of the library call.
         """
         if mask & BufferOperation.discard_read_buffer:
-            self.clear()
+            self._clear_buff()
         if (
             mask & BufferOperation.discard_read_buffer_no_io
             or mask & BufferOperation.discard_receive_buffer
@@ -1562,6 +1963,58 @@ class TCPIPSocketSession(Session):
             pass
 
         return StatusCode.success
+
+    def read_stb(self) -> Tuple[int, StatusCode]:
+        """Reads a status byte of the service request.
+
+        Corresponds to viReadSTB function of the VISA library.
+
+        Returns
+        -------
+        int
+            Service request status byte
+        StatusCode
+            Return value of the library call.
+
+        """
+        if self.attrs[ResourceAttribute.io_prot] != constants.VI_PROT_4882_STRS:
+            return 0, StatusCode.error_invalid_setup
+
+        # Read the status byte from the device
+        _n, status = self.write(b"*STB?\n")
+        if status != StatusCode.success:
+            return 0, status
+        stbs, status = self.read(100)
+        if status != StatusCode.success:
+            return 0, status
+        try:
+            stb = int(stbs)
+            return stb, StatusCode.success
+        except ValueError:
+            return 0, StatusCode.error_nonsupported_operation
+
+    def assert_trigger(self, protocol: constants.TriggerProtocol) -> StatusCode:
+        """Asserts hardware trigger.
+
+        Parameters
+        ----------
+        protocol : constants.TriggerProtocol
+            Triggering protocol to use.
+            Only supports constants.TriggerProtocol.default
+
+        Returns
+        -------
+        StatusCode
+            Return value of the library call.
+
+        """
+        if protocol != constants.TriggerProtocol.default:
+            return StatusCode.error_nonsupported_operation
+        if self.attrs[ResourceAttribute.io_prot] != constants.VI_PROT_4882_STRS:
+            return StatusCode.error_invalid_setup
+
+        _n, status = self.write(b"*TRG\n")
+        return status
 
     def _get_tcpip_nodelay(
         self, attribute: ResourceAttribute
@@ -1603,12 +2056,7 @@ class TCPIPSocketSession(Session):
         self, attribute: ResourceAttribute, attribute_state: bool
     ) -> StatusCode:
         if self.interface:
-            self.interface.setsockopt(
-                socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1 if attribute_state else 0
-            )
-            self.interface.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, 60)
-            self.interface.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, 60)
-            self.interface.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 5)
+            set_keepalive(self.interface, bool(attribute_state))
             return StatusCode.success
         return StatusCode.error_nonsupported_attribute
 
@@ -1685,7 +2133,16 @@ def get_services(service_type: str, wait_time: float = 0.1) -> Dict[str, dict]:
 
         update_service = add_service
 
-    zero_conf = zeroconf.Zeroconf()
+    try:
+        zero_conf = zeroconf.Zeroconf()
+    except OSError as e:
+        # e.g. another mDNS stack (avahi) holds the port and does not share it
+        warnings.warn(
+            f"Discovery of {service_type} resources is unavailable, "
+            f"the mDNS socket could not be opened: {e}",
+            UserWarning,
+        )
+        return {}
     listener = MyListener()
     browser = zeroconf.ServiceBrowser(zero_conf, service_type, listener, delay=0)
     time.sleep(wait_time)

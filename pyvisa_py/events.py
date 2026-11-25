@@ -208,6 +208,11 @@ class HandlerRegistry:
                     return True
             return False
 
+    def is_handler_installed(self, event_type: constants.EventType) -> bool:
+        """Return whether a handler (callback) delivery is installed for *event_type*."""
+        with self._lock:
+            return event_type in self._handlers
+
     def fire(
         self,
         event_type: constants.EventType,

@@ -4,14 +4,17 @@ Python implementation of HiSLIP protocol.  Based on the HiSLIP spec:
 http://www.ivifoundation.org/downloads/Class%20Specifications/IVI-6.1_HiSLIP-1.1-2024-02-24.pdf
 """
 
+import queue
 import select
 import socket
 import struct
 import threading
 import time
-from typing import Dict, Optional, Tuple
+from collections import defaultdict, deque
+from dataclasses import dataclass
+from typing import Callable, Deque, Dict, Optional, Tuple
 
-from pyvisa_py.common import BytesBuffer, MutableBytesBuffer, connect_timeout
+from pyvisa_py.common import LOGGER, BytesBuffer, MutableBytesBuffer, connect_timeout
 
 PORT = 4880
 
@@ -213,6 +216,8 @@ def receive_flush(sock: socket.socket, recv_len: int) -> None:
     while bytes_recvd < recv_len:
         request_size = min(len(recv_buffer), recv_len - bytes_recvd)
         data_len = sock.recv_into(recv_buffer, request_size)
+        if data_len == 0:
+            raise RuntimeError("Connection was dropped by server.")
         bytes_recvd += data_len
 
 
@@ -338,7 +343,14 @@ class AsyncInitializeResponse(RxHeader):
         super().__init__(sock, "AsyncInitializeResponse")
         assert self.control_code == 0
         assert self.payload_length == 0
-        self.vendor_id = struct.unpack("!4x4s8x", self.header)
+        # Read the Message Parameter, it starts 4 bytes into the header and is 4 bytes long.
+        # Followed by 8 bytes of padding, since payload_length == 0
+        message_param = struct.unpack("!4x2s2s8x", self.header)
+        self.server_capabilities = message_param[0]
+        self.vendor_id = message_param[1]
+        # Server capabilities:
+        # "If bit 0 is set the secure connection capability is supported."
+        # but we do not support secure connection (yet). So this is unused for now.
 
 
 class AsyncMaxMsgSizeResponse(RxHeader):
@@ -407,6 +419,311 @@ class AsyncStatusResponse(RxHeader):
         assert self.payload_length == 0
 
 
+@dataclass(frozen=True, slots=True)
+class AsyncMessage:
+    msg_type: str
+    control_code: int
+    message_parameter: int
+    payload: bytes
+
+
+@dataclass
+class _PendingRequest:
+    expected_response: str
+    response: Optional[AsyncMessage] = None
+    error: Optional[Exception] = None
+    done: bool = False
+    abandoned: bool = False
+
+
+class AsyncChannel:
+    """Own the async HiSLIP socket and dispatch unsolicited messages."""
+
+    def __init__(
+        self,
+        sock: socket.socket,
+        event_callback: Optional[Callable[[int], None]] = None,
+        interrupt_callback: Optional[Callable[[int], None]] = None,
+    ) -> None:
+        self._sock = sock
+        self._event_callback = event_callback
+        self._interrupt_callback = interrupt_callback
+        self._send_lock = threading.Lock()
+        self._state_lock = threading.Condition()
+        self._pending_requests: Dict[str, Deque[_PendingRequest]] = defaultdict(deque)
+        self._failure: Optional[Exception] = None
+        self._device_clear_in_progress = False
+        self._stop = threading.Event()
+        self._event_queue: queue.Queue[Optional[int]] = queue.Queue()
+        self._event_thread: Optional[threading.Thread] = None
+        if self._event_callback is not None:
+            self._event_thread = threading.Thread(
+                target=self._dispatch_events, daemon=True
+            )
+            self._event_thread.start()
+        self._thread = threading.Thread(target=self._run, daemon=True)
+        # And start the thread
+        if not self._thread.is_alive():
+            self._thread.start()
+
+    def close(self) -> None:
+        self._stop.set()
+        self._fail_pending(lambda: RuntimeError("async channel closed"), terminal=True)
+        self._event_queue.put(None)
+        try:
+            self._sock.shutdown(socket.SHUT_RDWR)
+        except Exception:
+            pass
+        current_thread = threading.current_thread()
+        if self._thread.is_alive() and self._thread is not current_thread:
+            self._thread.join(timeout=1.0)
+        if (
+            self._event_thread is not None
+            and self._event_thread.is_alive()
+            and self._event_thread is not current_thread
+        ):
+            self._event_thread.join(timeout=1.0)
+        try:
+            self._sock.close()
+        except Exception:
+            pass
+
+    def begin_device_clear(self) -> None:
+        with self._state_lock:
+            self._device_clear_in_progress = True
+        while True:
+            try:
+                event = self._event_queue.get_nowait()
+            except queue.Empty:
+                break
+            if event is None:
+                self._event_queue.put(None)
+                break
+
+    def end_device_clear(self) -> None:
+        with self._state_lock:
+            self._device_clear_in_progress = False
+
+    def request(
+        self,
+        msg_type: str,
+        control_code: int,
+        message_parameter: int,
+        payload: bytes = b"",
+        expected_response: Optional[str] = None,
+    ) -> AsyncMessage:
+        if expected_response is None:
+            raise ValueError("expected_response is required for async requests")
+
+        timeout = self._sock.gettimeout()
+        pending = _PendingRequest(expected_response)
+
+        try:
+            with self._send_lock:
+                with self._state_lock:
+                    if self._failure is not None:
+                        raise self._failure
+                    if self._stop.is_set():
+                        raise RuntimeError("async channel closed")
+                    self._pending_requests[expected_response].append(pending)
+                try:
+                    send_msg(
+                        self._sock,
+                        msg_type,
+                        control_code,
+                        message_parameter,
+                        payload,
+                    )
+                except Exception:
+                    self._fail_pending(
+                        lambda: RuntimeError("async channel send failed"),
+                        terminal=True,
+                    )
+                    raise
+
+            deadline = None if timeout is None else time.monotonic() + float(timeout)
+            with self._state_lock:
+                while not pending.done:
+                    if deadline is None:
+                        self._state_lock.wait()
+                    else:
+                        remaining = deadline - time.monotonic()
+                        if remaining <= 0:
+                            break
+                        self._state_lock.wait(remaining)
+
+                if not pending.done:
+                    pending.abandoned = True
+                    raise socket.timeout("timed out")
+
+                if pending.error is not None:
+                    raise pending.error
+                response = pending.response
+                assert response is not None
+                return response
+        finally:
+            with self._state_lock:
+                if not pending.done:
+                    pending.abandoned = True
+
+    def _read_exact(self, size: int) -> bytes:
+        data = bytearray()
+        while len(data) < size:
+            if self._stop.is_set():
+                raise OSError("async channel stopped")
+            readable, _, _ = select.select([self._sock], [], [], 0.5)
+            if not readable:
+                continue
+            chunk = self._sock.recv(size - len(data))
+            if not chunk:
+                raise RuntimeError("async channel closed")
+            data.extend(chunk)
+        return bytes(data)
+
+    def _read_message(self) -> AsyncMessage:
+        header = self._read_exact(HEADER_SIZE)
+        prologue, msg_type, control_code, message_parameter, payload_length = (
+            struct.unpack(HEADER_FORMAT, header)
+        )
+
+        if prologue != b"HS":
+            raise RuntimeError("protocol synchronization error on async channel")
+
+        if msg_type not in MESSAGETYPE_STR:
+            raise RuntimeError("unrecognized async message type: %d" % msg_type)
+
+        payload = self._read_exact(payload_length) if payload_length else b""
+        return AsyncMessage(
+            msg_type=MESSAGETYPE_STR[msg_type],
+            control_code=control_code,
+            message_parameter=message_parameter,
+            payload=payload,
+        )
+
+    def _deliver_event(self, message: AsyncMessage) -> None:
+        if (
+            message.msg_type == "AsyncServiceRequest"
+            and self._event_callback is not None
+        ):
+            self._event_queue.put(message.control_code)
+
+    def _dispatch_events(self) -> None:
+        while True:
+            status_byte = self._event_queue.get()
+            if status_byte is None:
+                break
+            # When _stop is set, the dispatcher skips queued callbacks.
+            # close() also puts a None sentinel on the queue; because the queue is FIFO,
+            # the dispatcher eventually consumes it and breaks out of the loop.
+            # The continue here therefore drains and discards queued events until shutdown reaches the sentinel.
+            if self._stop.is_set():
+                continue
+            with self._state_lock:
+                discard_event = self._device_clear_in_progress
+            if discard_event:
+                continue
+            try:
+                assert self._event_callback is not None
+                self._event_callback(status_byte)
+            except Exception:
+                LOGGER.exception("Error handling async service request")
+
+    def _deliver_interrupt(self, message: AsyncMessage) -> None:
+        if self._interrupt_callback is None:
+            return
+        try:
+            self._interrupt_callback(message.message_parameter)
+        except Exception:
+            LOGGER.exception("Error handling async interruption")
+
+    def _complete_pending(self, message: AsyncMessage) -> bool:
+        with self._state_lock:
+            requests = self._pending_requests.get(message.msg_type)
+            if not requests:
+                return False
+            pending = requests.popleft()
+            if not pending.abandoned:
+                pending.response = message
+                pending.done = True
+            self._state_lock.notify_all()
+            return True
+
+    def _fail_pending(
+        self, error_factory: Callable[[], Exception], terminal: bool = False
+    ) -> None:
+        with self._state_lock:
+            if terminal and self._failure is None:
+                self._failure = error_factory()
+            for requests in self._pending_requests.values():
+                for pending in requests:
+                    if not pending.abandoned:
+                        pending.error = error_factory()
+                        pending.done = True
+            self._pending_requests.clear()
+            self._state_lock.notify_all()
+
+    def _run(self) -> None:
+        while not self._stop.is_set():
+            try:
+                message = self._read_message()
+            except socket.timeout:
+                continue
+            except OSError:
+                if not self._stop.is_set():
+                    self._fail_pending(
+                        lambda: RuntimeError("async channel closed"), terminal=True
+                    )
+                break
+            except Exception as e:
+                if not self._stop.is_set():
+                    LOGGER.exception(
+                        f"Async channel reader stopped due to protocol error: {e}"
+                    )
+                    self._fail_pending(
+                        lambda: RuntimeError("async channel protocol error"),
+                        terminal=True,
+                    )
+                break
+
+            if message.msg_type == "AsyncInterrupted":
+                # When the client receives Interrupted or AsyncInterrupted, it shall clear any whole or partial server messages
+                # that have been validated per rules 1 and 2.
+                # If the client initially detects AsyncInterrupted, it shall also discard any further Data or DataEND messages
+                # from the server until Interrupted is encountered.
+                # If the client detects Interrupted before it detects AsyncInterrupted, the client shall not send any further
+                # messages until AsyncInterrupted is received.
+                self._fail_pending(
+                    lambda: HiSLIPInterruptedError(message.message_parameter)
+                )
+                self._deliver_interrupt(message)
+                continue
+
+            if message.msg_type == "FatalError":
+                error = FATALERRORMESSAGE.get(
+                    message.control_code,
+                    f"device-defined error {message.control_code}",
+                )
+                error_message = message.payload.decode(errors="replace")
+                self._fail_pending(
+                    lambda: RuntimeError(
+                        f"HiSLIP fatal error {error}: {error_message}"
+                    ),
+                    terminal=True,
+                )
+                break
+
+            if self._complete_pending(message):
+                continue
+
+            if message.msg_type in {"AsyncServiceRequest"}:
+                with self._state_lock:
+                    if not self._device_clear_in_progress:
+                        self._deliver_event(message)
+                continue
+
+            LOGGER.debug("Ignoring unsolicited async message %s", message.msg_type)
+
+
 class DeviceClearAcknowledge(RxHeader):
     def __init__(self, sock: socket.socket) -> None:
         super().__init__(sock, "DeviceClearAcknowledge")
@@ -452,6 +769,8 @@ class Instrument:
         timeout: Optional[float] = None,
         port: int = PORT,
         sub_address: str = "hislip0",
+        event_callback: Optional[Callable[[int], None]] = None,
+        interrupt_callback: Optional[Callable[[int], None]] = None,
     ) -> None:
         # init transaction:
         #     C->S: Initialize
@@ -490,6 +809,14 @@ class Instrument:
         # We set the user timeout once we managed to initialize the connection.
         self._async.settimeout(timeout)
 
+        self._async_channel = AsyncChannel(
+            self._async,
+            event_callback=event_callback,
+            interrupt_callback=interrupt_callback,
+        )
+        # The thread is started in the AsyncChannel constructor,
+        # so we don't need to start it here.
+
         # initialize variables
         self.max_msg_size = DEFAULT_MAX_MSG_SIZE
         self.keepalive = False
@@ -497,17 +824,22 @@ class Instrument:
         self._rmt = 0
         self._message_id = 0xFFFF_FF00
         self._last_message_id: Optional[int] = None
+        self._feature_bitmap = 0
         self._msg_type: str = ""
         self._payload_remaining: int = 0
+        self._last_read_rmt = False
+        self._last_read_termchar = False
         self._receiving = threading.Event()
+        self._receive_state_lock = threading.Lock()
+        self._status_query_lock = threading.Lock()
 
     # ================ #
     # MEMBER FUNCTIONS #
     # ================ #
 
     def close(self) -> None:
+        self._async_channel.close()
         self._sync.close()
-        self._async.close()
 
     @property
     def timeout(self) -> float:
@@ -541,6 +873,18 @@ class Instrument:
         self._rmt = 0
         self._payload_remaining = 0
         self._msg_type = ""
+        self._last_read_rmt = False
+        self._last_read_termchar = False
+
+    def _message_id_for_async_request(self) -> int:
+        message_id = self.last_message_id
+        if message_id is not None:
+            return message_id
+        return (self._message_id - 2) & 0xFFFF_FFFF
+
+    @property
+    def feature_bitmap(self) -> int:
+        return self._feature_bitmap
 
     @property
     def keepalive(self) -> bool:
@@ -561,7 +905,17 @@ class Instrument:
         self._sync.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, bool(keepalive))
         self._async.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, bool(keepalive))
 
-    def send(self, data: BytesBuffer) -> int:
+    @property
+    def nodelay(self) -> bool:
+        """Whether the Nagle algorithm is disabled on both sockets."""
+        return bool(self._sync.getsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY))
+
+    @nodelay.setter
+    def nodelay(self, nodelay: bool) -> None:
+        self._sync.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, bool(nodelay))
+        self._async.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, bool(nodelay))
+
+    def send(self, data: BytesBuffer, send_end: bool = True) -> int:
         """Send the data on the synchronous channel.
 
         More than one packet may be necessary in order
@@ -576,7 +930,10 @@ class Instrument:
         while num_bytes_to_send > 0:
             if num_bytes_to_send <= max_payload_size:
                 assert len(data_view) == num_bytes_to_send
-                self._send_data_end_packet(data_view)
+                if send_end:
+                    self._send_data_end_packet(data_view)
+                else:
+                    self._send_data_packet(data_view)
                 bytes_sent = num_bytes_to_send
             else:
                 self._send_data_packet(data_view[:max_payload_size])
@@ -587,13 +944,17 @@ class Instrument:
 
         return len(data)
 
-    def receive(self, max_len: int = 4096) -> bytes:
+    def receive(
+        self,
+        max_len: int = 4096,
+        termination_char: Optional[int] = None,
+        suppress_end: bool = False,
+    ) -> bytes:
         """Receive data on the synchronous channel.
 
-        Terminate after max_len bytes or after receiving a DataEnd message
+        Terminate after max_len bytes, an enabled termination character, or
+        an unsuppressed DataEnd message.
         """
-
-        # print(f"receive({max_len=})")  # uncomment for debugging
 
         # receive data, terminating after len(recv_buffer) bytes or
         # after receiving a DataEnd message.
@@ -601,43 +962,83 @@ class Instrument:
         # note the use of receive_exact_into (which calls socket.recv_into),
         # avoiding unnecessary copies.
         #
-        self._receiving.set()
+        with self._receive_state_lock:
+            self._receiving.set()
         try:
-            recv_buffer = bytearray(max_len)
-            view = memoryview(recv_buffer)
-            bytes_recvd = 0
+            # This is the result of this VISA read call. The call may span
+            # multiple counted HiSLIP Data payloads, but must stop at max_len or an enabled termination character.
 
-            while bytes_recvd < max_len:
+            # This is the receive buffer that will accumulate the incoming data.
+            recv_buffer = bytearray()
+
+            term_byte = (
+                bytes((termination_char,)) if termination_char is not None else None
+            )
+            self._last_read_rmt = False
+            self._last_read_termchar = False
+
+            while len(recv_buffer) < max_len:
                 if self._payload_remaining <= 0:
                     if self._msg_type == "DataEnd":
-                        # truncate to the actual number of bytes received
-                        recv_buffer = recv_buffer[:bytes_recvd]
-                        break
+                        self._rmt = 1
+                        self._last_read_rmt = True
+                        self._msg_type = ""
+                        if not suppress_end:
+                            break
                     self._msg_type, self._payload_remaining = self._next_data_header()
 
-                request_size = min(self._payload_remaining, max_len - bytes_recvd)
-                receive_exact_into(self._sync, view[:request_size])
-                self._payload_remaining -= request_size
-                bytes_recvd += request_size
-                view = view[request_size:]
+                # Grow the receive buffer if needed
+                start = len(recv_buffer)
+                request_size = min(self._payload_remaining, max_len - start)
+                recv_buffer.extend(b"\x00" * request_size)
 
-            if bytes_recvd > max_len:
+                if term_byte is None:
+                    # No termination character, just receive the exact number of bytes requested.
+                    receive_exact_into(
+                        self._sync,
+                        memoryview(recv_buffer)[start : start + request_size],
+                    )
+                    received = request_size
+                else:
+                    # There is a termination character, so we need to peek into the socket to check for it.
+                    peeked = self._sync.recv_into(
+                        memoryview(recv_buffer)[start : start + request_size],
+                        request_size,
+                        socket.MSG_PEEK,
+                    )
+                    if peeked == 0:
+                        raise RuntimeError("Connection was dropped by server.")
+                    term_index = recv_buffer.find(term_byte, start, start + peeked)
+                    received = term_index - start + 1 if term_index >= 0 else peeked
+                    receive_exact_into(
+                        self._sync, memoryview(recv_buffer)[start : start + received]
+                    )
+                    del recv_buffer[start + received :]
+                    self._last_read_termchar = term_index >= 0
+
+                # Update the remaining payload length after receiving data.
+                self._payload_remaining -= received
+
+                reached_end = (
+                    self._payload_remaining == 0 and self._msg_type == "DataEnd"
+                )
+                # HiSLIP DataEnd carries the END indication (RMT); VISA reads
+                # may also finish on count or termination character (§6.1.1).
+                if reached_end:
+                    self._rmt = 1
+                    self._last_read_rmt = True
+                    self._msg_type = ""
+
+                if self._last_read_termchar or (reached_end and not suppress_end):
+                    break
+
+            if len(recv_buffer) > max_len:
                 raise MemoryError("scribbled past end of recv_buffer")
-
-            # if there is no data remaining, set the RMT flag
-            if self._payload_remaining == 0 and self._msg_type == "DataEnd":
-                #
-                # From IEEE Std 488.2: Response Message Terminator.
-                #
-                # RMT is the new-line accompanied by END sent from the server
-                # to the client at the end of a response. Note that with HiSLIP
-                # this is implied by the DataEND message.
-                #
-                self._rmt = 1
 
             return bytes(recv_buffer)
         finally:
-            self._receiving.clear()
+            with self._receive_state_lock:
+                self._receiving.clear()
 
     def _next_data_header(self) -> Tuple[str, int]:
         """
@@ -674,14 +1075,18 @@ class Instrument:
         return header.msg_type, header.payload_length
 
     def device_clear(self) -> None:
-        feature = self.async_device_clear()
-        # Abandon pending messages and wait for in-process synchronous messages
-        # to complete.
-        time.sleep(0.1)
-        # Indicate to server that synchronous channel is cleared out.
-        self.device_clear_complete(feature)
+        self._perform_device_clear()
         # reset messageID and resume normal opreation
         self._message_id = 0xFFFF_FF00
+        self.last_message_id = None
+
+    def _perform_device_clear(self) -> None:
+        self._async_channel.begin_device_clear()
+        try:
+            feature = self.async_device_clear()
+            self._feature_bitmap = self.device_clear_complete(feature)
+        finally:
+            self._async_channel.end_device_clear()
 
     def terminate(self) -> None:
         """Cancel a pending I/O operation on the synchronous channel.
@@ -701,9 +1106,9 @@ class Instrument:
         complete_terminate() to reset the HiSLIP protocol state before
         performing further I/O on this session.
         """
-        if not self._receiving.is_set():
-            return
-        self._sync.cancel()
+        with self._receive_state_lock:
+            if self._receiving.is_set():
+                self._sync.cancel()
 
     def complete_terminate(self) -> None:
         """Reset HiSLIP protocol state after terminate().
@@ -739,40 +1144,41 @@ class Instrument:
             finally:
                 self._sync.setblocking(True)
                 self._sync.settimeout(self._timeout)
+            self._payload_remaining = 0
+            self._msg_type = ""
 
             # 3. Full device clear: AsyncDeviceClear → Interrupted →
             #    DeviceClearComplete → DeviceClearAcknowledge
-            feature = self.async_device_clear()
-
-            # Read from the sync channel until we get the Interrupted message.
-            # The server sends Interrupted after acknowledging AsyncDeviceClear.
-            saved_timeout = self._sync.gettimeout()
-            self._sync.settimeout(2.0)
+            self._async_channel.begin_device_clear()
             try:
-                while True:
-                    header = RxHeader(self._sync)
-                    if header.msg_type == "Interrupted":
-                        break
-                    # Discard payload of any other messages
-                    if header.payload_length > 0:
-                        receive_flush(self._sync, header.payload_length)
-            except socket.timeout:
-                # Server didn't send Interrupted — proceed anyway.
-                # DeviceClearComplete will still reset the protocol.
-                pass
-            finally:
-                self._sync.settimeout(saved_timeout)
+                feature = self.async_device_clear()
+                # Read from the sync channel until we get the Interrupted
+                # message. The server sends it after acknowledging the clear.
+                saved_timeout = self._sync.gettimeout()
+                self._sync.settimeout(2.0)
+                try:
+                    while True:
+                        header = RxHeader(self._sync)
+                        if header.msg_type == "Interrupted":
+                            break
+                        if header.payload_length > 0:
+                            receive_flush(self._sync, header.payload_length)
+                except socket.timeout:
+                    # DeviceClearComplete still resets the protocol if the
+                    # server does not send Interrupted.
+                    pass
+                finally:
+                    self._sync.settimeout(saved_timeout)
 
-            self.device_clear_complete(feature)
+                self._feature_bitmap = self.device_clear_complete(feature)
+            finally:
+                self._async_channel.end_device_clear()
         finally:
             self._sync._cancel_enabled = True
 
         # 4. Reset all protocol state
         self._message_id = 0xFFFF_FF00
-        self._last_message_id = None
-        self._rmt = 0
-        self._payload_remaining = 0
-        self._msg_type = ""
+        self.last_message_id = None
 
     def initialize(
         self,
@@ -816,9 +1222,15 @@ class Instrument:
         #     C->S: AsyncMaxMsgSize
         #     S->C: AsyncMaxMsgSizeResponse
         payload = struct.pack("!Q", size)
-        send_msg(self._async, "AsyncMaxMsgSize", 0, 0, payload)
-        response = AsyncMaxMsgSizeResponse(self._async)
-        return response.max_msg_size
+        response = self._async_channel.request(
+            "AsyncMaxMsgSize",
+            0,
+            0,
+            payload,
+            expected_response="AsyncMaxMsgSizeResponse",
+        )
+        assert len(response.payload) == 8
+        return struct.unpack("!Q", response.payload)[0]
 
     def async_lock_info(self) -> int:
         """
@@ -828,11 +1240,17 @@ class Instrument:
         # async_lock_info transaction:
         #     C->S: AsyncLockInfo
         #     S->C: AsyncLockInfoResponse
-        send_msg(self._async, "AsyncLockInfo", 0, 0)
-        response = AsyncLockInfoResponse(self._async)
-        return response.exclusive_lock
+        response = self._async_channel.request(
+            "AsyncLockInfo",
+            0,
+            0,
+            expected_response="AsyncLockInfoResponse",
+        )
+        # TODO if you want to support shared locks, you may need to
+        # interpret `clients_holding_locks `
+        return response.control_code
 
-    def async_lock_request(self, timeout: float, lock_string: str = "") -> str:
+    def async_lock_request(self, timeout_ms: int, lock_string: str = "") -> str:
         """
         perform an AsyncLock request transaction.
         returns the lock_response from the AsyncLockResponse packet.
@@ -841,10 +1259,14 @@ class Instrument:
         #     C->S: AsyncLock
         #     S->C: AsyncLockResponse
         ctrl_code = LOCKCONTROLCODE["request"]
-        timeout_ms = int(1e3 * timeout)
-        send_msg(self._async, "AsyncLock", ctrl_code, timeout_ms, lock_string.encode())
-        response = AsyncLockResponse(self._async)
-        return response.lock_response
+        response = self._async_channel.request(
+            "AsyncLock",
+            ctrl_code,
+            timeout_ms,
+            lock_string.encode(),
+            expected_response="AsyncLockResponse",
+        )
+        return LOCKRESPONSE[response.control_code]
 
     def async_lock_release(self) -> str:
         """
@@ -855,9 +1277,13 @@ class Instrument:
         #     C->S: AsyncLock
         #     S->C: AsyncLockResponse
         ctrl_code = LOCKCONTROLCODE["release"]
-        send_msg(self._async, "AsyncLock", ctrl_code, self.last_message_id)
-        response = AsyncLockResponse(self._async)
-        return response.lock_response
+        response = self._async_channel.request(
+            "AsyncLock",
+            ctrl_code,
+            self._message_id_for_async_request(),
+            expected_response="AsyncLockResponse",
+        )
+        return LOCKRESPONSE[response.control_code]
 
     def async_remote_local_control(self, remotelocalcontrol: str) -> None:
         """
@@ -867,10 +1293,12 @@ class Instrument:
         #     C->S: AsyncRemoteLocalControl
         #     S->C: AsyncRemoteLocalResponse
         ctrl_code = REMOTELOCALCONTROLCODE[remotelocalcontrol]
-        send_msg(
-            self._async, "AsyncRemoteLocalControl", ctrl_code, self.last_message_id
+        self._async_channel.request(
+            "AsyncRemoteLocalControl",
+            ctrl_code,
+            self._message_id_for_async_request(),
+            expected_response="AsyncRemoteLocalResponse",
         )
-        AsyncRemoteLocalResponse(self._async)
 
     def async_status_query(self) -> int:
         """
@@ -880,43 +1308,88 @@ class Instrument:
         # async_status_query transaction:
         #     C->S: AsyncStatusQuery
         #     S->C: AsyncStatusResponse
-        send_msg(self._async, "AsyncStatusQuery", self._rmt, self._message_id)
-        self._rmt = 0
-        response = AsyncStatusResponse(self._async)
-        return response.server_status
+        with self._status_query_lock:
+            response = self._async_channel.request(
+                "AsyncStatusQuery",
+                self._rmt,
+                self._message_id_for_async_request(),
+                expected_response="AsyncStatusResponse",
+            )
+            self._rmt = 0
+            return response.control_code
 
     def async_device_clear(self) -> int:
         """
         perform an AsyncDeviceClear transaction.
         returns the feature_bitmap from the AsyncDeviceClearAcknowledge packet.
         """
-        send_msg(self._async, "AsyncDeviceClear", 0, 0)
-        response = AsyncDeviceClearAcknowledge(self._async)
-        return response.feature_bitmap
+        response = self._async_channel.request(
+            "AsyncDeviceClear",
+            0,
+            0,
+            expected_response="AsyncDeviceClearAcknowledge",
+        )
+        return response.control_code
 
     def device_clear_complete(self, feature_bitmap: int) -> int:
         """
         perform a DeviceClear transaction.
         returns the feature_bitmap from the DeviceClearAcknowledge packet.
         """
+        final_feature_bitmap = self._receive_device_clear_ack(wait=False)
         send_msg(self._sync, "DeviceClearComplete", feature_bitmap, 0)
-        response = DeviceClearAcknowledge(self._sync)
-        return response.feature_bitmap
+        if final_feature_bitmap is not None:
+            return final_feature_bitmap
+        final_feature_bitmap = self._receive_device_clear_ack(wait=True)
+        assert final_feature_bitmap is not None
+        return final_feature_bitmap
+
+    def _discard_pending_sync_payload(self) -> None:
+        if self._payload_remaining > 0:
+            receive_flush(self._sync, self._payload_remaining)
+            self._payload_remaining = 0
+            self._msg_type = ""
+
+    def _receive_device_clear_ack(self, wait: bool) -> Optional[int]:
+        self._discard_pending_sync_payload()
+        while True:
+            if not wait and not select.select([self._sync], [], [], 0)[0]:
+                return None
+
+            response = RxHeader(self._sync)
+            if response.msg_type == "DeviceClearAcknowledge":
+                if response.message_parameter != 0 or response.payload_length != 0:
+                    raise RuntimeError("invalid DeviceClearAcknowledge message")
+                return response.control_code
+
+            if response.msg_type == "FatalError":
+                error_message = receive_exact(self._sync, response.payload_length)
+                error = FATALERRORMESSAGE.get(
+                    response.control_code,
+                    f"device-defined error {response.control_code}",
+                )
+                raise RuntimeError(f"HiSLIP fatal error {error}: {error_message!r}")
+
+            if response.payload_length > 0:
+                receive_flush(self._sync, response.payload_length)
 
     def trigger(self) -> None:
         """send a Trigger packet on the sync channel"""
+        self._discard_pending_sync_payload()
         send_msg(self._sync, "Trigger", self._rmt, self._message_id)
         self.last_message_id = self._message_id
         self._message_id = (self._message_id + 2) & 0xFFFF_FFFF
 
     def _send_data_packet(self, payload: BytesBuffer) -> None:
         """send a Data packet on the sync channel"""
+        self._discard_pending_sync_payload()
         send_msg(self._sync, "Data", self._rmt, self._message_id, payload)
         self.last_message_id = self._message_id
         self._message_id = (self._message_id + 2) & 0xFFFF_FFFF
 
     def _send_data_end_packet(self, payload: BytesBuffer) -> None:
         """send a DataEnd packet on the sync channel"""
+        self._discard_pending_sync_payload()
         send_msg(self._sync, "DataEnd", self._rmt, self._message_id, payload)
         self.last_message_id = self._message_id
         self._message_id = (self._message_id + 2) & 0xFFFF_FFFF

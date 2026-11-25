@@ -8,7 +8,9 @@ Here's some guidelines to help the review process go smoothly.
    made.
 
 2. Please ensure that the code is properly formatted and typed by running
-   black, isort, flake8 and mypy.
+   the pre-commit hooks. Run ``pip install pre-commit && pre-commit install``
+   and they will run automatically; run ``pre-commit`` alone to test without
+   committing.
 
 3. Please ensure that you have written units tests for the changes made/features
    added if possible. If it is not possible please be sure to provide sufficient
@@ -23,12 +25,25 @@ Here's some guidelines to help the review process go smoothly.
    already reviewed code ends up having to be re-reviewed/it is hard to tell
    what is new etc!).
 
+6. Please update docs\sources\compliance.rst manually when you affect the level 
+   of compliance (be it IVI side or the other side: VXI-11, HiSLIP, VICP, GPIB, ...)
+
 Many thanks in advance for your cooperation!
 
 -->
 
-- [ ] Closes # (insert issue number if relevant)
-- [ ] Executed ``black . && isort -c . && flake8`` with no errors
-- [ ] The change is fully covered by automated unit tests
-- [ ] Documented in docs/ as appropriate
-- [ ] Added an entry to the CHANGES file
+## Summary
+
+Describe the user-facing change and why it is needed.
+
+## News fragment
+
+- [ ] User-visible changes should add a Towncrier fragment under `newsfragments/<issue>.<type>.rst` unless the PR carries the `no-news-required` label.
+- [ ] For transport- or protocol-specific changes, optionally place the fragment in `newsfragments/<section>/<issue>.<type>.rst` using a configured section such as `asrl`, `gpib`, `tcpip`, `tcpip/vxi11`, `tcpip/hislip`, `tcpip/socket`, `usb`, `vicp`, or `prologix`.
+- [ ] When a PR affects multiple transports or protocols, create one fragment for each affected section instead of combining them in a single entry.
+- [ ] Chosen fragment type: `feature`, `bugfix`, `doc`, `removal`, or `misc`.
+- [ ] If the PR does not require a changelog entry, add the `no-news-required` label instead of creating a fragment.
+
+## Testing
+
+Describe the exact validation you ran for this change.

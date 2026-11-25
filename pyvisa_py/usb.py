@@ -19,7 +19,7 @@ from pyvisa.constants import ResourceAttribute, StatusCode
 from pyvisa.rname import USBInstr, USBRaw
 
 from .common import LOGGER
-from .sessions import Session, UnknownAttribute
+from .sessions import OpenError, Session, UnknownAttribute
 
 try:
     import usb
@@ -65,6 +65,13 @@ class USBSession(Session):
     # for a specific kind of resource
     parsed: Union[USBInstr, USBRaw]
 
+    # extend the fixed attributes from the base Session class.
+    # Contrary to serial and socket, io_prot is not used, because VPP-4.3 does not explicitly demands it.
+    _hardcoded_attrs = {
+        **Session._hardcoded_attrs,
+        ResourceAttribute.io_prot: constants.VI_PROT_NORMAL,
+    }
+
     #: Class to use when instantiating the interface
     _intf_cls: Union[Type[usbraw.USBRawDevice], Type[usbtmc.USBTMC]]
 
@@ -94,20 +101,28 @@ class USBSession(Session):
         return "via PyUSB (%s). Backend: %s" % (ver, backend)
 
     def after_parsing(self) -> None:
-        self.interface = self._intf_cls(
-            int(self.parsed.manufacturer_id, 0),
-            int(self.parsed.model_code, 0),
-            self.parsed.serial_number,
-        )
+        # TODO: board is not used
+        try:
+            self.interface = self._intf_cls(
+                int(self.parsed.manufacturer_id, 0),
+                int(self.parsed.model_code, 0),
+                self.parsed.serial_number,
+            )
+        except usb.USBError as exc:
+            if exc.errno == errno.EBUSY:
+                raise OpenError(StatusCode.error_resource_busy) from exc
+            raise
 
         self.attrs.update(
             {
+                ResourceAttribute.interface_instrument_name: f"USB{self.parsed.usb_interface_number}",
                 ResourceAttribute.manufacturer_id: int(self.parsed.manufacturer_id, 0),
                 ResourceAttribute.model_code: int(self.parsed.model_code, 0),
                 ResourceAttribute.usb_serial_number: self.parsed.serial_number,
                 ResourceAttribute.usb_interface_number: int(
                     self.parsed.usb_interface_number
                 ),
+                ResourceAttribute.interface_number: 0,
             }
         )
 
@@ -116,6 +131,7 @@ class USBSession(Session):
             ("SUPPRESS_END_EN", ResourceAttribute.suppress_end_enabled),
             ("TERMCHAR", ResourceAttribute.termchar),
             ("TERMCHAR_EN", ResourceAttribute.termchar_enabled),
+            ("RSRC_LOCK_STATE", ResourceAttribute.resource_lock_state),
         ):
             attribute = getattr(constants, "VI_ATTR_" + name)
             self.attrs[attr] = attributes.AttributesByID[attribute].default
@@ -123,7 +139,7 @@ class USBSession(Session):
         # Force setting the timeout to get the proper value
         self.set_attribute(
             ResourceAttribute.timeout_value,
-            attributes.AttributesByID[attribute].default,
+            attributes.AttributesByID[ResourceAttribute.timeout_value].default,
         )
 
     def _get_timeout(self, attribute: ResourceAttribute) -> Tuple[int, StatusCode]:

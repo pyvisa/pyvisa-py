@@ -143,10 +143,13 @@ class NIEnet100TCPIPIntfcSession(_NIEnet100IntfcSession):
         resource_manager_session: VISARMSession,
         resource_name: str,
         parsed: rname.ResourceName | None = None,
+        access_mode: constants.AccessModes = constants.AccessModes.no_lock,
         open_timeout: int | None = None,
     ) -> None:
         self.interface = None
-        super().__init__(resource_manager_session, resource_name, parsed, open_timeout)
+        super().__init__(
+            resource_manager_session, resource_name, parsed, access_mode, open_timeout
+        )
 
     def after_parsing(self) -> None:
         # pyvisa's open_timeout nominally bounds lock acquisition; like VXI-11
@@ -235,6 +238,7 @@ class NIEnet100InstrSession(Session):
         resource_manager_session: VISARMSession,
         resource_name: str,
         parsed: rname.ResourceName | None = None,
+        access_mode: constants.AccessModes = constants.AccessModes.no_lock,
         open_timeout: int | None = None,
     ) -> None:
         self.interface = None
@@ -242,7 +246,9 @@ class NIEnet100InstrSession(Session):
         #: too small to consume. The next read() drains this before going
         #: back to the wire, so no bytes are lost between calls.
         self._read_buffer = bytearray()
-        super().__init__(resource_manager_session, resource_name, parsed, open_timeout)
+        super().__init__(
+            resource_manager_session, resource_name, parsed, access_mode, open_timeout
+        )
 
     def after_parsing(self) -> None:
         try:

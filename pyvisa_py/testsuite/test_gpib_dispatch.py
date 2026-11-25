@@ -13,7 +13,7 @@ sentinel classes.
 
 import pytest
 
-from pyvisa.constants import InterfaceType
+from pyvisa.constants import AccessModes, InterfaceType
 from pyvisa_py import gpib_dispatch
 from pyvisa_py.sessions import OpenError, Session
 
@@ -41,8 +41,8 @@ def clean_registry():
 class _Recorder:
     """Sentinel backend session that records its constructor arguments."""
 
-    def __init__(self, rm, name, parsed, open_timeout):
-        self.args = (rm, name, parsed, open_timeout)
+    def __init__(self, rm, name, parsed, access_mode, open_timeout):
+        self.args = (rm, name, parsed, access_mode, open_timeout)
 
 
 def test_first_matching_backend_wins(clean_registry):
@@ -101,18 +101,28 @@ def test_constructor_args_forwarded_unchanged(clean_registry):
     captured = {}
 
     class Fake:
-        def __init__(self, rm, name, parsed, open_timeout):
-            captured.update(rm=rm, name=name, parsed=parsed, open_timeout=open_timeout)
+        def __init__(self, rm, name, parsed, access_mode, open_timeout):
+            captured.update(
+                rm=rm,
+                name=name,
+                parsed=parsed,
+                access_mode=access_mode,
+                open_timeout=open_timeout,
+            )
 
     gpib_dispatch.register_backend(lambda p: Fake, priority=0)
 
     rm, name, parsed, timeout = object(), "GPIB0::5::INSTR", object(), 7
-    gpib_dispatch.GPIBInstrDispatch(rm, name, parsed=parsed, open_timeout=timeout)
+    mode = AccessModes.exclusive_lock
+    gpib_dispatch.GPIBInstrDispatch(
+        rm, name, parsed=parsed, access_mode=mode, open_timeout=timeout
+    )
 
     assert captured == {
         "rm": rm,
         "name": name,
         "parsed": parsed,
+        "access_mode": mode,
         "open_timeout": timeout,
     }
 
