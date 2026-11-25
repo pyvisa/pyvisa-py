@@ -1,0 +1,3 @@
+Add support for the NI GPIB-ENET/100 Ethernet-to-GPIB bridge. Opening
+``NI-ENET100-TCPIP<n>::<host>::INTFC`` binds GPIB board ``n`` to the bridge,
+after which ``GPIB<n>::<pad>[::<sad>]::INSTR`` resources are routed through it.
