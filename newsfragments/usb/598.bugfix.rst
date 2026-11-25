@@ -1,0 +1,1 @@
+Pass termination character information to USBTMC devices when reading.

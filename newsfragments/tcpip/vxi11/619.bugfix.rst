@@ -1,0 +1,2 @@
+Allow VXI-11 link ID 0 to be used for SRQ in agreement with the specification
+and other implementations.
