@@ -1,0 +1,1 @@
+Add remote/local control support for VXI-11 resources.

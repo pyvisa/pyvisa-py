@@ -1,0 +1,2 @@
+Complete ``VI_ATTR_IO_PROT`` support for TCPIP::SOCKET resources, including clear
+and ``readstb``, and document the implementation.

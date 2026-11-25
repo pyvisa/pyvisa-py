@@ -1,0 +1,2 @@
+Remove the additional ``read_stb`` inside VXI-11 SRQ handling, since it is not
+standard behavior and does not cache the SRQ bit correctly.

@@ -1,0 +1,3 @@
+Overhaul VXI-11 read termination handling, including exact chunk-size timeouts,
+read count boundaries, termination character detection, suppress-end handling,
+and timeout calculation.

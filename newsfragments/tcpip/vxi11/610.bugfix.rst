@@ -1,0 +1,1 @@
+Avoid shutting down an already stopped SRQ server.
