@@ -1,0 +1,2 @@
+Configure termination characters correctly on GPIB devices to avoid timeout
+issues for instruments that do not signal EOI.

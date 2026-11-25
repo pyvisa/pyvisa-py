@@ -1,0 +1,3 @@
+Fix VXI-11 read termination so END takes priority over the termination
+character and ``VI_SUCCESS_TERM_CHAR`` is not reported while
+``VI_ATTR_TERMCHAR_EN`` is clear.

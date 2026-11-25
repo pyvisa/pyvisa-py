@@ -1,0 +1,3 @@
+Improve VXI-11 locking compliance. Exclusive locking now works, the obsolete
+``session.lock_timeout`` attribute is removed, ``VI_KTATTR_LOCKWAIT`` is added,
+and error codes are corrected.
