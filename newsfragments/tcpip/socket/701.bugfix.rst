@@ -1,0 +1,2 @@
+Fail opening TCPIP SOCKET resources when the connection is refused or fails
+instead of reporting the error on the first read or write.
