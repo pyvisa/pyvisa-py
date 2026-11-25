@@ -1,5 +1,6 @@
 """Tests for HiSLIP write message termination."""
 
+import threading
 from unittest.mock import MagicMock
 
 from pyvisa_py.protocols.hislip import HEADER_SIZE, Instrument
@@ -7,6 +8,7 @@ from pyvisa_py.protocols.hislip import HEADER_SIZE, Instrument
 
 def make_instrument():
     instrument = Instrument.__new__(Instrument)
+    instrument.sync_lock = threading.RLock()
     instrument._max_msg_size = HEADER_SIZE + 4
     instrument._send_data_packet = MagicMock()
     instrument._send_data_end_packet = MagicMock()
