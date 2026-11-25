@@ -24,6 +24,7 @@ class TestSessions(BaseTestCase):
             (InterfaceType.tcpip, "INSTR"),
             (InterfaceType.tcpip, "SOCKET"),
             (InterfaceType.prlgx_tcpip, "INTFC"),
+            (InterfaceType.ni_enet100_tcpip, "INTFC"),
             (InterfaceType.gpib, "INSTR"),
         ]
         exp_missing = []
