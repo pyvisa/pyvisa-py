@@ -1,0 +1,1 @@
+Discard stale data in HiSLIP responses (related to #687).

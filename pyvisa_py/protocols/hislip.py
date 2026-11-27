@@ -134,6 +134,10 @@ class HiSLIPInterruptedError(Exception):
         super().__init__(f"HiSLIP I/O terminated (message_id={message_id:#x})")
 
 
+class _MessageIDMismatch(Exception):
+    """A stale response was discarded; invalidate this read's buffered data."""
+
+
 class CancellableSocket(socket.socket):
     """Socket subclass that supports cross-thread cancellation via select().
 
@@ -980,12 +984,19 @@ class Instrument:
             while len(recv_buffer) < max_len:
                 if self._payload_remaining <= 0:
                     if self._msg_type == "DataEnd":
-                        self._rmt = 1
                         self._last_read_rmt = True
                         self._msg_type = ""
                         if not suppress_end:
                             break
-                    self._msg_type, self._payload_remaining = self._next_data_header()
+                    try:
+                        self._msg_type, self._payload_remaining = (
+                            self._next_data_header()
+                        )
+                    except _MessageIDMismatch:
+                        recv_buffer.clear()
+                        self._last_read_rmt = False
+                        self._last_read_termchar = False
+                        continue
 
                 # Grow the receive buffer if needed
                 start = len(recv_buffer)
@@ -1025,7 +1036,6 @@ class Instrument:
                 # HiSLIP DataEnd carries the END indication (RMT); VISA reads
                 # may also finish on count or termination character (§6.1.1).
                 if reached_end:
-                    self._rmt = 1
                     self._last_read_rmt = True
                     self._msg_type = ""
 
@@ -1035,6 +1045,10 @@ class Instrument:
             if len(recv_buffer) > max_len:
                 raise MemoryError("scribbled past end of recv_buffer")
 
+            # Report END only once its response survives MessageID validation
+            # and is delivered to the caller.
+            if self._last_read_rmt:
+                self._rmt = 1
             return bytes(recv_buffer)
         finally:
             with self._receive_state_lock:
@@ -1049,19 +1063,15 @@ class Instrument:
             header = RxHeader(self._sync)
 
             if header.msg_type in ("Data", "DataEnd"):
-                # When receiving Data messages if the MessageID is not 0xffff ffff,
-                # then verify that the MessageID indicated in the Data message is
-                # the MessageID that the client sent to the server with the most
-                # recent Data, DataEND or Trigger message.
-                #
-                # If the MessageIDs do not match, the client shall clear any Data
-                # responses already buffered and discard the offending Data message
-
+                # HiSLIP 3.1.2 rules 1-2: only Data may use the wildcard ID.
+                # A mismatch also invalidates data accumulated by this read.
                 if (
-                    header.message_parameter == 0xFFFF_FFFF
-                    or header.message_parameter == self.last_message_id
-                ):
+                    header.msg_type == "Data"
+                    and header.message_parameter == 0xFFFF_FFFF
+                ) or header.message_parameter == self.last_message_id:
                     break
+                receive_flush(self._sync, header.payload_length)
+                raise _MessageIDMismatch
 
             if header.msg_type == "Interrupted":
                 # Server sent Interrupted in response to AsyncDeviceClear.
