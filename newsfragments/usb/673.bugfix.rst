@@ -1,0 +1,2 @@
+Fix USB RAW reads raising ``TypeError`` when the termination character is passed
+to the interface.
