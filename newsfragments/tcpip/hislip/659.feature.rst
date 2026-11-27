@@ -1,0 +1,1 @@
+Allow concurrent HiSLIP asynchronous transactions and events.

@@ -1,0 +1,1 @@
+Clean up GPIB ``ib*`` calls by using symbolic definitions instead of bare integers.

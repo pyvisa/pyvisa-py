@@ -1,0 +1,2 @@
+Implement the VISA event subsystem for VXI-11 resources, including enabling,
+disabling, discarding, waiting for, installing, and uninstalling event handlers.

@@ -1,0 +1,1 @@
+Add ``read_stb``, ``assert_trigger``, and ``gpib_control_run`` functions to USBTMC.

@@ -1,0 +1,2 @@
+Fix HiSLIP initial/reset ``MessageID`` handling in lock release and remote/local
+control transactions.
